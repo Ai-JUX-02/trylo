@@ -25,7 +25,10 @@ $sidecars = Join-Path $repoRoot "desktop\sidecars"
 $srcTauri = Join-Path $repoRoot "desktop\src-tauri"
 $resources = Join-Path $srcTauri "resources"
 if (-not ([IO.Path]::GetFullPath($resources)).StartsWith(([IO.Path]::GetFullPath($repoRoot) + "\"), [StringComparison]::OrdinalIgnoreCase)) { throw "resources escape repository" }
-if ((Get-Item -LiteralPath $resources).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "resources must not be redirected" }
+if ((Test-Path -LiteralPath $resources) -and ((Get-Item -LiteralPath $resources).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "resources must not be redirected" }
+New-Item -ItemType Directory -Force -Path $resources | Out-Null
+node (Join-Path $repoRoot "scripts\release\check-source-completeness.mjs")
+if ($LASTEXITCODE -ne 0) { throw "source completeness validation failed" }
 $dsRoot = Join-Path $resources "desktop-services"
 $dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
@@ -222,7 +225,7 @@ $wgcTarget = Join-Path $dsRoot "wgc-helper"
 if (-not (Test-Path (Join-Path $wgcSource "trylo-wgc-helper.exe"))) {
   throw @"
 prepare-sidecars: trylo-wgc-helper.exe not found at $wgcSource
-  Build it first: dotnet publish native/wgc-helper/TryloWgcHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+  Build it first: dotnet publish new_tool/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 "@
 }
 New-Item -ItemType Directory -Force -Path $wgcTarget | Out-Null

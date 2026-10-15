@@ -1,5 +1,6 @@
 # 公开源码整理与迁移顺序
 
+> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 > 状态：待审
 > 阶段：公开源码整理，第一批
 > 负责人：Trylo 项目维护者

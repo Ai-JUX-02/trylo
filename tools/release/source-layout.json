@@ -90,6 +90,19 @@
       ],
       "excludeFiles": [],
       "reason": "Existing synthetic fixture candidates; privacy and test reachability review still required."
+    },
+    {
+      "id": "tool-sources",
+      "source": "new_tool",
+      "target": "new_tool",
+      "excludePrefixes": [
+        "packages",
+        "browser",
+        "office",
+        "ingestion"
+      ],
+      "excludeFiles": [],
+      "reason": "Trylo-maintained Windows-MCP fork and tooling documentation; downloaded environments remain excluded."
     }
   ],
   "extraFiles": [
@@ -222,6 +235,76 @@
       "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
       "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
       "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "tool-sources.json",
+      "target": "tool-sources.json",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "scripts/setup-repository-tools.mjs",
+      "target": "scripts/setup-repository-tools.mjs",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "scripts/release/check-source-completeness.mjs",
+      "target": "scripts/release/check-source-completeness.mjs",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/README.md",
+      "target": "new_tool/README.md",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/PROVENANCE.json",
+      "target": "new_tool/computer-control/Windows-MCP/PROVENANCE.json",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/README.md",
+      "target": "new_tool/computer-control/Windows-MCP/README.md",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/LICENSE.md",
+      "target": "new_tool/computer-control/Windows-MCP/LICENSE.md",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/pyproject.toml",
+      "target": "new_tool/computer-control/Windows-MCP/pyproject.toml",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/uv.lock",
+      "target": "new_tool/computer-control/Windows-MCP/uv.lock",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/.python-version",
+      "target": "new_tool/computer-control/Windows-MCP/.python-version",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "desktop/src-tauri/icons/_generate.ps1",
+      "target": "desktop/src-tauri/icons/_generate.ps1",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-persistent-ca.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-persistent-ca.js",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "reason": "Required source/build configuration restored by the 2026-10-15 completeness audit."
+    },
+    {
+      "source": "docs/release/SOURCE_COMPLETENESS_2026_10_15.md",
+      "target": "docs/release/SOURCE_COMPLETENESS_2026_10_15.md",
+      "reason": "Public source completeness findings and verification boundaries."
     }
   ],
   "excludedRoots": [

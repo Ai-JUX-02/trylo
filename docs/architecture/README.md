@@ -1,5 +1,6 @@
 # Trylo 产品源码架构
 
+> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 > R3 发布边界：普通 Work 使用 CLI；CoWork 后台已从默认主包移出，仅保留独立实验依赖。[当前组件边界](OPTIONAL_COWORK_RUNTIME.md)。以下保留原架构方案记录。
 
 > 状态：待审

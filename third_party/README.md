@@ -1,5 +1,6 @@
 # 第三方组件边界
 
+> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../docs/release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 本目录用于后续整理经过审计的固定来源、许可证、NOTICE、Trylo 补丁及重建说明。当前不自动搬入本机 vendor 完整树。
 
 | 既有组件 | 当前事实 | 公开前需要闭合 |

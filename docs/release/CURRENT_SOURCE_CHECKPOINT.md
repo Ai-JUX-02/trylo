@@ -1,5 +1,6 @@
 # Current source checkpoint / 当前源码快照
 
+> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 Date / 日期：2026-10-15
 Status / 状态：源码开发快照；目录迁移和发行验收未完成。
 

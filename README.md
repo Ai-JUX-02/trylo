@@ -15,6 +15,7 @@ Windows desktop preview: [download and checksums](result/desktop/). The preview 
 | [new trylo cli](new%20trylo%20cli/) | Trylo CLI/TUI, execution, protocol, permissions, session recovery, and learning |
 | [desktop](desktop/) | React + Tauri desktop application |
 | [desktop-services](desktop-services/) | Local service host, tooling, browser, remote, and companion services |
+| [new_tool](new_tool/README.md) | Windows-MCP fork source, tooling provenance and pinned dependency setup |
 | [work](work/) | Workflows, managed-runtime adapters, and deliverables |
 | [mobile-app](mobile-app/) | Android application and remote workbench |
 | [trylocode-site](trylocode-site/) | Website source |
@@ -40,3 +41,5 @@ See [checkpoint details](docs/release/CURRENT_SOURCE_CHECKPOINT.md), [architectu
 Only the new CLI source is included. The legacy CLI, proprietary CLI distributions, research checkouts, credentials, raw sessions/recordings, and local build caches are excluded. Third-party components retain their own licenses and attribution.
 
 First-party project code follows [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and component-level provenance. Source updates, website deployment, and binary releases are separate operations.
+
+Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.

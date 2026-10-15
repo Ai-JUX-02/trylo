@@ -15,6 +15,7 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 | [new trylo cli](new%20trylo%20cli/) | CLI/TUI、执行循环、协议、权限、会话恢复和学习 |
 | [desktop](desktop/) | React + Tauri 原生桌面 |
 | [desktop-services](desktop-services/) | 本地服务宿主、工具、浏览器、远程和桌宠服务 |
+| [new_tool](new_tool/README.md) | Windows-MCP fork source, tooling provenance and pinned dependency setup |
 | [work](work/) | 工作流、托管运行适配和交付物 |
 | [mobile-app](mobile-app/) | Android 应用和远程工作台 |
 | [trylocode-site](trylocode-site/) | 网站源码 |
@@ -40,3 +41,5 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 本次只公开新版 CLI，不包含旧 CLI、官方专有 CLI 发行件、研究仓库、凭据、原始会话/录音录像和本机构建缓存。第三方组件保留各自许可证和来源声明。
 
 项目自产代码沿用 [Apache-2.0](LICENSE)，另见 [NOTICE](NOTICE) 与组件来源说明。源码更新、网站部署和二进制发行分别进行。
+
+Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.

@@ -1,0 +1,454 @@
+{
+  "schemaVersion": 1,
+  "component": "Windows-MCP Trylo fork",
+  "upstream": {
+    "repository": "https://github.com/CursorTouch/Windows-MCP",
+    "commit": "83e17f622597dd5b10a09fa34ffe0b8686dbc7eb",
+    "version": "0.8.5",
+    "license": "MIT",
+    "licenseFile": "LICENSE.md"
+  },
+  "snapshot": "2026-10-15 desktop-v1.0.1-r3 fork source",
+  "hashEncoding": "utf8-lf",
+  "uvLockSha256": "18e34869b0ca1cfaac23eee385dfa0ac78a48897297c5c4a6a4c2cfe847c55bb",
+  "modifications": [
+    "Trylo tool allowlist integration and OCR/display inventory surface.",
+    "CAD input, focus/IME, coordinate handling, snapshot/UIA and tree budgeting fixes.",
+    "Capture broker, WGC helper protocol, takeover, watchdog and action result handling."
+  ],
+  "files": [
+    {
+      "path": "src/windows_mcp/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/windows_mcp/__main__.py",
+      "sha256": "888341193b51037ea17d76411fc688ada19aa027bce5921d6c121dece8f2e7f7"
+    },
+    {
+      "path": "src/windows_mcp/broker/__init__.py",
+      "sha256": "6d6bb3cc0b792dc60159c9fb39a58b4c58c959b7ea768c019ee30565e44183d4"
+    },
+    {
+      "path": "src/windows_mcp/broker/__main__.py",
+      "sha256": "c93290a2e4da20987940e3fc212acb95d6bad88ef78145cc29f6bee3e5a7282c"
+    },
+    {
+      "path": "src/windows_mcp/broker/protocol.py",
+      "sha256": "e6ea5199778ebfcf4fe240f680d1489bac232b5a85d4dd9b7dfa247f8bbcd2ca"
+    },
+    {
+      "path": "src/windows_mcp/broker/supervisor.py",
+      "sha256": "879bf1d85b8593a4caa56e5907c3163269d0e89865384d735a6034f216c9c239"
+    },
+    {
+      "path": "src/windows_mcp/broker/uia_subscriptions.py",
+      "sha256": "7a4609eebdc4177ffdf63da889d7044c4b73d901fdfd7b773d06984d16d2005e"
+    },
+    {
+      "path": "src/windows_mcp/broker/winevent.py",
+      "sha256": "dac23dde70c63507956d86e7226f3274bc6955955ce115d5356f7c0e29d73f1c"
+    },
+    {
+      "path": "src/windows_mcp/capture/__init__.py",
+      "sha256": "82766f40cafb440d4789bc0101c492b1f59e468ad68d871c10cd93b957624129"
+    },
+    {
+      "path": "src/windows_mcp/capture/frame_store.py",
+      "sha256": "47277a18c5b2a867e69ac5a0e511f644dee6e007529711eeb00be1dfcb3561d6"
+    },
+    {
+      "path": "src/windows_mcp/capture/frames.py",
+      "sha256": "254079cf5a40b475cde0a8092f2be7c5046a198f71adbce29b4f03f25d540c6f"
+    },
+    {
+      "path": "src/windows_mcp/capture/providers/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/windows_mcp/capture/providers/base.py",
+      "sha256": "ce13de81700e367e47a8dc720834b1431d47b62f826e5e15d1016b4eb13a6f96"
+    },
+    {
+      "path": "src/windows_mcp/capture/providers/legacy.py",
+      "sha256": "24bd3bb105d8d871748484ff25d4da7721b81f206efa49f3da8cd570663cac9f"
+    },
+    {
+      "path": "src/windows_mcp/capture/providers/wgc.py",
+      "sha256": "5afb3cbeb514c29408aedfeea6e43b89148c8e5a25d89908df65c4690e4dcca8"
+    },
+    {
+      "path": "src/windows_mcp/capture/service.py",
+      "sha256": "26b693fe33e59dc43ffd0c5a9b30df8cd770140109aec1f0507979904399f1f2"
+    },
+    {
+      "path": "src/windows_mcp/config.py",
+      "sha256": "536e27a9a783a28c354a62658def272d54c31e3d7b48ad27f7869c33b105b212"
+    },
+    {
+      "path": "src/windows_mcp/desktop/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/windows_mcp/desktop/config.py",
+      "sha256": "6f55b57d26439980098007fa7489a6cc72afefccc824822402a287c504d7092c"
+    },
+    {
+      "path": "src/windows_mcp/desktop/flash_overlay.py",
+      "sha256": "087969587786659dd256dc6473acce5ae8c8aee9f86ef22b3f360a8237b051fd"
+    },
+    {
+      "path": "src/windows_mcp/desktop/ocr_backend.py",
+      "sha256": "b5ef26a632d6f1529d5f231ce3ad8c60a8390517ddd1552523ae73913c909e47"
+    },
+    {
+      "path": "src/windows_mcp/desktop/screenshot.py",
+      "sha256": "4f1538daec24a4601465e17d6ad719b60ac13b1dca86ef9e0cb148cce5ee2570"
+    },
+    {
+      "path": "src/windows_mcp/desktop/service.py",
+      "sha256": "f967f9399734a51e2f7cbb8dfcd99fba5eaeec216375c024261b26c0895f72c1"
+    },
+    {
+      "path": "src/windows_mcp/desktop/utils.py",
+      "sha256": "8c76d0910b7328ad9d7fc440557e642a1c754995a696255661630f92751f9a50"
+    },
+    {
+      "path": "src/windows_mcp/desktop/views.py",
+      "sha256": "b806b1a756a88cf470376f1c61ff5f6a423f2d69a4d7d398c7f9e2ce53246bad"
+    },
+    {
+      "path": "src/windows_mcp/filesystem/__init__.py",
+      "sha256": "e93f18971bfa41e0fa3be14d0a8954d096918fc67cc225ebadb241cb26740a8f"
+    },
+    {
+      "path": "src/windows_mcp/filesystem/service.py",
+      "sha256": "393a2aea9f67f1576a5cb3a15e80bea7c5954d9b271595aae99193df94d3a732"
+    },
+    {
+      "path": "src/windows_mcp/filesystem/views.py",
+      "sha256": "2c792fcfccedfdc7bfb07f743661904e9f0a40044fe31d10dfae6fc3e276955c"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/__init__.py",
+      "sha256": "bce39ae91af9ec65fb95bd18c1e36593f32672162e8f2837d1f9ed73b04d1a15"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/analytics.py",
+      "sha256": "4bd6f56449e8b74cebe743fd7d43c41523bb40bde1082a0f5e9503973f5ed610"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/auth.py",
+      "sha256": "fdcfcf03c4ba0d8a55076568b5ab81d52ed8c146ddd0cffd715a64b4006e2baf"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/config.py",
+      "sha256": "a411cd9ac73c86ec19d72a663ebc2247336b8328c61af2038efd293f7a2a74a8"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/eventloop.py",
+      "sha256": "d9d30120793ba8349a367f319b82072819bd86c0b7a63333f779c15021ddaff0"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/oauth.py",
+      "sha256": "31937461a39d748a14e900a657276e9c20aaef9f0229bbb5c03a9ac8a5c27f11"
+    },
+    {
+      "path": "src/windows_mcp/infrastructure/security.py",
+      "sha256": "d929f35a87ad9e546fc23a417f199b90aca3666387ad6717097ab3842a32e8a5"
+    },
+    {
+      "path": "src/windows_mcp/notifications/__init__.py",
+      "sha256": "d6a527bbb4c151063014f85073b016b2c11897bdf8f924e6925a25e8cb4167aa"
+    },
+    {
+      "path": "src/windows_mcp/notifications/service.py",
+      "sha256": "7912f5900d53421d80c25eb4e4ec8718be5dedcfe3c50a3ea3285e13571f7fc1"
+    },
+    {
+      "path": "src/windows_mcp/paths.py",
+      "sha256": "52e13e93fceb70c2934791623e3d64edf35fcf20596685dd4026cf8b3a13cda6"
+    },
+    {
+      "path": "src/windows_mcp/powershell/__init__.py",
+      "sha256": "924bfd456f13c1f159be9de63d5fae029b93008c6c17f712c35b8105380e1364"
+    },
+    {
+      "path": "src/windows_mcp/powershell/service.py",
+      "sha256": "86071b7bb3cf5dcd0c5fe2eb26f7add0f279fd46acce5b6db0492ded8705b7bd"
+    },
+    {
+      "path": "src/windows_mcp/powershell/utils.py",
+      "sha256": "4b167a493081d7204a0c38cff73ac458a9e8d4c55c9881b649243d6a9ac3680f"
+    },
+    {
+      "path": "src/windows_mcp/process/__init__.py",
+      "sha256": "b114f67aa8809838e01f95dce20b84ff8e509550bf91161a46bbc75e0db0cc95"
+    },
+    {
+      "path": "src/windows_mcp/process/service.py",
+      "sha256": "498842f255352e5af0920bfe5294f198a51afcc10311faa33b872afc023a9b9a"
+    },
+    {
+      "path": "src/windows_mcp/registry/__init__.py",
+      "sha256": "c05e2509ff19d343cab647364c5bfd683001af8c6b154d19fe115e37d58d0146"
+    },
+    {
+      "path": "src/windows_mcp/registry/service.py",
+      "sha256": "898d10b87f706827a39417f7a36ad87e1c8e67d601ab16f8152f40fbf7e33bd9"
+    },
+    {
+      "path": "src/windows_mcp/registry/views.py",
+      "sha256": "f1cefa67b5829664bc1efe13cc8da85953f419aad29d7d3c3aa121ecd8b5a85d"
+    },
+    {
+      "path": "src/windows_mcp/runtime/__init__.py",
+      "sha256": "a4ffcbecfbe08968f52cea6466c9556f596ffc72aebd695643bea606086b076c"
+    },
+    {
+      "path": "src/windows_mcp/runtime/action_router.py",
+      "sha256": "8ecbdb156e2ec06c3ae582feab3bd333f9dd785580c06f8c5a500b2cc90b7e8f"
+    },
+    {
+      "path": "src/windows_mcp/runtime/backends/__init__.py",
+      "sha256": "29e489a6cdc5ab8562f4b34fb0842ee00cb0c4105a78640dcbb6d7a93e5c3b98"
+    },
+    {
+      "path": "src/windows_mcp/runtime/backends/base.py",
+      "sha256": "9b5ece6da483be06a48d3d839c86c657c9169f4f7b51271d5ffd279a0cc97238"
+    },
+    {
+      "path": "src/windows_mcp/runtime/backends/raw_input.py",
+      "sha256": "7198d4d363c805c9984f4c4352ebb7e3d45873a8a3ca893c73ba163b2e58ef14"
+    },
+    {
+      "path": "src/windows_mcp/runtime/backends/uia_patterns.py",
+      "sha256": "b3aa704fb41931b0f9e0e4c1557ab834b8251c471c2a5b8df46c4214e3dd030e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/clock.py",
+      "sha256": "213c3c2aa3a7fa94f229a68d70fafe6ed92ea1a027715346651ed81ca911a17e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/commands.py",
+      "sha256": "48925b2533a339f6ade3b12866be980ca0cae91e300cf4d3590f5a6e84f82714"
+    },
+    {
+      "path": "src/windows_mcp/runtime/desktop_actor.py",
+      "sha256": "2b73540ea2ebdeea32a5fd067334335ea3f0bfb8248c7449ce47795cf122835b"
+    },
+    {
+      "path": "src/windows_mcp/runtime/desktop_runtime.py",
+      "sha256": "d8996333f00a95d4fd4aad2037eab126951751d9a1554dd8ec1ea74fbd2c8fde"
+    },
+    {
+      "path": "src/windows_mcp/runtime/errors.py",
+      "sha256": "834f250ff001144242f89237f9e69efe6f2188e55e9494e7804505c954bf64d3"
+    },
+    {
+      "path": "src/windows_mcp/runtime/generation_registry.py",
+      "sha256": "14a840d312b975e2913d95163a6501852896eb9501acba79acb6b0e17a4fc63e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/identity.py",
+      "sha256": "3e656f880c30486be8a09e0620458a2388ada36e71f030aac76caa1c0c3a3c5b"
+    },
+    {
+      "path": "src/windows_mcp/runtime/metrics.py",
+      "sha256": "345d11ea85752adad3e53c1526293f85dbb1efae5d419818149b0583da394961"
+    },
+    {
+      "path": "src/windows_mcp/runtime/observation_builder.py",
+      "sha256": "a17b5501e4f78bb054fc205d9c55c10ed8c019b29b902f6b98b083f9a70b1f4e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/observations.py",
+      "sha256": "a61fa1fbc09c3a7336283efc4e1391d4a0d8318e247b2ea6542be4fbaac2e02e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/predicates.py",
+      "sha256": "a53293073b7fc224ddc90641f73d259f19db01a06108d2b69f319a914bff43e6"
+    },
+    {
+      "path": "src/windows_mcp/runtime/results.py",
+      "sha256": "3eda4fa4bd857c6155472f549af81bcbddfb0c08956e328ce17fab8a970daf2d"
+    },
+    {
+      "path": "src/windows_mcp/runtime/serialization.py",
+      "sha256": "16f9f7c389729c4af5a4034bcd6ece928db878fd5cf60e1c2a00c8b19526889e"
+    },
+    {
+      "path": "src/windows_mcp/runtime/snapshot_store.py",
+      "sha256": "3e7b4de1a6a1c64207934bb247505bcb84eb818001c5a4993b7dea04087e7c58"
+    },
+    {
+      "path": "src/windows_mcp/runtime/takeover.py",
+      "sha256": "f5fda00471d35fdbc5444762fe0a15910553f2636a2c03b42b6815f9b26e9a9a"
+    },
+    {
+      "path": "src/windows_mcp/runtime/target_resolver.py",
+      "sha256": "b80599ed29332e78b51b1543a23376c5b88cdf6e717e8cbcf989d7478023d805"
+    },
+    {
+      "path": "src/windows_mcp/runtime/user_input_hook.py",
+      "sha256": "10a398b3766458eed73b4b96e9c1060042a9b97d0c69fef796595ae3e262f893"
+    },
+    {
+      "path": "src/windows_mcp/runtime/verifier.py",
+      "sha256": "271ad12380f5e0a6c1abd9e307dee0d1f12cea156087fce89e13e77f50940b2c"
+    },
+    {
+      "path": "src/windows_mcp/tools/__init__.py",
+      "sha256": "ec986ad93013f528d467be2d02608a17d3709167033a0e20455fca7ad1fb7810"
+    },
+    {
+      "path": "src/windows_mcp/tools/_action_helpers.py",
+      "sha256": "d3558a4bd95ad3494af00f97757e5b68a05e58e758d1dd01393e925956cbb885"
+    },
+    {
+      "path": "src/windows_mcp/tools/_snapshot_helpers.py",
+      "sha256": "b8b5e319b45e9312243a9e1c2bd4a3ca02ae9d8b8ebc63597a20edb34ca38964"
+    },
+    {
+      "path": "src/windows_mcp/tools/app.py",
+      "sha256": "e59ca03673f2f89b5d19bea2544eab6694cba39f69ab71c1041a67344e15e3e7"
+    },
+    {
+      "path": "src/windows_mcp/tools/clipboard.py",
+      "sha256": "a1b7a1fea1f01ba92ed136b11c0bb6a380a2ea6fbc7490f9a450b355b3b6c071"
+    },
+    {
+      "path": "src/windows_mcp/tools/display.py",
+      "sha256": "c294e53c1fe14026c8f0118e87ea06fc408d295ec5e7112c1f9c913766b6c1bb"
+    },
+    {
+      "path": "src/windows_mcp/tools/filesystem.py",
+      "sha256": "b5c918bd56114066737f6939116d3acae5ee5975e6291dc05fe177dd298ba062"
+    },
+    {
+      "path": "src/windows_mcp/tools/input.py",
+      "sha256": "6e9fb04ce09844d79094fa4626726d990cb5c8d1eb46dba6ec9ca94890567b0c"
+    },
+    {
+      "path": "src/windows_mcp/tools/multi.py",
+      "sha256": "8f29cc0109e91e1ba2760fea04e7fc79c195a15ff3df375a0d03a2422fa9e4b5"
+    },
+    {
+      "path": "src/windows_mcp/tools/notification.py",
+      "sha256": "04ff3ae175c136733bc2baacbf2171d08cdac7af47bd86f9bae6741257ccc093"
+    },
+    {
+      "path": "src/windows_mcp/tools/ocr.py",
+      "sha256": "2dda26b6471c04332e4d6399184b862257f67adfdef52054c8920f7c50a3a02d"
+    },
+    {
+      "path": "src/windows_mcp/tools/process.py",
+      "sha256": "e4da92b550fe757ac4371550d255e1b257538f724e523a54ca97e620a5b5e252"
+    },
+    {
+      "path": "src/windows_mcp/tools/registry.py",
+      "sha256": "4dbee46e46c797baa64e43aa8ca7241320066d37c5a2e3ff125ed72fbe00ac34"
+    },
+    {
+      "path": "src/windows_mcp/tools/scrape.py",
+      "sha256": "2a7227d56153ace338921eface0625c7ba2c6103e8901ee6e3615d0ff1373d5c"
+    },
+    {
+      "path": "src/windows_mcp/tools/shell.py",
+      "sha256": "8820d6c38d9a97dcfa689bd63b1d82efc920154416bcf010c4d944998d83b079"
+    },
+    {
+      "path": "src/windows_mcp/tools/snapshot.py",
+      "sha256": "5da9d5d48eb800cc337620cac023ff455bc5e5329b600d030bf6381e90e52115"
+    },
+    {
+      "path": "src/windows_mcp/tree/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/windows_mcp/tree/budget.py",
+      "sha256": "bea3e56dabb404b422f1b63c28afb9fb5affef34aa571ac7fc7518f2590b8199"
+    },
+    {
+      "path": "src/windows_mcp/tree/cache_utils.py",
+      "sha256": "f5c70c9924c57fce74c9ce2a7d38b3c54104fa17e4bedfad329749e7fc5fd6fe"
+    },
+    {
+      "path": "src/windows_mcp/tree/config.py",
+      "sha256": "a52d2a002ea81b07be99a4e46c27125dd847c23c7b26c1fd81e5fcc7de15bd3e"
+    },
+    {
+      "path": "src/windows_mcp/tree/ia2.py",
+      "sha256": "8582258e257d2bd309b09046a818752c118e73fab07f22eaf2d7c3d44558e2d1"
+    },
+    {
+      "path": "src/windows_mcp/tree/service.py",
+      "sha256": "2a0d19b65fd7844f4fd2dc1967601d5c04ac482bb694b333ec53786c988b6fae"
+    },
+    {
+      "path": "src/windows_mcp/tree/utils.py",
+      "sha256": "2b44a13ad217d1ecac24aa74ec50a11425374a3e7bc88ce0d7c76bad4daeaf98"
+    },
+    {
+      "path": "src/windows_mcp/tree/views.py",
+      "sha256": "b019a7ffd5faed815c7d2faf0e260a34766d3e8dcb46e6abe4ba7cc3d7db2165"
+    },
+    {
+      "path": "src/windows_mcp/uia/__init__.py",
+      "sha256": "3f368af28ff7d4dae4d64eb8b4b40028ff9d6954cc84c99f3ed87ff019ef593a"
+    },
+    {
+      "path": "src/windows_mcp/uia/comtypes_cache.py",
+      "sha256": "346ed65fdde2a3e3986356ff7ad710e2798475714df2ac924457a9553ba07436"
+    },
+    {
+      "path": "src/windows_mcp/uia/controls.py",
+      "sha256": "a028bf2bec8b24e3dbda7fb1d70e7ec0d41597fff3c8fe87d1573daa01a626cd"
+    },
+    {
+      "path": "src/windows_mcp/uia/core.py",
+      "sha256": "a18596eaaaa91fffebc519629cb51d394c4e6f759d95b26b68604cabadd2b8dd"
+    },
+    {
+      "path": "src/windows_mcp/uia/enums.py",
+      "sha256": "b6038732abfabfdffd05aa242d71f3c19938d0a55cf11fdc0e15bb466c07982b"
+    },
+    {
+      "path": "src/windows_mcp/uia/events.py",
+      "sha256": "b597cac541ba3495b7611603f5eebba657c4a5ead50821d0742396295ee13ace"
+    },
+    {
+      "path": "src/windows_mcp/uia/exceptions.py",
+      "sha256": "e1bc844ebfd89d9470798ba178d5bb4d935819c446039b1409e1aabd25d71bf8"
+    },
+    {
+      "path": "src/windows_mcp/uia/patterns.py",
+      "sha256": "4c5865572e69450e0f7fab4d6de5bf8b0a4960fc8dc4b0b23418152b40b29c1a"
+    },
+    {
+      "path": "src/windows_mcp/vdm/__init__.py",
+      "sha256": "04247f3d6653a1378f5edde28fb2b1446aded12d0c9273229602bce7198dbe11"
+    },
+    {
+      "path": "src/windows_mcp/vdm/core.py",
+      "sha256": "69bb4c30807312b12a1c41898f4915c27deb9dc7c02ba6e961cc4ca342fe64d7"
+    },
+    {
+      "path": "src/windows_mcp/watchdog/__init__.py",
+      "sha256": "8d8c97199f61c171077ecc683254cd1c2c134508c7478a8ddb46cff0b30668f9"
+    },
+    {
+      "path": "src/windows_mcp/watchdog/event_handlers.py",
+      "sha256": "53271e2d6cf3ed306fd3b023b74b528d3cedf6166316ba2b69b36fe004eb2f46"
+    },
+    {
+      "path": "src/windows_mcp/watchdog/service.py",
+      "sha256": "4e0b44b1b680a63370d501ca79a1bb418819dbaf46347b04cf102ed3248f4c0e"
+    }
+  ],
+  "nativeHelper": {
+    "source": "native/wgc-helper/TryloWgcHelper.csproj",
+    "artifactPin": "desktop-services/src/tooling/manifests/windows-mcp.mjs#helper",
+    "note": "Rebuilt helper bytes must match the release pin; source completeness is not binary reproducibility acceptance."
+  }
+}
