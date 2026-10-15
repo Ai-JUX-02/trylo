@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, renameSync, rmSync, lstatSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, renameSync, rmSync, lstatSync, realpathSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -40,8 +40,9 @@ try {
     daemonSha256:hash(path.join(candidate,main)),nodeVersion,nodeSha256:hash(node),
     sqliteBindingSha256:hash(binding),betterSqlite3Probe:'ok',noSystemNode:true
   },null,2)+'\n');
-  const backup=target+'-before-import';
-  assert.ok(!existsSync(backup),'Review existing Work backup first');
+  const backupRoot=path.join(root,'.local-release/sidecar-backups');
+  mkdirSync(backupRoot,{recursive:true});
+  const backup=path.join(backupRoot,'workd-import-'+Date.now()+'-'+process.pid);
   assert.ok(!existsSync(target)||!lstatSync(target).isSymbolicLink(),'Redirected Work target');
   if(existsSync(target))renameSync(target,backup);
   try{renameSync(candidate,target);}

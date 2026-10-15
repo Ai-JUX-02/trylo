@@ -1,5 +1,9 @@
 Trylo Desktop 1.0.1 — Windows x64 portable preview
 
+Packaging revision 2: Work debug/development files are pruned; the pet uses a
+compressed self-contained .NET bundle with external image assets.
+The native Desktop executable and both CLI runtime payloads are unchanged.
+
 Extract the entire ZIP into a folder, then run trylo-desktop.exe.
 Open a real project folder on your computer and configure your model connection in Settings.
 A working Microsoft WebView2 Runtime is required.

@@ -6,16 +6,6 @@
   "arch": "x64",
   "format": "portable-zip",
   "entry": "trylo-desktop.exe",
-  "sourceRef": "desktop-v1.0.1",
-  "createdAt": "2026-10-15T16:01:54.018323+00:00",
-  "artifact": {
-    "file": "Trylo-Desktop-1.0.1-windows-x64-portable.zip",
-    "bytes": 593012640,
-    "files": 94532,
-    "seconds": 223.01,
-    "sha256": "ab227c35b8843662310c186b3297b843cbfb34730b9b446c66724c7cc243cb8c",
-    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1/Trylo-Desktop-1.0.1-windows-x64-portable.zip"
-  },
   "defaultRuntime": "legacy-stream-json",
   "runtimes": {
     "legacy": {
@@ -36,19 +26,36 @@
       "sha256": "58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f"
     }
   },
+  "installer": {
+    "published": false,
+    "detail": "NSIS packaging interrupted; only the complete portable ZIP is distributed"
+  },
+  "packagingRevision": 2,
+  "sourceRef": "desktop-v1.0.1-r2",
+  "createdAt": "2026-10-15T17:50:37.245266+00:00",
+  "basedOn": "desktop-v1.0.1",
+  "nativeDesktopExecutableRebuilt": false,
+  "artifact": {
+    "file": "Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip",
+    "bytes": 367231006,
+    "files": 69694,
+    "sha256": "2686938f08da00f4a7e36ac4eed3fd9b153ab827ff223599a30e0ca7151c3dc3",
+    "seconds": 150.78,
+    "compressionLevel": 6,
+    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r2/Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip"
+  },
   "verification": {
     "archiveCrc": true,
-    "archiveFiles": 94532,
+    "archiveFiles": 69694,
     "cliFilesVerified": 2716,
     "cli-legacyFilesVerified": 38284,
-    "nativeExeMatchesBuild": true,
-    "resourceLayout": true,
-    "embeddedGatewayCredentialRemoved": true,
-    "seconds": 132.03,
-    "addedLicenseCrcVerified": true,
-    "desktopFocusedTests": 92,
-    "shadowRunnerTests": 11,
-    "rustResolverTests": 9,
+    "unchangedDesktopCliServiceRuntimeFiles": 41199,
+    "unchangedRetainedWorkdFiles": 28464,
+    "workdNativeBindingsVerified": 12,
+    "nativeExeMatchesOriginalBuild": true,
+    "embeddedGatewayCredentialAbsent": true,
+    "workdLegalFilesPreserved": 764,
+    "seconds": 96.57,
     "legacyCliFromExtractedZip": {
       "passed": true,
       "provider": "local synthetic Anthropic SSE",
@@ -59,19 +66,105 @@
       "requestCount": 2,
       "exitCode": 0
     },
-    "workdNativeBinding": "ok",
+    "workdPackageProbes": {
+      "kind": "trylo-workd-package-probes",
+      "node": "v24.14.1",
+      "emptyPath": true,
+      "passed": true,
+      "results": [
+        {
+          "name": "sqlite",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 534
+        },
+        {
+          "name": "sharp",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 1554
+        },
+        {
+          "name": "canvas",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 1733
+        },
+        {
+          "name": "excel",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 10499
+        },
+        {
+          "name": "word",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 2544
+        },
+        {
+          "name": "powerpoint",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 279
+        },
+        {
+          "name": "pdf",
+          "passed": true,
+          "exitCode": 0,
+          "milliseconds": 4063
+        }
+      ],
+      "daemonControlPlaneAcceptance": false
+    },
+    "desktopPetFromExtractedZip": {
+      "passed": true,
+      "fromExtractedArchive": true,
+      "exitCode": 0,
+      "dimensions": [
+        264,
+        272
+      ],
+      "permissionRenderMatchesOriginal": true,
+      "emptyPath": true,
+      "settingsRestored": true,
+      "seconds": 7.01
+    },
+    "desktopPetHoverRender": true,
+    "desktopPetExternalAssetsVerified": 22,
+    "nestedDependencyGuardRegression": {
+      "nestedDependencyEntryGuard": true,
+      "initialRuntimeExit": 1,
+      "fixedRuntimeExit": 0,
+      "distinctNestedVersionsPreserved": true
+    },
     "workdStartup": {
       "passed": false,
-      "attempts": 3,
+      "controlPlaneListening": false,
+      "isolatedUserData": true,
+      "providerCredentialsInherited": false,
+      "noSystemNode": true,
       "timeoutSeconds": 35,
-      "detail": "Control Plane was not ready; diagnostic stopped while loading the existing agent-daemon module"
+      "seconds": 35.87,
+      "managedTaskAcceptance": false
     },
-    "nativeGuiAcceptance": false,
+    "nativeDesktopGuiAcceptance": false,
+    "fullInteractiveTrayAcceptance": false,
     "realProviderAcceptance": false,
-    "mobileAssetsChanged": false
+    "mobileAssetsChanged": false,
+    "priorSourceRegressionEvidence": {
+      "sourceRef": "desktop-v1.0.1",
+      "desktopFocusedTests": 92,
+      "shadowRunnerTests": 11,
+      "rustResolverTests": 9,
+      "rerunForPackagingRevision": false
+    }
   },
-  "installer": {
-    "published": false,
-    "detail": "NSIS packaging interrupted; only the complete portable ZIP is distributed"
+  "sizeComparison": {
+    "beforeBytes": 593012640,
+    "afterBytes": 367231006,
+    "savedBytes": 225781634,
+    "savedPercent": 38.07,
+    "details": "size-comparison.json"
   }
 }

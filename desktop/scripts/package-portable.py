@@ -5,6 +5,7 @@ def main():
  parser=argparse.ArgumentParser(description='Package the already-built Windows Desktop as a portable ZIP (Python 3.10+).')
  parser.add_argument('--output',type=Path)
  parser.add_argument('--workers',type=int,default=16)
+ parser.add_argument('--compression-level',type=int,choices=range(10),default=6)
  args=parser.parse_args()
  root=Path(__file__).resolve().parents[2]
  version=json.loads((root/'desktop/package.json').read_text(encoding='utf-8'))['version']
@@ -33,7 +34,7 @@ def main():
   return file,name,None if file.stat().st_size>32*1024*1024 else file.read_bytes()
  partial=output.with_suffix(output.suffix+'.partial')
  if partial.exists():raise SystemExit('Review the previous partial archive first: '+str(partial))
- with zipfile.ZipFile(partial,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=1,allowZip64=True) as archive,concurrent.futures.ThreadPoolExecutor(max_workers=max(1,min(args.workers,32))) as pool:
+ with zipfile.ZipFile(partial,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=args.compression_level,allowZip64=True) as archive,concurrent.futures.ThreadPoolExecutor(max_workers=max(1,min(args.workers,32))) as pool:
   pending=collections.deque()
   def store(future):
    file,name,data=future.result()
@@ -47,7 +48,7 @@ def main():
  digest=hashlib.sha256()
  with output.open('rb') as stream:
   for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
- result={'file':output.name,'bytes':output.stat().st_size,'files':len(items),'sha256':digest.hexdigest(),'seconds':round(time.monotonic()-started,2)}
+ result={'file':output.name,'bytes':output.stat().st_size,'files':len(items),'sha256':digest.hexdigest(),'seconds':round(time.monotonic()-started,2),'compressionLevel':args.compression_level}
  output.with_suffix('.build.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
  print(json.dumps(result,indent=2))
 

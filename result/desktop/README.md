@@ -1,8 +1,10 @@
-# Trylo Desktop 1.0.1
+# Trylo Desktop 1.0.1 R2
+
+R2: 593 MB → 367 MB（减少 38.1%）。Work 后台去除非运行附带文件，桌宠改为压缩自包含发布，保留全部角色图片。[体积与验证记录](../../docs/release/DESKTOP_1_0_1_R2.md)。
 
 Windows x64 桌面便携预览版，默认使用旧 Trylo CLI（`legacy-stream-json`）。这是 Desktop 编译产物，与 Android 手机 APP 独立发布。
 
-[下载 Windows 桌面版 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1/Trylo-Desktop-1.0.1-windows-x64-portable.zip) · [发布页](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.1)
+[下载 Windows 桌面版 ZIP](https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r2/Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip) · [发布页](https://github.com/ylz92871-dotcom/trylo/releases/tag/desktop-v1.0.1-r2)
 
 下载后完整解压到一个文件夹，运行 `trylo-desktop.exe`。首次启动请打开项目、选择本机工作目录，并在设置中配置模型连接。需要可用的 Microsoft WebView2 Runtime。
 

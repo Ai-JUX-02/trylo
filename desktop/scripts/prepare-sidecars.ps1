@@ -1,4 +1,4 @@
-﻿# Trylo Desktop — prepare all sidecars for packaging. See migration spec §9.1.
+# Trylo Desktop — prepare all sidecars for packaging. See migration spec §9.1.
 #
 # Run before `cargo tauri build` (wire into the release pipeline / beforeBuild).
 # Steps:
@@ -62,71 +62,6 @@ Write-Host "prepare-sidecars: publish desktop pet (self-contained)"
 & (Join-Path $repoRoot "desktop\scripts\build-desktop-pet.ps1") -ProjectDir (Join-Path $sidecars "desktop-companion") -SelfContained
 if ($LASTEXITCODE -ne 0) { throw "build-desktop-pet failed" }
 
-Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
-# Stages resources/workd = built dist/daemon + production node_modules
-# closure + better-sqlite3 probe under the pinned Node ABI. The probe and
-# the inventory below are the release gate: the installed app must run the
-# real daemon with NO npm/build/rebuild on the user machine.
-if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
-  node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
-  if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
-} else {
-  node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
-  if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
-}
-
-Write-Host "prepare-sidecars: copy into src-tauri/resources/"
-# `work/bin` is the Work daemon wrapper. `workd_spawn` ALWAYS spawns it —
-# even in `stub` mode, because the stub lives inside the wrapper — so a
-# package without it has no Work pane at all. Only `bin/` is copied: the
-# vendor/CoWork checkout is >1 GB and real mode is staged separately.
-$workBin = Join-Path $repoRoot "work\bin"
-$targets = @(
-  @{ src = "$ds\dist";               dst = "$dsDist" },
-  @{ src = "$ds\vendor";             dst = "$dsRoot\vendor" },
-  # ws is required by the vendored remote-gateway at RUNTIME (it loads via
-  # createRequire from vendor/legacy, NOT through the esbuild bundle), so it
-  # must ship alongside the vendor tree. ws@8.21.0 has zero runtime deps —
-  # the single package folder is sufficient (spec §9.1 / §3.3).
-  @{ src = "$ds\node_modules\ws";    dst = "$dsRoot\node_modules\ws" },
-  # Windows-MCP fork source (tool-package-manager.syncWindowsMcpFork). The
-  # pinned transport installs the UPSTREAM tarball for the dependency set;
-  # this tree is then overlaid onto the installed src/windows_mcp so a
-  # packaged app gets the Trylo fork surface (14 tools incl. Ocr) instead
-  # of the 12-tool upstream one. The bundled host resolves it as the
-  # `windows-mcp-fork` sibling of dist/host.bundle.mjs.
-  @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
-  @{ src = "$sidecars\desktop-companion\publish"; dst = "$sidecarPub\desktop-companion\publish" },
-  @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" },
-  @{ src = "$workBin";               dst = "$resources\work\bin" }
-)
-foreach ($t in $targets) {
-  if (-not (Test-Path $t.src)) { throw "prepare-sidecars: missing source $($t.src)" }
-  New-Item -ItemType Directory -Force -Path $t.dst | Out-Null
-  Copy-Item -Recurse -Force "$($t.src)\*" $t.dst
-}
-
-# Legacy .js adapters are CommonJS even when resources are staged below the
-# desktop package's type=module boundary. The entry bundle remains explicit .mjs.
-Set-Content -LiteralPath (Join-Path $dsRoot "package.json") -Value '{"private":true,"type":"commonjs"}' -Encoding utf8
-
-# Python bytecode is machine/version-specific build residue, not a runtime
-# source artifact. Never let a developer's __pycache__ leak into the bundle.
-$hermesResourceDir = Join-Path $sidecarPub "hermes-capabilities"
-$hermesCacheDir = Join-Path $hermesResourceDir "__pycache__"
-if (Test-Path -LiteralPath $hermesCacheDir) {
-  Remove-Item -LiteralPath $hermesCacheDir -Recurse -Force
-}
-Get-ChildItem -LiteralPath $hermesResourceDir -File -Filter "*.pyc" -ErrorAction SilentlyContinue |
-  Remove-Item -Force
-# Same residue rule for the staged Windows-MCP fork (__pycache__ lives at
-# every depth under src/windows_mcp on a developed checkout).
-$forkResourceDir = Join-Path $dsRoot "windows-mcp-fork"
-Get-ChildItem -LiteralPath $forkResourceDir -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
-  Remove-Item -Recurse -Force
-Get-ChildItem -LiteralPath $forkResourceDir -Recurse -File -Filter "*.pyc" -ErrorAction SilentlyContinue |
-  Remove-Item -Force
-
 # Pin a Node runtime into the bundle (audit §2.3 Task W4). The INSTALLED app
 # must never depend on `node` being on the user's system PATH — an end user
 # has no Node, and a missing interpreter used to surface as a bare spawn
@@ -156,6 +91,101 @@ $nodeTargetDir = Join-Path $resources "runtime\node\win-x64"
 New-Item -ItemType Directory -Force -Path $nodeTargetDir | Out-Null
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $nodeTargetDir "node.exe") -Force
 Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.exe"
+
+
+Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
+# Stages resources/workd = built dist/daemon + production node_modules
+# closure + better-sqlite3 probe under the pinned Node ABI. The probe and
+# the inventory below are the release gate: the installed app must run the
+# real daemon with NO npm/build/rebuild on the user machine.
+if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
+  node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
+} else {
+  node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
+  if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
+}
+
+# Prune into a fresh candidate; keep the original artifact outside bundle.resources.
+$slimId = [Guid]::NewGuid().ToString("N")
+$workCandidate = Join-Path $resources "workd-slim-$slimId"
+$workTarget = Join-Path $resources "workd"
+node (Join-Path $PSScriptRoot "slim-workd-artifact.mjs") --source $workTarget --output $workCandidate
+if ($LASTEXITCODE -ne 0) { throw "Work artifact pruning failed" }
+$backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
+New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+$workBackup = Join-Path $backupRoot "workd-$slimId"
+Move-Item -LiteralPath $workTarget -Destination $workBackup
+try { Move-Item -LiteralPath $workCandidate -Destination $workTarget }
+catch {
+  if (-not (Test-Path -LiteralPath $workTarget)) { Move-Item -LiteralPath $workBackup -Destination $workTarget }
+  throw
+}
+
+Write-Host "prepare-sidecars: probe pruned Work native/document dependencies"
+& (Join-Path $nodeTargetDir "node.exe") (Join-Path $PSScriptRoot "verify-workd-package.mjs") $workTarget
+if ($LASTEXITCODE -ne 0) { throw "Work package runtime probes failed" }
+
+Write-Host "prepare-sidecars: copy into src-tauri/resources/"
+# `work/bin` is the Work daemon wrapper. `workd_spawn` ALWAYS spawns it —
+# even in `stub` mode, because the stub lives inside the wrapper — so a
+# package without it has no Work pane at all. Only `bin/` is copied: the
+# vendor/CoWork checkout is >1 GB and real mode is staged separately.
+$workBin = Join-Path $repoRoot "work\bin"
+$targets = @(
+  @{ src = "$ds\dist";               dst = "$dsDist" },
+  @{ src = "$ds\vendor";             dst = "$dsRoot\vendor" },
+  # ws is required by the vendored remote-gateway at RUNTIME (it loads via
+  # createRequire from vendor/legacy, NOT through the esbuild bundle), so it
+  # must ship alongside the vendor tree. ws@8.21.0 has zero runtime deps —
+  # the single package folder is sufficient (spec §9.1 / §3.3).
+  @{ src = "$ds\node_modules\ws";    dst = "$dsRoot\node_modules\ws" },
+  # Windows-MCP fork source (tool-package-manager.syncWindowsMcpFork). The
+  # pinned transport installs the UPSTREAM tarball for the dependency set;
+  # this tree is then overlaid onto the installed src/windows_mcp so a
+  # packaged app gets the Trylo fork surface (14 tools incl. Ocr) instead
+  # of the 12-tool upstream one. The bundled host resolves it as the
+  # `windows-mcp-fork` sibling of dist/host.bundle.mjs.
+  @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
+  @{ src = "$sidecars\desktop-companion\publish"; dst = "$sidecarPub\desktop-companion\publish" },
+  @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" },
+  @{ src = "$workBin";               dst = "$resources\work\bin" }
+)
+foreach ($t in $targets) {
+  if (-not (Test-Path $t.src)) { throw "prepare-sidecars: missing source $($t.src)" }
+  # A compressed pet publish must not merge with stale loose .NET runtime DLLs.
+  $petDestination = Join-Path $sidecarPub "desktop-companion\publish"
+  if ($t.dst -eq $petDestination -and (Test-Path -LiteralPath $t.dst)) {
+    $fullDestination = [IO.Path]::GetFullPath($t.dst)
+    if (-not $fullDestination.StartsWith(([IO.Path]::GetFullPath($resources) + "\"), [StringComparison]::OrdinalIgnoreCase)) { throw "Pet destination escapes resources" }
+    if ((Get-Item -LiteralPath $t.dst).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Redirected pet destination" }
+    $petBackup = Join-Path $backupRoot ("pet-stage-" + [Guid]::NewGuid().ToString("N"))
+    Move-Item -LiteralPath $t.dst -Destination $petBackup
+  }
+  New-Item -ItemType Directory -Force -Path $t.dst | Out-Null
+  Copy-Item -Recurse -Force "$($t.src)\*" $t.dst
+}
+
+# Legacy .js adapters are CommonJS even when resources are staged below the
+# desktop package's type=module boundary. The entry bundle remains explicit .mjs.
+Set-Content -LiteralPath (Join-Path $dsRoot "package.json") -Value '{"private":true,"type":"commonjs"}' -Encoding utf8
+
+# Python bytecode is machine/version-specific build residue, not a runtime
+# source artifact. Never let a developer's __pycache__ leak into the bundle.
+$hermesResourceDir = Join-Path $sidecarPub "hermes-capabilities"
+$hermesCacheDir = Join-Path $hermesResourceDir "__pycache__"
+if (Test-Path -LiteralPath $hermesCacheDir) {
+  Remove-Item -LiteralPath $hermesCacheDir -Recurse -Force
+}
+Get-ChildItem -LiteralPath $hermesResourceDir -File -Filter "*.pyc" -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+# Same residue rule for the staged Windows-MCP fork (__pycache__ lives at
+# every depth under src/windows_mcp on a developed checkout).
+$forkResourceDir = Join-Path $dsRoot "windows-mcp-fork"
+Get-ChildItem -LiteralPath $forkResourceDir -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue |
+  Remove-Item -Recurse -Force
+Get-ChildItem -LiteralPath $forkResourceDir -Recurse -File -Filter "*.pyc" -ErrorAction SilentlyContinue |
+  Remove-Item -Force
 
 Write-Host "prepare-sidecars: stage and probe the new CLI"
 node (Join-Path $PSScriptRoot "stage-cli.mjs")
