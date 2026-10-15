@@ -122,8 +122,8 @@ vi.mock('./cli-runtime-guard', () => ({
 const { CodeRunController } = await import('./code-run-controller');
 const { buildStopTaskRequest } = await import('../host-adapter/control-protocol');
 
-const CWD = 'C:/work/demo-ws/workspace' as FilePath;
-const CLI_PATH = 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js' as FilePath;
+const CWD = 'C:/trylo-workspace/workspace' as FilePath;
+const CLI_PATH = 'C:/trylo-workspace/new trylo cli/dist/cmd/trylo/main.js' as FilePath;
 
 function settings(protocol: 'legacy-stream-json' | 'trylo-v1'): SettingsForCodeRun {
   return { cliPath: CLI_PATH, cwd: CWD, cliRuntimeProtocol: protocol };
@@ -475,4 +475,15 @@ describe('Legacy initialization failures', () => {
     expect(c.hasPrewarm()).toEqual(replacement);
     expect(m.calls.stopTryloProcess).toBe(stopped);
   });
+});
+
+
+it('forwards the installed interpreter to legacy runs and prewarm', async () => {
+  const { startTrylo, startTryloPrewarm } = await import('../host-adapter/trylo-runner');
+  const nodeProgram = 'C:/Program Files/Trylo/runtime/node/win-x64/node.exe';
+  await controller().run(request('legacy-stream-json', 'hi', { cliNodeProgram: nodeProgram }));
+  expect(vi.mocked(startTrylo).mock.lastCall?.[0]).toMatchObject({ nodeProgram });
+  await controller().prewarm({ ...settings('legacy-stream-json'), cliNodeProgram: nodeProgram },
+    { permissionLevel: 'read_only' });
+  expect(vi.mocked(startTryloPrewarm).mock.lastCall?.[0]).toMatchObject({ nodeProgram });
 });

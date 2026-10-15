@@ -34,6 +34,8 @@ export type CliResolutionSource = 'env' | 'bundled' | 'dev-checkout' | 'system-p
 export interface CliRuntimeResolution {
   /** Absolute path to the CLI script, or null when nothing was found. */
   readonly cliScript: string | null;
+  readonly legacyCliScript?: string | null;
+  readonly legacyCliSource?: CliResolutionSource | null;
   readonly cliSource: CliResolutionSource | null;
   readonly nodeProgram: string;
   readonly nodeSource: CliResolutionSource;
@@ -43,12 +45,16 @@ export interface CliRuntimeResolution {
 export async function resolveCliRuntime(): Promise<CliRuntimeResolution> {
   const dto = await invoke<{
     cli_script: string | null;
+    legacy_cli_script?: string | null;
+    legacy_cli_source?: string | null;
     cli_source: string | null;
     node_program: string;
     node_source: string;
   }>('resolve_cli_runtime');
   return {
     cliScript: dto.cli_script,
+    legacyCliScript: dto.legacy_cli_script ?? null,
+    legacyCliSource: (dto.legacy_cli_source as CliResolutionSource | null) ?? null,
     cliSource: (dto.cli_source as CliResolutionSource | null) ?? null,
     nodeProgram: dto.node_program,
     nodeSource: dto.node_source as CliResolutionSource,
@@ -139,4 +145,19 @@ export function cliSpawnCommand(
   // reports `system-path` when that happens, so a packaged build that
   // silently relied on PATH is visible in diagnostics.
   return { command: node !== '' ? node : 'node', prefix: [cliScript] };
+}
+
+/** Resolve only the legacy entry; a discovered v1 entry can never substitute it. */
+export function effectiveLegacyCliPath(
+  configured: string | undefined,
+  resolved: CliRuntimeResolution | null,
+): EffectiveCliPath {
+  const trimmed = (configured ?? '').trim();
+  const normalized = trimmed.replaceAll('\\', '/').toLowerCase();
+  const isOldDefault = normalized === 'd:/cc/trylo/trylo cli/cli.js'
+    || normalized === 'c:/trylo-cli/cli.js';
+  if (trimmed !== '' && !isOldDefault) return { path: trimmed, substituted: false };
+  return resolved?.legacyCliScript
+    ? { path: resolved.legacyCliScript, substituted: true }
+    : { path: trimmed, substituted: false };
 }

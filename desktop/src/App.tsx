@@ -339,7 +339,7 @@ import {
   type WorkspaceIndex,
 } from './host-adapter/conversation-history'
 
-const DEFAULT_WORKSPACE_ROOT = 'C:/work/demo-ws' as const
+const DEFAULT_WORKSPACE_ROOT = 'C:/trylo-workspace' as const
 const isTauriFn = isTauri
 const EMPTY_CHAT_MESSAGES: readonly ChatMessage[] = []
 
@@ -479,7 +479,7 @@ export interface Workspace {
   readonly name: string
 }
 
-/** Last path segment, e.g. `C:/work/demo-ws` → `trylo`. */
+/** Last path segment, e.g. `C:/trylo-workspace` → `trylo`. */
 function basenameOf(p: string): string {
   const m = p.match(/[^/\\]+$/)
   return m ? m[0] : p
@@ -2075,11 +2075,14 @@ function App(): ReactElement {
       },
       config: (scope) => {
         const current = settingsRef.current
-        if (!current.cliPath) return null
+        const legacy = settingsForCodeRun({ ...current, cliRuntimeProtocol: 'legacy-stream-json',
+          cliPath: current.cliRuntimeProtocol === 'trylo-v1' ? '' : current.cliPath }, scope.projectRoot)
+        if (!legacy.cliPath) return null
         return {
           enabled: true,
           cli: {
-            cliPath: current.cliPath,
+            cliPath: legacy.cliPath,
+            nodeProgram: legacy.cliNodeProgram,
             cwd: scope.projectRoot,
             apiKey: current.apiKey,
             apiHost: current.apiHost,

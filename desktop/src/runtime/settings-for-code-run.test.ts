@@ -22,7 +22,7 @@ import {
 import { LEGACY_RUNTIME_DEFAULT_CLI_PATH } from '../host-adapter/cli-runtime-path';
 import type { FilePath } from '../host-adapter/types';
 
-const CWD = 'C:/work/demo-ws/workspace' as FilePath;
+const CWD = 'C:/trylo-workspace/workspace' as FilePath;
 
 /** What the resolver returns on a machine that HAS the new CLI bundled. */
 const BUNDLED = {
@@ -34,7 +34,7 @@ const BUNDLED = {
 
 /** What it returns from a dev checkout. */
 const DEV_CHECKOUT = {
-  cliScript: 'C:/work/demo-ws/new trylo cli/dist/cmd/trylo/main.js',
+  cliScript: 'C:/trylo-workspace/new trylo cli/dist/cmd/trylo/main.js',
   cliSource: 'dev-checkout' as const,
   nodeProgram: 'C:/Program Files/nodejs/node.exe',
   nodeSource: 'system-path' as const,
@@ -132,4 +132,19 @@ describe('settingsForCodeRun — protocol × path resolution', () => {
       }
     }
   });
+});
+
+
+it('a fresh legacy install resolves its own entry and pinned Node, never the v1 entry', () => {
+  const legacy = { ...BUNDLED, legacyCliScript: 'C:/Program Files/Trylo/cli-legacy/cli.cjs',
+    legacyCliSource: 'bundled' as const };
+  setCliRuntimeResolution(legacy);
+  for (const cliPath of ['', LEGACY_RUNTIME_DEFAULT_CLI_PATH, 'C:/trylo-cli/cli.js']) {
+    const snapshot = settingsForCodeRun({ cliPath: cliPath as FilePath }, CWD);
+    expect(snapshot.cliPath).toBe(legacy.legacyCliScript);
+    expect(snapshot.cliRuntimeProtocol).toBe('legacy-stream-json');
+    expect(snapshot.cliNodeProgram).toBe(legacy.nodeProgram);
+  }
+  const custom = settingsForCodeRun({ cliPath: 'D:/custom/cli.js' as FilePath }, CWD);
+  expect(custom.cliPath).toBe('D:/custom/cli.js');
 });

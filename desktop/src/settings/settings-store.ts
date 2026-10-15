@@ -299,7 +299,7 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  cliPath: 'C:/trylo-cli/cli.js',
+  cliPath: '',
   workspace: 'C:/work/demo-ws',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
   cliRuntimeProtocol: DEFAULT_CLI_RUNTIME_PROTOCOL,

@@ -33,6 +33,7 @@
 
 import {
   effectiveV1CliPath,
+  effectiveLegacyCliPath,
   type CliResolutionSource,
   type CliRuntimeResolution as RustCliRuntimeResolution,
 } from './cli-runtime-path';
@@ -137,9 +138,10 @@ export function selectCliRuntime(input: CliRuntimeSelectionInput): CliRuntimeSel
   } else {
     // NOT `effectiveV1CliPath`, not the resolver: the legacy runtime is
     // whatever the user configured, and substituting it is the bug.
-    entry = (input.configuredPath ?? '').trim();
-    substituted = false;
-    cliSource = null;
+    const effective = effectiveLegacyCliPath(input.configuredPath, input.resourceResolution);
+    entry = effective.path;
+    substituted = effective.substituted;
+    cliSource = input.resourceResolution?.legacyCliSource ?? null;
   }
 
   const source = runtimeSourceOf(substituted, cliSource);
@@ -180,7 +182,7 @@ export function selectCliRuntime(input: CliRuntimeSelectionInput): CliRuntimeSel
     // The interpreter travels with the script or not at all: for v1 it is
     // the one the resolver found next to the entry, for legacy it is the
     // bare `node` the old runtime has always used.
-    ...(kind === 'trylo-v1' && input.resourceResolution?.nodeProgram
+    ...((kind === 'trylo-v1' || substituted) && input.resourceResolution?.nodeProgram
       ? { nodeProgram: input.resourceResolution.nodeProgram }
       : {}),
     source,

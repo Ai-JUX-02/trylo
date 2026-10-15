@@ -62,6 +62,7 @@ function promptWithHistory(
 export interface TryloRunnerOptions {
   /** Absolute path to cli.js. */
   readonly cliPath: FilePath;
+  readonly nodeProgram?: string;
   /** Working directory (the user's opened folder). */
   readonly cwd: FilePath;
   /** Anthropic API key. */
@@ -86,6 +87,7 @@ export interface TryloRunner {
  *  write) and `startTryloPrewarm` (no prompt, idle). */
 export interface BuildCliSpawnArgsInput {
   readonly cliPath: FilePath;
+  readonly nodeProgram?: string;
   readonly cwd: FilePath;
   readonly apiKey?: string;
   readonly apiHost?: string;
@@ -162,7 +164,7 @@ function buildCliSpawnArgs(input: BuildCliSpawnArgsInput): {
   // unknown permission shape.
   const permissionLevel: PermissionLevel = input.permissionLevel ?? 'workspace_write';
   const nodeScriptMatch = /\.(m?js|cjs)$/i.test(input.cliPath);
-  const command = nodeScriptMatch ? 'node' : input.cliPath;
+  const command = nodeScriptMatch ? (input.nodeProgram?.trim() || 'node') : input.cliPath;
   const scriptPrefix = nodeScriptMatch ? [input.cliPath] : [];
 
   const cliArgs = [
@@ -202,6 +204,7 @@ export interface StartTryloArgs {
   readonly prompt: string;
   /** Path to cli.js. */
   readonly cliPath: FilePath;
+  readonly nodeProgram?: string;
   /** Workspace cwd. */
   readonly cwd: FilePath;
   /** API key (used as the `ANTHROPIC_API_KEY` env var). */
@@ -284,6 +287,7 @@ export async function startTrylo(args: StartTryloArgs): Promise<{
   // write a structured user message to stdin below.
   const { command, cliArgs, env } = buildCliSpawnArgs({
     cliPath: args.cliPath,
+    nodeProgram: args.nodeProgram,
     cwd: args.cwd,
     apiKey: args.apiKey,
     apiHost: args.apiHost,
@@ -376,6 +380,7 @@ export async function startTrylo(args: StartTryloArgs): Promise<{
  *  ready loop instead of starting a model turn. */
 export interface StartTryloPrewarmArgs {
   readonly cliPath: FilePath;
+  readonly nodeProgram?: string;
   readonly cwd: FilePath;
   readonly apiKey?: string;
   readonly apiHost?: string;
@@ -433,6 +438,7 @@ export async function startTryloPrewarm(
 
   const { command, cliArgs, env } = buildCliSpawnArgs({
     cliPath: args.cliPath,
+    nodeProgram: args.nodeProgram,
     cwd: args.cwd,
     apiKey: args.apiKey,
     apiHost: args.apiHost,

@@ -542,3 +542,13 @@ describe('isFileOnlyLoopEvent (events-file tail filter)', () => {
     }
   });
 });
+
+it('packaged legacy runs and prewarms use the supplied Node interpreter', async () => {
+  const nodeProgram = 'C:/Program Files/Trylo/runtime/node/win-x64/node.exe';
+  const args = { cliPath: 'C:/Program Files/Trylo/cli-legacy/cli.cjs' as FilePath,
+    nodeProgram, cwd: 'D:/workspace' as FilePath, prompt: 'hello', onEvents: () => {} };
+  await startTrylo(args);
+  await startTryloPrewarm(args);
+  expect(spawnCalls.map(call => call.command)).toEqual([nodeProgram, nodeProgram]);
+  expect(spawnCalls.every(call => call.args[0] === args.cliPath)).toBe(true);
+});

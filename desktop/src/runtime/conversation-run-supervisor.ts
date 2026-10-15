@@ -30,7 +30,7 @@ import {
   type CliRuntimeProtocol,
 } from './cli-runtime-protocol';
 import { getCliRuntimeResolution } from './cli-runtime-resolution';
-import { effectiveV1CliPath } from '../host-adapter/cli-runtime-path';
+import { effectiveV1CliPath, effectiveLegacyCliPath } from '../host-adapter/cli-runtime-path';
 import type { ResolvedToolRuntime, ToolRuntimeResolver, ToolSurface } from '../tooling/types';
 import type { ToolLeaseGrant, ToolRiskRouter } from '../tooling/tool-risk-classifier';
 // Round-3 P0-5: see ./steer-delivery.ts — `steerCode` answers WHY, not whether.
@@ -453,27 +453,13 @@ export function settingsForCodeRun(
   const model = settings.poolModel?.trim()
     ? settings.poolModel
     : (settings.apiModel || undefined);
-  // P08 §4.1 — THE BRANCH THAT MATTERS.
-  //
-  // Which CLI to spawn is decided by the PROTOCOL, not by whether the
-  // resource resolver happened to find a new CLI on this machine:
-  //
-  //   legacy-stream-json → the configured path, untouched. It points at
-  //                        the old runtime, which is exactly right, and
-  //                        replacing it would hand `-p --input-format …`
-  //                        to a CLI that has no `-p`.
-  //   trylo-v1           → the new CLI, resolved from packaged resources
-  //                        when the configured value is empty or is the
-  //                        legacy runtime's own default.
-  //
-  // The first cut of this called `effectiveV1CliPath` unconditionally;
-  // the audit (P0) caught it, and the combination test below pins it.
+  // Each protocol resolves its own entry; custom paths stay untouched.
   const protocol = settings.cliRuntimeProtocol ?? DEFAULT_CLI_RUNTIME_PROTOCOL;
   const resolution = getCliRuntimeResolution();
   const cliPath =
     protocol === 'trylo-v1'
       ? effectiveV1CliPath(settings.cliPath, resolution).path
-      : settings.cliPath;
+      : effectiveLegacyCliPath(settings.cliPath, resolution).path;
   return {
     cliPath: cliPath as FilePath,
     cwd,
@@ -494,7 +480,7 @@ export function settingsForCodeRun(
     // P08 §WP6 (audit P1): the pinned Node travels WITH the script — the
     // two come from one resolution and must not be separated, or a
     // machine without Node on PATH fails despite the bundle carrying one.
-    ...(protocol === 'trylo-v1' && resolution?.nodeProgram
+    ...((protocol === 'trylo-v1' || resolution?.legacyCliScript) && resolution?.nodeProgram
       ? { cliNodeProgram: resolution.nodeProgram }
       : {}),
   };

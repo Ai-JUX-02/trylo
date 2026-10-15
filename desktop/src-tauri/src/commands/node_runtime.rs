@@ -83,9 +83,15 @@ fn node_program_name() -> &'static str {
 
 /// Repo root derived from `CARGO_MANIFEST_DIR`
 /// (`<repo>/desktop/src-tauri`), independent of cwd.
+#[cfg(debug_assertions)]
 fn repo_root() -> Option<PathBuf> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     manifest.ancestors().nth(2).map(Path::to_path_buf)
+}
+
+#[cfg(not(debug_assertions))]
+fn repo_root() -> Option<PathBuf> {
+    None
 }
 
 /// First existing candidate under `root`, if any.
@@ -250,6 +256,38 @@ pub fn resolve_cli_script_in(
     None
 }
 
+/// Resolve the instrumented legacy Trylo entry, never the official runtime/cli.js.
+pub fn resolve_legacy_cli_script(resource_dir: Option<&Path>) -> Option<RuntimeResolution> {
+    resolve_legacy_cli_script_in(resource_dir, repo_root())
+}
+
+pub fn resolve_legacy_cli_script_in(
+    resource_dir: Option<&Path>,
+    repo_root: Option<PathBuf>,
+) -> Option<RuntimeResolution> {
+    if let Ok(explicit) = std::env::var("TRYLO_LEGACY_CLI_SCRIPT") {
+        if !explicit.trim().is_empty() {
+            return Some(RuntimeResolution {
+                program: PathBuf::from(explicit.trim()),
+                source: RuntimeSource::Env,
+            });
+        }
+    }
+    if let Some(dir) = resource_dir {
+        let candidate = dir.join("cli-legacy/cli.cjs");
+        if candidate.is_file() {
+            return Some(RuntimeResolution { program: candidate, source: RuntimeSource::Bundled });
+        }
+    }
+    if let Some(root) = repo_root {
+        let candidate = root.join("trylo cli/cli.js");
+        if candidate.is_file() {
+            return Some(RuntimeResolution { program: candidate, source: RuntimeSource::DevCheckout });
+        }
+    }
+    None
+}
+
 /// Diag-safe description of a resolution: the source only, never the full
 /// private absolute path (audit §2.3 Task W3: no absolute private paths in
 /// renderer-facing diagnostics).
@@ -264,6 +302,20 @@ pub fn describe(resolution: &RuntimeResolution) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_bundle_is_independent_from_the_v1_entry() {
+        let root = std::env::temp_dir().join(format!("trylo-legacy-bundle-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("cli/dist/cmd/trylo")).unwrap();
+        std::fs::write(root.join("cli/dist/cmd/trylo/main.js"), "// new").unwrap();
+        assert!(resolve_legacy_cli_script_in(Some(&root), None).is_none());
+        std::fs::create_dir_all(root.join("cli-legacy")).unwrap();
+        std::fs::write(root.join("cli-legacy/cli.cjs"), "// legacy").unwrap();
+        let resolved = resolve_legacy_cli_script_in(Some(&root), None).unwrap();
+        assert_eq!(resolved.program, root.join("cli-legacy/cli.cjs"));
+        assert_eq!(resolved.source, RuntimeSource::Bundled);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn candidates_are_platform_specific() {

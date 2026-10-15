@@ -6,6 +6,8 @@ Trylo is a personal learning agent project with a native desktop application, a 
 
 **Status: alpha source checkpoint.** This update includes the new Trylo CLI source. The repository reorganization is in progress: current build paths are retained, while the proposed layout is documented separately. This is not a new installer release or a claim that every acceptance check has passed.
 
+Windows desktop preview: [download and checksums](result/desktop/). The preview defaults to the legacy CLI; new CLI source remains included.
+
 ## Source map
 
 | Directory | Responsibility |

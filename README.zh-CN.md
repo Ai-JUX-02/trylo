@@ -6,6 +6,8 @@ Trylo 是一个个人学习智能体项目，包含原生桌面、新版 TypeScr
 
 **当前状态：Alpha 源码快照。** 本次公开新版 Trylo CLI 和当前产品源码。工程整理仍在进行：现有构建路径暂时保留，新的目录结构在架构文档中单独列出。这次提交不代表安装包发行或全项目验收完成。
 
+Windows Desktop preview: [download and checksums](result/desktop/).
+
 ## 从哪里看
 
 | 目录 | 主要职责 |

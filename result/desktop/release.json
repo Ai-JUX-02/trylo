@@ -1,0 +1,77 @@
+{
+  "product": "Trylo Desktop",
+  "version": "1.0.1",
+  "channel": "unsigned-preview",
+  "platform": "windows",
+  "arch": "x64",
+  "format": "portable-zip",
+  "entry": "trylo-desktop.exe",
+  "sourceRef": "desktop-v1.0.1",
+  "createdAt": "2026-10-15T16:01:54.018323+00:00",
+  "artifact": {
+    "file": "Trylo-Desktop-1.0.1-windows-x64-portable.zip",
+    "bytes": 593012640,
+    "files": 94532,
+    "seconds": 223.01,
+    "sha256": "ab227c35b8843662310c186b3297b843cbfb34730b9b446c66724c7cc243cb8c",
+    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1/Trylo-Desktop-1.0.1-windows-x64-portable.zip"
+  },
+  "defaultRuntime": "legacy-stream-json",
+  "runtimes": {
+    "legacy": {
+      "version": "2.1.88-trylo",
+      "entry": "cli-legacy/cli.cjs",
+      "sha256": "48cddc726abf988ba913b91096424480db440c3e1a5a70e621172fc91e66bc59",
+      "files": 38284,
+      "redactedEmbeddedCredentials": 1
+    },
+    "new": {
+      "version": "0.1.0",
+      "entry": "cli/dist/cmd/trylo/main.js",
+      "sha256": "abfb467bdd8edafe70e9cde14bfc26cacf903d1b4424a3af0aa0ec9a7f83b4d0",
+      "files": 2716
+    },
+    "node": {
+      "version": "v24.14.1",
+      "sha256": "58e74bf02fc5bbacc41dcb8bef089961cd5bddd37830b87784e4fc624d145d1f"
+    }
+  },
+  "verification": {
+    "archiveCrc": true,
+    "archiveFiles": 94532,
+    "cliFilesVerified": 2716,
+    "cli-legacyFilesVerified": 38284,
+    "nativeExeMatchesBuild": true,
+    "resourceLayout": true,
+    "embeddedGatewayCredentialRemoved": true,
+    "seconds": 132.03,
+    "addedLicenseCrcVerified": true,
+    "desktopFocusedTests": 92,
+    "shadowRunnerTests": 11,
+    "rustResolverTests": 9,
+    "legacyCliFromExtractedZip": {
+      "passed": true,
+      "provider": "local synthetic Anthropic SSE",
+      "noSystemNode": true,
+      "protocol": "legacy-stream-json",
+      "resultFrames": 1,
+      "assistantMarker": true,
+      "requestCount": 2,
+      "exitCode": 0
+    },
+    "workdNativeBinding": "ok",
+    "workdStartup": {
+      "passed": false,
+      "attempts": 3,
+      "timeoutSeconds": 35,
+      "detail": "Control Plane was not ready; diagnostic stopped while loading the existing agent-daemon module"
+    },
+    "nativeGuiAcceptance": false,
+    "realProviderAcceptance": false,
+    "mobileAssetsChanged": false
+  },
+  "installer": {
+    "published": false,
+    "detail": "NSIS packaging interrupted; only the complete portable ZIP is distributed"
+  }
+}

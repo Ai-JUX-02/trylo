@@ -297,6 +297,7 @@ export interface LearningConfig {
 /** CLI connection used by the shadow (invisible) learning run. */
 export interface LearningCliConfig {
   readonly cliPath: string;
+  readonly nodeProgram?: string;
   readonly cwd: string;
   readonly apiKey?: string;
   readonly apiHost?: string;

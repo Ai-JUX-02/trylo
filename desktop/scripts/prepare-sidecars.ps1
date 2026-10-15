@@ -1,4 +1,4 @@
-# Trylo Desktop — prepare all sidecars for packaging. See migration spec §9.1.
+﻿# Trylo Desktop — prepare all sidecars for packaging. See migration spec §9.1.
 #
 # Run before `cargo tauri build` (wire into the release pipeline / beforeBuild).
 # Steps:
@@ -22,6 +22,8 @@ $ds = Join-Path $repoRoot "desktop-services"
 $sidecars = Join-Path $repoRoot "desktop\sidecars"
 $srcTauri = Join-Path $repoRoot "desktop\src-tauri"
 $resources = Join-Path $srcTauri "resources"
+if (-not ([IO.Path]::GetFullPath($resources)).StartsWith(([IO.Path]::GetFullPath($repoRoot) + "\"), [StringComparison]::OrdinalIgnoreCase)) { throw "resources escape repository" }
+if ((Get-Item -LiteralPath $resources).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "resources must not be redirected" }
 $dsRoot = Join-Path $resources "desktop-services"
 $dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
@@ -65,8 +67,13 @@ Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
 # closure + better-sqlite3 probe under the pinned Node ABI. The probe and
 # the inventory below are the release gate: the installed app must run the
 # real daemon with NO npm/build/rebuild on the user machine.
-node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
-if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
+if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
+  node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
+  if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
+} else {
+  node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
+  if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
+}
 
 Write-Host "prepare-sidecars: copy into src-tauri/resources/"
 # `work/bin` is the Work daemon wrapper. `workd_spawn` ALWAYS spawns it —
@@ -153,6 +160,10 @@ Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.ex
 Write-Host "prepare-sidecars: stage and probe the new CLI"
 node (Join-Path $PSScriptRoot "stage-cli.mjs")
 if ($LASTEXITCODE -ne 0) { throw "stage-cli failed (exit $LASTEXITCODE)" }
+
+Write-Host "prepare-sidecars: stage and probe the legacy CLI (shipping default)"
+node (Join-Path $PSScriptRoot "stage-legacy-cli.mjs")
+if ($LASTEXITCODE -ne 0) { throw "stage-legacy-cli failed (exit $LASTEXITCODE)" }
 
 # Verify what actually landed in resources/ (audit §3.2 W4: a copy that
 # silently produced an incomplete tree used to reach `tauri build` and only

@@ -766,6 +766,7 @@ export class CodeRunController {
         : await startTrylo({
         prompt: request.prompt,
         cliPath: request.settings.cliPath,
+        nodeProgram: request.settings.cliNodeProgram,
         cwd: request.settings.cwd,
         apiKey: request.settings.apiKey,
         apiHost: request.settings.apiHost,
@@ -951,6 +952,7 @@ export class CodeRunController {
       let toolProtocolChecked = false;
       const { processId } = await startTryloPrewarm({
         cliPath: settings.cliPath,
+        nodeProgram: settings.cliNodeProgram,
         cwd: settings.cwd,
         apiKey: settings.apiKey,
         apiHost: settings.apiHost,
