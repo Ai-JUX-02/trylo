@@ -69,11 +69,13 @@ test("a 429 on the primary falls back once to the fallback model", async (t) => 
     now: () => 0,
     newId: (prefix) => `${prefix}-${++id}`,
   };
-  const sink = { stdout: (_text: string) => {}, stderr: (_text: string) => {} };
+  const lines: string[] = [];
+  const sink = { stdout: (text: string) => lines.push(text), stderr: (_text: string) => {} };
   const scaffold = await prepareRun(ctx, {
     options: {
       message: [],
       readStdin: false,
+      format: "stream-json",
       provider: "openai-compatible",
       model: "primary-7b",
       fallbackModel: "fallback-70b",
@@ -93,4 +95,14 @@ test("a 429 on the primary falls back once to the fallback model", async (t) => 
   if ("warnings" in outcome) {
     assert.ok(outcome.warnings.some((warning) => warning.startsWith("model_fallback:")));
   }
+  const frames = lines.map(line => JSON.parse(line) as Record<string, unknown>);
+  const starts = frames.filter(frame => frame.type === "run_start");
+  const results = frames.filter(frame => frame.type === "run_result");
+  assert.equal(starts.length, 1, "fallback is one external run, not a second start");
+  assert.equal(results.length, 1, "the failed primary must not terminate Desktop before fallback");
+  assert.equal(results[0]?.status, "completed");
+  assert.equal(results[0]?.turnId, starts[0]?.turnId);
+  assert.equal(frames.at(-1)?.type, "run_result");
+  assert.ok(frames.some(frame => frame.type === "warning" && frame.code === "model_fallback"));
+  if ("result" in outcome) assert.equal(results[0]?.attemptTurnId, outcome.result.turnId);
 });

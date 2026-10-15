@@ -31,7 +31,7 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 
 ## 已知未完成项
 
-- Desktop 仍保留旧协议适配器，当前默认路由尚未切换；新版 `trylo-v1` 路由已存在。
+- 公库源码默认使用新版 `trylo-v1` CLI，打包不包含旧 CLI 引擎。旧协议适配仅供显式配置的外部运行时使用。
 - Work 的 vendor/构建闭包、读取历史证据的测试仍需整理。
 - 新目录预览是迁移目标，尚未成为当前运行布局。
 - 原生桌面、安装制品和 Android 真机验收与源码检查分别记录。
@@ -43,3 +43,5 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 项目自产代码沿用 [Apache-2.0](LICENSE)，另见 [NOTICE](NOTICE) 与组件来源说明。源码更新、网站部署和二进制发行分别进行。
 
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
+
+当前主库同步与验证：[同步记录](docs/release/MAIN_SOURCE_SYNC_2026_10_15.md)。既有 Desktop R3 下载包仍保持原来的旧 CLI 默认与校验值；本次仅更新源码。

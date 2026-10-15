@@ -204,10 +204,6 @@ Write-Host "prepare-sidecars: stage and probe the new CLI"
 node (Join-Path $PSScriptRoot "stage-cli.mjs")
 if ($LASTEXITCODE -ne 0) { throw "stage-cli failed (exit $LASTEXITCODE)" }
 
-Write-Host "prepare-sidecars: stage and probe the legacy CLI (shipping default)"
-node (Join-Path $PSScriptRoot "stage-legacy-cli.mjs")
-if ($LASTEXITCODE -ne 0) { throw "stage-legacy-cli failed (exit $LASTEXITCODE)" }
-
 # Verify what actually landed in resources/ (audit §3.2 W4: a copy that
 # silently produced an incomplete tree used to reach `tauri build` and only
 # surface as "the pet does not appear"). The inventory hard-fails on any

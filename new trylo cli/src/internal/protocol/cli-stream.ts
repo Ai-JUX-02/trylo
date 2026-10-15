@@ -55,6 +55,11 @@ export type CliStreamEvent =
        * heard of it sees the same line it always saw (D3).
        */
       readonly message?: string;
+      /** Additive journal facts; older streams may omit these fields. */
+      readonly name?: string;
+      readonly code?: string;
+      /** Elapsed time between matching tool-use/result journal envelopes. */
+      readonly durationMs?: number;
     }
   | { readonly type: "warning"; readonly code: string; readonly message: string }
   | { readonly type: "usage"; readonly usage: CliUsage }
@@ -79,6 +84,8 @@ export type CliRunResult = {
   readonly finishReason: string;
   readonly sessionId: string;
   readonly turnId: string;
+  /** Actual final durable attempt when fallback spans multiple turns. */
+  readonly attemptTurnId?: string;
   readonly iterations: number;
   readonly usage: CliUsage;
   readonly durationMs: number;

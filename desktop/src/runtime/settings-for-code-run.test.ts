@@ -69,13 +69,12 @@ describe('settingsForCodeRun — protocol × path resolution', () => {
     expect(snapshot.cliNodeProgram).toBeUndefined();
   });
 
-  it('legacy is also the default when the protocol is absent', () => {
-    // No stored protocol (a pre-P08 settings blob) must behave like legacy,
-    // not like "whatever the resolver found".
+  it('uses the new CLI and its pinned Node when the protocol is absent', () => {
     setCliRuntimeResolution(BUNDLED);
     const snapshot = settingsForCodeRun({ cliPath: LEGACY_RUNTIME_DEFAULT_CLI_PATH }, CWD);
-    expect(snapshot.cliRuntimeProtocol).toBe('legacy-stream-json');
-    expect(snapshot.cliPath).toBe(LEGACY_RUNTIME_DEFAULT_CLI_PATH);
+    expect(snapshot.cliRuntimeProtocol).toBe('trylo-v1');
+    expect(snapshot.cliPath).toBe(BUNDLED.cliScript);
+    expect(snapshot.cliNodeProgram).toBe(BUNDLED.nodeProgram);
   });
 
   it('v1 + dev checkout: uses the resolved script and its Node', () => {
@@ -135,12 +134,12 @@ describe('settingsForCodeRun — protocol × path resolution', () => {
 });
 
 
-it('a fresh legacy install resolves its own entry and pinned Node, never the v1 entry', () => {
+it('an explicit legacy choice resolves its own entry and pinned Node, never the v1 entry', () => {
   const legacy = { ...BUNDLED, legacyCliScript: 'C:/Program Files/Trylo/cli-legacy/cli.cjs',
     legacyCliSource: 'bundled' as const };
   setCliRuntimeResolution(legacy);
   for (const cliPath of ['', LEGACY_RUNTIME_DEFAULT_CLI_PATH, 'C:/trylo-cli/cli.js']) {
-    const snapshot = settingsForCodeRun({ cliPath: cliPath as FilePath }, CWD);
+    const snapshot = settingsForCodeRun({ cliPath: cliPath as FilePath, cliRuntimeProtocol: 'legacy-stream-json' }, CWD);
     expect(snapshot.cliPath).toBe(legacy.legacyCliScript);
     expect(snapshot.cliRuntimeProtocol).toBe('legacy-stream-json');
     expect(snapshot.cliNodeProgram).toBe(legacy.nodeProgram);

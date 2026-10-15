@@ -1,5 +1,6 @@
 # 公开源码整理与迁移顺序
 
+> Current source decision (2026-10-15): main working-tree fixes are synchronized, trylo-v1 is the default, and legacy CLI source/engine staging are excluded. [Synchronization record](../release/MAIN_SOURCE_SYNC_2026_10_15.md). Earlier R3 artifact notes describe their historical download, not this source default.
 > 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 > 状态：待审
 > 阶段：公开源码整理，第一批

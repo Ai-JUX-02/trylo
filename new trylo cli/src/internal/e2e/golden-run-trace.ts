@@ -24,6 +24,8 @@ export const GOLDEN_RUN_TRACE: ReadonlyArray<Record<string, unknown>> = [
     status: "succeeded",
     output: "wrote fixture-output.txt (27 bytes, created)",
     truncated: false,
+    name: "write_file",
+    durationMs: 0,
   },
   {
     type: "usage",
@@ -45,6 +47,8 @@ export const GOLDEN_RUN_TRACE: ReadonlyArray<Record<string, unknown>> = [
     status: "succeeded",
     output: "the fixture wrote this line",
     truncated: false,
+    name: "read_file",
+    durationMs: 0,
   },
   {
     type: "usage",

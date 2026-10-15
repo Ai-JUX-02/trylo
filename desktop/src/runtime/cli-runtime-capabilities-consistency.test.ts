@@ -38,11 +38,9 @@ import {
 const KINDS: readonly CliRuntimeKind[] = ['legacy', 'trylo-v1'];
 
 describe('kind → protocol', () => {
-  it('maps the legacy kind to the SHIPPING default protocol', () => {
-    // §4.1: the default stays `legacy-stream-json` until release parity
-    // passes. Hanging the mapping off the same constant means a default flip
-    // cannot silently leave the mapping pointing somewhere else.
-    expect(protocolOfKind('legacy')).toBe(DEFAULT_CLI_RUNTIME_PROTOCOL);
+  it('maps the new CLI kind to the public source default', () => {
+    expect(protocolOfKind('trylo-v1')).toBe(DEFAULT_CLI_RUNTIME_PROTOCOL);
+    expect(protocolOfKind('legacy')).toBe('legacy-stream-json');
   });
 
   it('covers the closed protocol set exactly once', () => {

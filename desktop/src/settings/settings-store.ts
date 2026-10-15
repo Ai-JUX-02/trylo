@@ -44,6 +44,7 @@
 // store (keyring / stronghold).
 
 export type ApiFormat = 'anthropic' | 'openai';
+export type SettingsSaveIntent = 'connection' | 'preferences';
 /** Legacy permission mode kept only for one-way migration (P2, spec §4.4).
  *  New code must consume `PermissionLevel` from
  *  `../permission/permission-policy.ts`; the picker no longer writes this
@@ -161,6 +162,20 @@ export function connectionFields(s: ConnectionSource): ModelConnectionFields {
   };
 }
 
+/** Compare only the canonical connection fields, including wire format and provider. */
+export function sameConnection(a: ModelConnectionFields, b: ModelConnectionFields): boolean {
+  return (Object.keys(connectionFields(a)) as (keyof ModelConnectionFields)[]).every(key => a[key] === b[key]);
+}
+
+/** Editing a connection creates a custom selection unless it still matches a saved profile.
+ *  Named profiles are changed only by the user's explicit overwrite action. */
+export function settingsForSave(previous: TryloSettings, next: TryloSettings): TryloSettings {
+  const edited = !sameConnection(previous, next);
+  const active = next.modelProfiles.find(profile => profile.id === next.activeModelProfileId);
+  return { ...next, poolModel: edited && next.poolModel === previous.poolModel ? '' : next.poolModel,
+    activeModelProfileId: active && sameConnection(active, next) ? active.id : '' };
+}
+
 /** Apply a profile to the active primary connection. Never touches pool. */
 export function applyProfile(s: TryloSettings, profile: ModelProfile): TryloSettings {
   return {
@@ -265,10 +280,8 @@ export interface TryloSettings {
   /**
    * P08 §4.1: which CLI runtime contract Desktop spawns.
    *
-   * Developer-only opt-in. The default is `legacy-stream-json` until
-   * release parity passes; flipping it is a release decision. Absent
-   * (never persisted / pre-P08 value) migrates to the legacy default so
-   * no existing user is silently moved to the new CLI.
+   * Public source builds default to `trylo-v1`. Explicitly stored runtime
+   * choices are preserved; a legacy engine must be configured externally.
    */
   readonly cliRuntimeProtocol: CliRuntimeProtocol;
 }
@@ -299,7 +312,7 @@ const DEFAULTS: TryloSettings = {
   workComputer: true,
   workCad: false,
   hermesWorkLearning: true,
-  cliPath: '',
+  cliPath: 'C:/trylo-cli/cli.js',
   workspace: 'C:/work/demo-ws',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
   cliRuntimeProtocol: DEFAULT_CLI_RUNTIME_PROTOCOL,
@@ -585,14 +598,19 @@ export function loadSettings(): TryloSettings {
 
 export function saveSettings(s: TryloSettings): void {
   if (typeof window === 'undefined') return;
+  let previousRaw: string | null;
   try {
-    const previousRaw = window.localStorage.getItem(STORAGE_KEY);
-    if (parseStoredSettings(previousRaw)) {
-      window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!);
-    }
+    previousRaw = window.localStorage.getItem(STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {
-    // Quota exceeded or private mode — ignore.
+    throw new Error('设置保存失败，未应用更改。请检查存储空间或权限后重试。');
+  }
+  // Backup is best-effort and follows the primary commit: an optional backup
+  // hitting quota must never silently keep the old primary connection active.
+  try {
+    if (parseStoredSettings(previousRaw)) window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!);
+  } catch {
+    // The primary is already committed; retain any older backup as-is.
   }
 }
 

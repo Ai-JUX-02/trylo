@@ -16,6 +16,7 @@ import type { ShellEnvironment } from "../../adapters/sandbox/shell-detect.js";
 import path from "node:path";
 import { skillsPortFor } from "./skills-wiring.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
+import { createFallbackStream } from "./fallback-stream.js";
 
 /**
  * One turn of a prepared run.
@@ -95,6 +96,8 @@ export async function runOneTurn(
       }
     }
   }
+  const fallbackStream = scaffold.format === "stream-json" && scaffold.fallbackModel !== undefined && permissionMode === "non_interactive"
+    ? createFallbackStream(sink) : undefined;
   const base: TurnHostInput = {
     ...(scaffold.toolSelection === undefined ? {} : { toolSelection: scaffold.toolSelection }),
     ...(scaffold.questions === undefined ? {} : { questions: scaffold.questions }),
@@ -119,7 +122,7 @@ export async function runOneTurn(
     permission: permissionFor(permissionMode, ctx, scaffold.permissions?.choice(choice) ?? choice),
     ...(scaffold.permissions === undefined ? {} : { grants: scaffold.permissions.grants }),
     format: scaffold.format,
-    sink,
+    sink: fallbackStream?.sink ?? sink,
     ...(cancelSignal === undefined ? {} : { cancelSignal }),
     ...(pendingInput === undefined ? {} : { pendingInput }),
     now: ctx.now,
@@ -201,9 +204,12 @@ export async function runOneTurn(
   };
   const outcome = await executeTurn(base);
   if (isTurnFailure(outcome)) {
+    fallbackStream?.finish();
     return outcome;
   }
-  return maybeFallbackTurn(ctx, scaffold, base, outcome, permissionMode);
+  const finished = await maybeFallbackTurn(ctx, scaffold, base, outcome, permissionMode);
+  fallbackStream?.finish();
+  return finished;
 }
 
 /**

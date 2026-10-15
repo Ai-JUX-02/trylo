@@ -305,6 +305,21 @@
       "source": "docs/release/SOURCE_COMPLETENESS_2026_10_15.md",
       "target": "docs/release/SOURCE_COMPLETENESS_2026_10_15.md",
       "reason": "Public source completeness findings and verification boundaries."
+    },
+    {
+      "source": "desktop/README-Portable.txt",
+      "target": "desktop/README-Portable.txt",
+      "reason": "Current new-CLI portable instructions are separate from historical R3 release notes."
+    },
+    {
+      "source": "docs/fixtures/p08-cli-v1/legacy-read-parity.jsonl",
+      "target": "docs/fixtures/p08-cli-v1/legacy-read-parity.jsonl",
+      "reason": "Controlled synthetic protocol-parity fixture required by the synced test; no legacy engine source or binary."
+    },
+    {
+      "source": "docs/fixtures/p08-cli-v1/legacy-read-parity.md",
+      "target": "docs/fixtures/p08-cli-v1/legacy-read-parity.md",
+      "reason": "Controlled synthetic protocol-parity fixture required by the synced test; no legacy engine source or binary."
     }
   ],
   "excludedRoots": [
@@ -341,7 +356,7 @@
     {
       "id": "R01",
       "owner": "desktop/services",
-      "summary": "Remove reachable legacy CLI routes/defaults and migrate shadow runner; validate new CLI production behavior."
+      "summary": "Public source now defaults to trylo-v1 and excludes legacy packaging. Native/installed parity and historical external legacy adapters still require their own acceptance."
     },
     {
       "id": "R02",

@@ -22,6 +22,8 @@ import { parseCliV1Event, type CliV1Event, type CliV1Rejected, type CliV1Usage }
 import { desktopV1Tool } from './trylo-v1-tool';
 import { ThinkScrubber } from './think-scrubber';
 import { thinkingSummary } from './thinking-summary';
+import { summarizeStderr, describeV1Rejections } from './trylo-v1-diagnostics';
+export { summarizeStderr } from './trylo-v1-diagnostics';
 
 /** Why a run ended. `unknown` is the honest answer when we can't tell. */
 export type TryloV1Outcome = 'completed' | 'failed' | 'cancelled' | 'unknown';
@@ -44,27 +46,6 @@ export interface TryloV1RunSummary {
   readonly usage: CliV1Usage | null;
   /** Null until an authoritative `run_result` was consumed. */
   readonly outcome: TryloV1Outcome | null;
-}
-
-/** How much stderr may become visible terminal detail (P08 §5). */
-const MAX_STDERR_LINES = 5;
-const MAX_STDERR_CHARS = 500;
-
-/**
- * Turn captured stderr into one human-readable line.
- *
- * NOT just the last line: the real pre-run failure writes
- *   `cannot resume session x: missing_session`
- *   `if no other trylo process is running, delete the stale .lock …`
- * and the last line is remediation advice, not the cause. Keeping the
- * head preserves the root cause; capping keeps a chatty runtime from
- * dumping a wall of text into the transcript.
- */
-export function summarizeStderr(stderr: readonly string[]): string {
-  const lines = stderr.map((l) => l.trim()).filter((l) => l !== '');
-  if (lines.length === 0) return '';
-  const joined = lines.slice(0, MAX_STDERR_LINES).join(' | ');
-  return joined.length <= MAX_STDERR_CHARS ? joined : `${joined.slice(0, MAX_STDERR_CHARS)}…`;
 }
 
 export class TryloV1EventAdapter {
@@ -137,14 +118,7 @@ export class TryloV1EventAdapter {
 
   /** One sentence describing what the wire guard refused, if anything. */
   describeRejections(): string {
-    if (this.rejections.length === 0) return '';
-    const reasons = new Map<string, number>();
-    for (const r of this.rejections) {
-      reasons.set(r.reason, (reasons.get(r.reason) ?? 0) + 1);
-    }
-    const parts = [...reasons.entries()].map(([reason, count]) => `${reason}×${count}`);
-    const sample = this.rejections[0]!.raw.slice(0, 120);
-    return `${this.rejections.length} 行输出无法按协议解析（${parts.join(', ')}）。示例：${sample}`;
+    return describeV1Rejections(this.rejections);
   }
 
   /** True once an authoritative terminal event was produced. */
@@ -164,7 +138,19 @@ export class TryloV1EventAdapter {
       }
       return [];
     }
-    return this.project(parsed.event);
+    const event = parsed.event;
+    if ((event.type === 'run_start' || event.type === 'run_result') && this.sessionId !== null) {
+      if (event.sessionId !== this.sessionId || event.turnId !== this.turnId ||
+          (event.type === 'run_start' && (event.providerId !== this.providerId || event.model !== this.model))) {
+        this.rejections.push({ ok: false, reason: 'identity_mismatch', raw: '' });
+        return [];
+      }
+      if (event.type === 'run_start') return [];
+    }
+    const newTool = event.type === 'tool_use' && !this.toolNames.has(event.toolCallId) && !this.settledToolCallIds.has(event.toolCallId);
+    const pending = event.type === 'message_start' || event.type === 'reasoning_start' || newTool
+      ? this.closeBlocks() : [];
+    return [...pending, ...this.project(event)];
   }
 
   /**
@@ -279,6 +265,19 @@ export class TryloV1EventAdapter {
     }
   }
 
+  private closeBlocks(): LoopEvent[] {
+    const events: LoopEvent[] = [];
+    if (this.textBlockId !== undefined || this.textBuffer !== '') {
+      const { seq, ts } = this.next();
+      events.push(...this.onMessageEnd(seq, ts));
+    }
+    if (this.reasoningBlockId !== undefined || this.reasoningBuffer !== '') {
+      const { seq, ts } = this.next();
+      events.push(...this.onReasoningEnd(seq, ts));
+    }
+    return events;
+  }
+
   private onRunStart(
     event: Extract<CliV1Event, { type: 'run_start' }>,
     seq: number,
@@ -356,7 +355,7 @@ export class TryloV1EventAdapter {
     const ok = event.status === 'succeeded';
     const startedAt = this.toolStartMs.get(event.toolCallId);
     this.toolStartMs.delete(event.toolCallId);
-    const name = this.toolNames.get(event.toolCallId) ?? '';
+    const name = this.toolNames.get(event.toolCallId) ?? (event.name ? desktopV1Tool(event.name, undefined).name : '');
     this.toolNames.delete(event.toolCallId);
     return [
       {
@@ -366,11 +365,11 @@ export class TryloV1EventAdapter {
         ok,
         output: event.output,
         truncated: event.truncated,
-        ...(ok ? {} : { error: event.message || event.output || `tool failed (${event.status})` }),
+        ...(ok ? {} : { error: event.message || event.code || event.output || `tool failed (${event.status})` }),
         // Measured when we saw the matching tool_use; 0 when we didn't
         // (a result whose call was never projected must not fake a
         // duration).
-        durationMs: startedAt === undefined ? 0 : Math.max(0, ts - startedAt),
+        durationMs: event.durationMs ?? (startedAt === undefined ? 0 : Math.max(0, ts - startedAt)),
       },
     ];
   }
@@ -387,12 +386,16 @@ export class TryloV1EventAdapter {
     this.sessionId = event.sessionId;
     this.turnId = event.turnId;
     this.latestUsage = event.usage;
-    return this.emitTerminal(
-      event.status,
+    const incomplete = event.status === 'completed' && (this.rejections.length > 0 || this.toolNames.size > 0);
+    const warnings = this.rejections.length > 0
+      ? [this.warn('protocol_rejected', this.describeRejections())]
+      : incomplete ? [this.warn('incomplete_tool_stream', 'CLI reported completion without a result for every tool call.')] : [];
+    return [...warnings, ...this.emitTerminal(
+      incomplete ? 'unknown' : event.status,
       event.lastMessage,
       event.finishReason || event.status,
       { ts, iterations: event.iterations, durationMs: event.durationMs },
-    );
+    )];
   }
 
   private emitTerminal(

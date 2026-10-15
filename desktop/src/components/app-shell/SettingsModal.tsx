@@ -20,6 +20,7 @@ import {
   createProfileId,
   removeProfile,
   saveSettings,
+  settingsForSave,
   settingsDefaults,
   upsertProfile,
   type ApiFormat,
@@ -28,6 +29,7 @@ import {
   type RemoteSettings,
   type SubConnection,
   type TryloSettings,
+  type SettingsSaveIntent,
 } from '../../settings/settings-store';
 import { PERMISSION_LEVELS, type PermissionLevel } from '../../permission/permission-policy';
 import type { CliRuntimeProtocol } from '../../runtime/cli-runtime-protocol';
@@ -52,7 +54,7 @@ export interface SettingsModalProps {
   readonly open: boolean;
   readonly initial: TryloSettings;
   readonly onClose: () => void;
-  readonly onSave?: (settings: TryloSettings) => void;
+  readonly onSave?: (settings: TryloSettings, intent: SettingsSaveIntent) => void;
   /** Real pet state from the sidecar (audit §4.2 PET-P0-1). Optional so the
    *  modal stays usable outside the wired app; absent means "unknown". */
   readonly petStatus?: PetStatusSnapshot;
@@ -157,6 +159,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   // Sidebar tab state
@@ -179,6 +182,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
       setForm(toFormState(props.initial));
       setTestResult(null);
       setTestError(null);
+      setSaveError(null);
       setProfileName('');
     }
   }, [props.open, props.initial, props.initialTab]);
@@ -220,8 +224,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
 
   const onSave = (e: FormEvent): void => {
     e.preventDefault();
-    saveSettings(form);
-    props.onSave?.(form);
+    const intent: SettingsSaveIntent = settingsTab === 'connection' ? 'connection' : 'preferences';
+    const next = settingsForSave(props.initial, intent === 'connection' ? { ...form, poolModel: '' } : form);
+    try { saveSettings(next); }
+    catch (error) {
+      setSaveError(error instanceof Error ? error.message : '设置保存失败，请重试。');
+      return;
+    }
+    props.onSave?.(next, intent);
     props.onClose();
   };
 
@@ -593,7 +603,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               </div>
               {form.modelProfiles.length === 0 ? (
                 <span className="settings-modal__hint">
-                  还没保存过配置。填好上面 Provider / Auth 后，起个名字点"保存当前为新配置"。
+                  还没保存过配置。填好上面 Provider / Auth 后，起个名字点“保存当前为新配置”。
                 </span>
               ) : (
                 <ul className="settings-modal__profiles-list">
@@ -686,12 +696,12 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                     set('cliRuntimeProtocol', e.target.value as CliRuntimeProtocol)
                   }
                 >
-                  <option value="legacy-stream-json">旧 CLI（默认）</option>
-                  <option value="trylo-v1">新 CLI — trylo-v1（开发预览）</option>
+                  <option value="legacy-stream-json">旧 CLI（需自行配置）</option>
+                  <option value="trylo-v1">新 CLI — trylo-v1（默认）</option>
                 </select>
                 <span className="settings-modal__hint">
                   新 CLI 是「一轮一个进程」，支持流式输出、工具调用、会话恢复和逐项审批。
-                  真实模型可使用已有 OpenAI 格式连接，或新 CLI 已配置的 provider 与凭据；默认仍是旧 CLI。
+                  真实模型可使用已有 OpenAI 格式连接，或新 CLI 已配置的 provider 与凭据；默认使用新 CLI。
                 </span>
               </label>
 
@@ -1170,6 +1180,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
           </div>
         </div>
         <footer className="settings-modal__footer">
+          {saveError && <p role="alert" className="settings-modal__test-result settings-modal__test-result--err">{saveError}</p>}
           <button
             type="button"
             className="settings-modal__btn settings-modal__btn--ghost"

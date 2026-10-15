@@ -58,6 +58,16 @@ test("appended caller instructions retain the default task guidance exactly once
   assert.ok(instructions.some(message => message.content === "Use concise Chinese progress updates."));
 });
 
+test("multi-step requests carry public progress guidance before tools and after findings", async () => {
+  for (const request of await requestsFor({ ...INPUT, systemPromptAppend: "Use Chinese." }, 2)) {
+    const seed = request.messages.filter(message => message.role === "system").map(message => message.content).join("\n");
+    assert.match(seed, /before the first tool/i);
+    assert.match(seed, /meaningful findings/i);
+    assert.match(seed, /simple questions.*directly/i);
+    assert.match(seed, /without private reasoning/i);
+  }
+});
+
 test("multi-deliverable CLI requests carry the requirements checklist and final delivery audit on follow-up requests", async () => {
   const text = "Repair a calculation, generate its output, write a change report, then run the validator.";
   for (const request of await requestsFor({ ...INPUT, text }, 2)) {

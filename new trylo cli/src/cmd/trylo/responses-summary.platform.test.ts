@@ -19,17 +19,24 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
   mkdirSync(workspace);
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bodies: Record<string, unknown>[] = [];
+  let summaryDelivery = "delta";
   const server = createServer((request, response) => {
     let raw = "";
     request.on("data", chunk => { raw += String(chunk); });
     request.on("end", () => {
       const body = JSON.parse(raw) as Record<string, unknown>;
       bodies.push(body);
+      const summaryText = "Inspect the public fixture.";
+      const summaryItem = { type: "reasoning", id: "rs-1", summary: [{ type: "summary_text", text: summaryText }] };
+      const summaryFrames = summaryDelivery === "delta"
+        ? frame("response.reasoning_summary_text.delta", { output_index: 0, delta: summaryText })
+        : summaryDelivery === "text.done" ? frame("response.reasoning_summary_text.done", { output_index: 0, summary_index: 0, text: summaryText })
+          : summaryDelivery === "part.done" ? frame("response.reasoning_summary_part.done", { output_index: 0, summary_index: 0, part: summaryItem.summary[0] }) : "";
       response.writeHead(200, { "Content-Type": "text/event-stream" });
       response.end(
         (body["reasoning"] === undefined ? "" :
-          frame("response.reasoning_summary_text.delta", { output_index: 0, delta: "Inspect the public fixture." }) +
-          frame("response.output_item.done", { output_index: 0, item: { type: "reasoning", id: "rs-1" } })) +
+          summaryFrames + frame("response.output_item.done", { output_index: 0,
+            item: summaryDelivery === "item.done" ? summaryItem : { type: "reasoning", id: "rs-1" } })) +
         frame("response.output_text.delta", { output_index: 1, delta: "Done." }) +
         frame("response.output_item.done", { output_index: 1, item: { type: "message", id: "msg-1" } }) +
         frame("response.completed", { response: { status: "completed" } }),
@@ -41,7 +48,8 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
   const address = server.address();
   assert.ok(address !== null && typeof address !== "string");
   const cli = fileURLToPath(new URL("./main.js", import.meta.url));
-  for (const declaredReasoning of [true, false]) {
+  for (const [declaredReasoning, delivery] of [[true, "delta"], [true, "text.done"], [true, "part.done"], [true, "item.done"], [false, "delta"]] as const) {
+    summaryDelivery = delivery;
     writeFileSync(join(profile, "providers.json"), JSON.stringify({
       version: 1,
       selected: "lab",
@@ -65,6 +73,7 @@ test("the real CLI opts into Responses summaries only for declared reasoning", a
     assert.equal(events.filter(event => event["type"] === "run_result").length, 1);
     if (declaredReasoning) {
       assert.deepEqual(bodies.at(-1)?.["reasoning"], { summary: "auto" });
+      assert.equal(events.filter(event => event["type"] === "reasoning_delta").map(event => event["text"]).join(""), "Inspect the public fixture.");
       const end = events.findIndex(event => event["type"] === "reasoning_end");
       const text = events.findIndex(event => event["type"] === "message_start");
       assert.ok(end >= 0 && end < text);

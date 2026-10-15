@@ -11,8 +11,8 @@ import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
  * incremental consumer and the end-of-run projection cannot drift apart — the
  * incremental one simply receives each event earlier.
  *
- * The state is bounded on purpose: an open message, an open reasoning block,
- * and nothing else. Nothing here may look ahead, which is why the sequence is
+ * State holds open blocks and in-flight tool facts, cleared on settlement.
+ * Nothing here may look ahead, which is why the sequence is
  * identical whether it is drained at the end or pushed envelope by envelope.
  * Fields that genuinely need the whole turn (`run_result.lastMessage`,
  * cumulative usage) stay in `projection.ts` and are emitted once, at the end.
@@ -134,7 +134,28 @@ type BlockState = {
   messageOpen: boolean;
   /** Undefined when closed; otherwise the privacy state of the open block. */
   reasoningRedacted: boolean | undefined;
+  readonly tools: Map<string, { readonly name: string; readonly timestamp: number }>;
 };
+
+function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEvent {
+  const toolCallId = text(envelope.payload, "toolCallId");
+  const started = state.tools.get(toolCallId);
+  state.tools.delete(toolCallId);
+  const name = text(envelope.payload, "name") || started?.name || "";
+  const code = text(envelope.payload, "code");
+  const reason = failureReason(envelope.payload);
+  const elapsed = started === undefined ? undefined : Date.parse(envelope.timestamp) - started.timestamp;
+  return {
+    type: "tool_result", toolCallId,
+    status: text(envelope.payload, "status"),
+    output: text(envelope.payload, "output"),
+    truncated: envelope.payload.truncated === true,
+    ...(reason === "" ? {} : { message: reason }),
+    ...(name === "" ? {} : { name }),
+    ...(code === "" ? {} : { code }),
+    ...(elapsed === undefined || !Number.isFinite(elapsed) ? {} : { durationMs: Math.max(0, elapsed) }),
+  };
+}
 
 function closeBlocks(state: BlockState, events: CliStreamEvent[], which: "message" | "reasoning" | "all"): void {
   if ((which === "reasoning" || which === "all") && state.reasoningRedacted !== undefined) {
@@ -191,11 +212,15 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
         events.push({ type: "reasoning_start", redacted });
         state.reasoningRedacted = redacted;
       }
-      events.push({ type: "reasoning_delta", text: text(envelope.payload, "text") });
+      // Privacy applies to wire bytes as well as to the Desktop presentation.
+      if (!redacted) events.push({ type: "reasoning_delta", text: text(envelope.payload, "text") });
       break;
     }
     case "tool_use":
       closeBlocks(state, events, "all");
+      state.tools.set(text(envelope.payload, "toolCallId"), {
+        name: text(envelope.payload, "name"), timestamp: Date.parse(envelope.timestamp),
+      });
       events.push({
         type: "tool_use",
         toolCallId: text(envelope.payload, "toolCallId"),
@@ -210,15 +235,7 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
       // Projecting `output` alone is why a failed call used to render as
       // `<- <id> failed` with nothing after it, and why the person watching had
       // no way to tell which tool broke or what to do about it.
-      const reason = failureReason(envelope.payload);
-      events.push({
-        type: "tool_result",
-        toolCallId: text(envelope.payload, "toolCallId"),
-        status: text(envelope.payload, "status"),
-        output: text(envelope.payload, "output"),
-        truncated: envelope.payload.truncated === true,
-        ...(reason === "" ? {} : { message: reason }),
-      });
+      events.push(projectToolResult(state, envelope));
       break;
     }
     case "usage":
@@ -238,6 +255,7 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
       events.push(warningFor(envelope.payload, envelope.kind));
       break;
     case "terminal": {
+      closeBlocks(state, events, "all");
       const diagnostic = terminalDiagnostic(envelope.payload);
       if (diagnostic !== undefined) {
         events.push(diagnostic);
@@ -250,16 +268,20 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
 }
 
 export function createStreamTranslator(): StreamTranslator {
-  const state: BlockState = { messageOpen: false, reasoningRedacted: undefined };
+  let state: BlockState | undefined = { messageOpen: false, reasoningRedacted: undefined, tools: new Map() };
   return {
     push(envelope: Envelope): ReadonlyArray<CliStreamEvent> {
+      if (state === undefined) return [];
       const events: CliStreamEvent[] = [];
       translateInto(state, envelope, events);
+      if (envelope.kind === "terminal") state = undefined;
       return events;
     },
     finish(): ReadonlyArray<CliStreamEvent> {
+      if (state === undefined) return [];
       const events: CliStreamEvent[] = [];
       closeBlocks(state, events, "all");
+      state = undefined;
       return events;
     },
   };

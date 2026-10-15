@@ -12,7 +12,8 @@ def main():
  version=json.loads((root/'desktop/package.json').read_text(encoding='utf-8'))['version']
  resources=root/'desktop/src-tauri/resources'
  profile=json.loads((root/'desktop/distribution.json').read_text(encoding='utf-8'))
- if profile['distribution']!='core' or profile['components']['coworkRuntime']['bundled'] is not False:
+ if (profile['distribution']!='core' or profile['components']['coworkRuntime']['bundled'] is not False
+     or profile.get('defaultCliRuntime')!='trylo-v1' or profile['components'].get('legacyCliRuntime',{}).get('bundled') is not False):
   raise SystemExit('This release requires a core Desktop distribution profile')
  dependency=json.loads((root/'desktop/optional-dependencies/cowork-runtime.json').read_text(encoding='utf-8'))
  name=(f'Trylo-Desktop-{version}-windows-x64-portable-core.zip' if args.component=='desktop'
@@ -22,7 +23,7 @@ def main():
  if output.exists():raise SystemExit('Refusing to overwrite an existing portable archive: '+str(output))
  items=[]
  # Explicit component roots: an old staged Work tree can never leak into core.
- trees=(['desktop-services','sidecars/desktop-companion/publish','sidecars/hermes-capabilities','cli','cli-legacy','runtime']
+ trees=(['desktop-services','sidecars/desktop-companion/publish','sidecars/hermes-capabilities','cli','runtime']
         if args.component=='desktop' else ['work/bin','workd'])
  for tree in trees:
   source=resources/tree
@@ -44,7 +45,8 @@ def main():
   items.append((root/'desktop/optional-dependencies/cowork-runtime.json','dependency-manifest.json'))
   notices=['WORKD-LICENSE.txt','README-CoWork.txt']
  for name in notices:
-  file=root/'result/desktop'/name
+  file=(root/'desktop/README-Portable.txt' if args.component=='desktop' and name=='README-Desktop.txt'
+        else root/'result/desktop'/name)
   if not file.is_file():raise SystemExit('Missing release notice: '+name)
   items.append((file,name))
  items.sort(key=lambda item:item[1]);started=time.monotonic()

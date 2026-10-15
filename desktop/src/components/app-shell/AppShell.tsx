@@ -18,7 +18,7 @@ import { SettingsModal, type SettingsTab } from './SettingsModal';
 import { RemotePairingModal } from './RemotePairingModal';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
-import type { TryloSettings } from '../../settings/settings-store';
+import type { SettingsSaveIntent, TryloSettings } from '../../settings/settings-store';
 import type { PetStatusSnapshot, RemotePairingInfoResult, RemoteStatusResult } from '../../services-host/methods';
 import type { ToolPlatformState } from '../../tooling/use-tool-platform-state';
 import type { LearningPort } from '../../learning/learning-port';
@@ -138,7 +138,7 @@ export interface AppShellProps {
    *  can request it. The shell only renders. */
   readonly settingsOpen: boolean;
   readonly onSettingsOpenChange: (open: boolean) => void;
-  readonly onSettingsSave: (settings: TryloSettings) => void;
+  readonly onSettingsSave: (settings: TryloSettings, intent?: SettingsSaveIntent) => void;
   /** Real pet state, shown in the settings modal (audit §4.2 PET-P0-1). */
   readonly petStatus?: PetStatusSnapshot;
   /** Real remote-gateway state, shown in the settings modal (spec §8.1.4). */

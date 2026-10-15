@@ -2,11 +2,27 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { createToolProfileService } from '../../src/tooling/tool-profile-service.mjs';
 import { createToolHealthService } from '../../src/tooling/tool-health-service.mjs';
 import { PLAYWRIGHT_MANIFEST } from '../../src/tooling/manifests/playwright.mjs';
 import { CHROME_DEVTOOLS_MANIFEST } from '../../src/tooling/manifests/chrome-devtools.mjs';
+
+test('an embedded profile launches the service host rather than its callers entry script', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trylo-embedded-profile-'));
+  const manifest = PLAYWRIGHT_MANIFEST;
+  const service = createToolProfileService({ storageRoot: root,
+    catalog: { get: id => id === manifest.id ? manifest : undefined, list: () => [manifest] },
+    health: { check: async () => ({ available: true }) }, packages: { resolve: async () => ({ executable: '/pinned/cli.js' }) },
+    nativeBrowser: { configure: async () => ({ gate: 'http://127.0.0.1:12345/abc123', args: [] }) },
+  });
+  const result = await service.resolve({ surface: 'code', projectRoot: root, conversationId: 'embedded', computerUse: false });
+  assert.equal(result.ok, true);
+  const server = JSON.parse(fs.readFileSync(result.mcpConfigPath, 'utf8')).mcpServers['trylo-browser'];
+  assert.equal(server.args[0], fileURLToPath(new URL('../../src/host.mjs', import.meta.url)));
+  assert.equal(server.args[1], '--native-browser-mcp');
+});
 
 for (const [surface, profileId, manifest, flag] of [
   ['code', 'code.core.v1', PLAYWRIGHT_MANIFEST, '--cdp-endpoint'],

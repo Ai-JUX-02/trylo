@@ -148,12 +148,14 @@ import {
   saveSettings,
   type ModelProfile,
   type TryloSettings,
+  type SettingsSaveIntent,
 } from './settings/settings-store'
 import {
   effectiveModelForConversation,
+  conversationModelsAfterSettingsSave,
   getConversationChoice,
   loadConversationModels,
-  resolveRunConnection,
+  settingsForConversation,
   saveConversationModels,
   setConversationChoice,
   type ConversationModelChoice,
@@ -339,7 +341,7 @@ import {
   type WorkspaceIndex,
 } from './host-adapter/conversation-history'
 
-const DEFAULT_WORKSPACE_ROOT = 'C:/trylo-workspace' as const
+const DEFAULT_WORKSPACE_ROOT = 'C:/work/demo-ws' as const
 const isTauriFn = isTauri
 const EMPTY_CHAT_MESSAGES: readonly ChatMessage[] = []
 
@@ -479,7 +481,7 @@ export interface Workspace {
   readonly name: string
 }
 
-/** Last path segment, e.g. `C:/trylo-workspace` → `trylo`. */
+/** Last path segment, e.g. `C:/work/demo-ws` → `trylo`. */
 function basenameOf(p: string): string {
   const m = p.match(/[^/\\]+$/)
   return m ? m[0] : p
@@ -2075,14 +2077,11 @@ function App(): ReactElement {
       },
       config: (scope) => {
         const current = settingsRef.current
-        const legacy = settingsForCodeRun({ ...current, cliRuntimeProtocol: 'legacy-stream-json',
-          cliPath: current.cliRuntimeProtocol === 'trylo-v1' ? '' : current.cliPath }, scope.projectRoot)
-        if (!legacy.cliPath) return null
+        if (!current.cliPath) return null
         return {
           enabled: true,
           cli: {
-            cliPath: legacy.cliPath,
-            nodeProgram: legacy.cliNodeProgram,
+            cliPath: current.cliPath,
             cwd: scope.projectRoot,
             apiKey: current.apiKey,
             apiHost: current.apiHost,
@@ -2237,9 +2236,18 @@ function App(): ReactElement {
     return () => window.removeEventListener('pagehide', onPageHide)
   }, [companion, remoteController])
 
-  const handleSettingsSave = useCallback((next: TryloSettings): void => {
+  const handleSettingsSave = useCallback((next: TryloSettings, intent: SettingsSaveIntent = 'connection'): void => {
+    const conversationId = topMode === 'work' ? workSessionId : codeSessionId
+    const nextModels = conversationModelsAfterSettingsSave(settingsRef.current, next,
+      conversationModelsRef.current, currentWorkspaceKey, conversationId ?? '', intent)
+    if (nextModels !== conversationModelsRef.current) {
+      conversationModelsRef.current = nextModels
+      setConversationModels(nextModels)
+      saveConversationModels(nextModels)
+    }
+    settingsRef.current = next
     setSettings(next)
-  }, [])
+  }, [currentWorkspaceKey, topMode, workSessionId, codeSessionId])
 
   /** Remember the model source a conversation chose. Keyed by the ACTIVE
    *  conversation (Code/Work per `topMode`); persisted independently so each
@@ -2846,17 +2854,16 @@ function App(): ReactElement {
       try {
         // Always read the latest persisted settings. Code
         // does this on every send; Work must do the same.
-        const currentSettings = loadSettings()
-        setSettings(currentSettings)
+        const savedSettings = loadSettings()
+        setSettings(savedSettings)
         // 不同对话不同模型: resolve THIS Work conversation's connection so the
         // run spawns with the conversation's chosen model (profile/pool/own).
-        const runConnection = resolveRunConnection(
-          currentSettings,
+        const currentSettings = settingsForConversation(
+          savedSettings,
           workspaceKey(root),
           sessionId,
           conversationModelsRef.current,
         )
-        Object.assign(currentSettings, runConnection)
         const effectiveLearningDirective =
           currentSettings.userLearning.userLearningNoTraceMode === false
             ? undefined
@@ -3645,18 +3652,11 @@ function App(): ReactElement {
         ]
       })
       setEditingMessageId(null)
-      const current = loadSettings()
-      setSettings(current)
+      const savedSettings = loadSettings()
+      setSettings(savedSettings)
       // 不同对话不同模型: resolve THIS Code conversation's connection on resend too.
-      Object.assign(
-        current,
-        resolveRunConnection(
-          current,
-          currentWorkspaceKey,
-          codeSessionId,
-          conversationModelsRef.current,
-        ),
-      )
+      const current = settingsForConversation(savedSettings, currentWorkspaceKey, codeSessionId,
+        conversationModelsRef.current)
       // 2) Resend through the supervisor. priorMessages is the
       //    truncated history (up to, but not including, the edited
       //    bubble — the bubble itself now carries the new text —
@@ -4730,19 +4730,12 @@ function App(): ReactElement {
       }
       const learningDirective = queuedLearningDirective ?? consumeNextLearningDirective('code')
       setText('')
-      const current = loadSettings()
-      setSettings(current)
+      const savedSettings = loadSettings()
+      setSettings(savedSettings)
       // 不同对话不同模型: resolve THIS Code conversation's connection so the
       // run spawns with the conversation's chosen model (profile/pool/own).
-      Object.assign(
-        current,
-        resolveRunConnection(
-          current,
-          currentWorkspaceKey,
-          codeSessionId,
-          conversationModelsRef.current,
-        ),
-      )
+      const current = settingsForConversation(savedSettings, currentWorkspaceKey, codeSessionId,
+        conversationModelsRef.current)
       const effectiveLearningDirective =
         current.userLearning.userLearningNoTraceMode === false ? undefined : learningDirective
       if (RUN_TELEMETRY_DEBUG) {

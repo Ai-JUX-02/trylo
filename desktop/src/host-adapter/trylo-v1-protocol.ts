@@ -70,6 +70,10 @@ export type CliV1Event =
       readonly output: string;
       readonly truncated: boolean;
       readonly message?: string;
+      readonly name?: string;
+      readonly code?: string;
+      /** Elapsed time between the CLI's matching journal envelopes. */
+      readonly durationMs?: number;
     }
   | { readonly type: 'warning'; readonly code: string; readonly message: string }
   | { readonly type: 'usage'; readonly usage: CliV1Usage }
@@ -83,6 +87,7 @@ export type CliV1Event =
       readonly usage: CliV1Usage;
       readonly durationMs: number;
       readonly lastMessage: string;
+      readonly attemptTurnId?: string;
     };
 
 /** Why a line was rejected. Callers surface this; they never swallow it. */
@@ -92,7 +97,8 @@ export type CliV1RejectReason =
   | 'not_an_object'
   | 'missing_type'
   | 'unknown_type'
-  | 'invalid_fields';
+  | 'invalid_fields'
+  | 'identity_mismatch';
 
 export interface CliV1Rejected {
   readonly ok: false;
@@ -122,10 +128,18 @@ function isNonEmptyString(value: unknown): value is string {
 function isUsage(value: unknown): value is CliV1Usage {
   if (!isRecord(value)) return false;
   return (
-    typeof value.inputTokens === 'number' &&
-    typeof value.outputTokens === 'number' &&
-    typeof value.totalTokens === 'number'
+    isCount(value.inputTokens) &&
+    isCount(value.outputTokens) &&
+    isCount(value.totalTokens)
   );
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isDuration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function isRunStatus(value: unknown): value is CliV1RunStatus {
@@ -157,10 +171,13 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
     case 'tool_result':
       return (
         isNonEmptyString(raw.toolCallId) &&
-        typeof raw.status === 'string' &&
+        (raw.status === 'succeeded' || raw.status === 'failed' || raw.status === 'cancelled' || raw.status === 'unknown') &&
         typeof raw.output === 'string' &&
         typeof raw.truncated === 'boolean' &&
-        (raw.message === undefined || typeof raw.message === 'string')
+        (raw.message === undefined || typeof raw.message === 'string') &&
+        (raw.name === undefined || isNonEmptyString(raw.name)) &&
+        (raw.code === undefined || isNonEmptyString(raw.code)) &&
+        (raw.durationMs === undefined || isDuration(raw.durationMs))
       );
     case 'warning':
       // `message` may legitimately be empty — the captured golden traces
@@ -175,10 +192,11 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         typeof raw.finishReason === 'string' &&
         isNonEmptyString(raw.sessionId) &&
         isNonEmptyString(raw.turnId) &&
-        typeof raw.iterations === 'number' &&
+        isCount(raw.iterations) &&
         isUsage(raw.usage) &&
-        typeof raw.durationMs === 'number' &&
-        typeof raw.lastMessage === 'string'
+        isDuration(raw.durationMs) &&
+        typeof raw.lastMessage === 'string' &&
+        (raw.attemptTurnId === undefined || isNonEmptyString(raw.attemptTurnId))
       );
     default:
       return false;

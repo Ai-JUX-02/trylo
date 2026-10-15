@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { browserRuntimeEnv } from './browser-runtime-env.mjs';
 
 import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
@@ -202,6 +203,9 @@ export function createToolProfileService(options = {}) {
   const now = options.now ?? (() => Date.now());
   const browserObserver = options.browserObserver;
   const nativeBrowser = options.nativeBrowser;
+  // An embedded caller's argv[1] is its launcher, which need not implement
+  // --native-browser-mcp. The service host supplies its own path when bundled.
+  const hostEntrypoint = options.hostEntrypoint ?? fileURLToPath(new URL('../host.mjs', import.meta.url));
 
   const profilesRoot = options.profilesRoot
     ?? (storageRoot ? path.join(storageRoot, 'tool-profiles') : '');
@@ -430,7 +434,7 @@ export function createToolProfileService(options = {}) {
         mcpServers[manifest.mcp.serverName] = {
           command: process.execPath,
           args: nativeConnection
-            ? [options.hostEntrypoint ?? process.argv[1], '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
+            ? [hostEntrypoint, '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
             : [installed.executable, ...expanded, ...originArgs],
           env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv },
         };

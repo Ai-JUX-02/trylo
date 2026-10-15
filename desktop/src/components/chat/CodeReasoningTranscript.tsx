@@ -147,11 +147,12 @@ function CodeReasoningTranscriptImpl(
   // Tool groups retain their live/history disclosure behavior. Reasoning-only
   // segments below always show their full text without an additional toggle.
   const errorVisible = props.entries.some(entry => entry.kind === 'tool' && entry.status === 'error');
-  const [expanded, setExpanded] = useState(props.active || errorVisible);
+  const hasReasoning = props.entries.some(entry => entry.kind === 'thinking' && (entry.preview.trim() || entry.summary.trim()));
+  const [expanded, setExpanded] = useState(props.active || errorVisible || hasReasoning);
   const wasActive = useRef(props.active);
   const userExpanded = useRef<boolean | null>(null);
   useEffect(() => {
-    if (errorVisible) {
+    if (errorVisible || hasReasoning) {
       if (userExpanded.current === null) setExpanded(true);
       return;
     }
@@ -162,13 +163,13 @@ function CodeReasoningTranscriptImpl(
     }
     if (!wasActive.current) return;
     wasActive.current = false;
-    // Let the completed state register briefly, then move the transcript out
-    // of the way so the final answer and review result become the focal point.
+    // Compact tool-only phases. Delivered reasoning stays readable after the
+    // answer starts; only the user's own toggle may hide it.
     const timer = window.setTimeout(() => {
       if (userExpanded.current === null) setExpanded(false);
     }, 420);
     return () => window.clearTimeout(timer);
-  }, [props.active, errorVisible]);
+  }, [props.active, errorVisible, hasReasoning]);
 
   const tools = props.entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
   const toolCount = tools.length;

@@ -77,6 +77,7 @@ test("a failed tool result carries why, and a successful one grows no new field"
       output: "",
       truncated: false,
       message: "shell_nonzero_exit:1\nboom",
+      code: "shell_nonzero_exit",
     },
   ]);
   // The same envelope shape a success has always had: `output`, no `message`.
@@ -131,7 +132,7 @@ test("text closes before reasoning and redaction changes start a separate block"
   ]), [
     { type: "message_start" }, { type: "message_delta", text: "progress" }, { type: "message_end" },
     { type: "reasoning_start", redacted: false }, { type: "reasoning_delta", text: "public summary" }, { type: "reasoning_end" },
-    { type: "reasoning_start", redacted: true }, { type: "reasoning_delta", text: "hidden" }, { type: "reasoning_end" },
+    { type: "reasoning_start", redacted: true }, { type: "reasoning_end" },
     { type: "reasoning_start", redacted: false }, { type: "reasoning_delta", text: "next summary" }, { type: "reasoning_end" },
   ]);
 });

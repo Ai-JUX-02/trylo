@@ -9,9 +9,8 @@
 //   - the runner route
 //   - the settings UI
 //
-// The default stays `legacy-stream-json` until release parity passes
-// (§4.1: "默认保持 legacy-stream-json，直到发行 parity 通过"). Flipping
-// the default is a release decision, not a code change made in passing.
+// The product owner selected trylo-v1 for public source builds (2026-10-15).
+// Legacy protocol adapters remain for explicitly configured external runtimes.
 
 export type CliRuntimeProtocol = 'legacy-stream-json' | 'trylo-v1';
 
@@ -20,12 +19,8 @@ export const CLI_RUNTIME_PROTOCOLS: readonly CliRuntimeProtocol[] = [
   'trylo-v1',
 ];
 
-/**
- * The shipping default. The new CLI is opt-in for developers only —
- * switching everyone over before M4 parity would turn every unfinished
- * capability into a silent regression.
- */
-export const DEFAULT_CLI_RUNTIME_PROTOCOL: CliRuntimeProtocol = 'legacy-stream-json';
+/** Public source builds use the new CLI without a private development env file. */
+export const DEFAULT_CLI_RUNTIME_PROTOCOL: CliRuntimeProtocol = 'trylo-v1';
 
 export function parseCliRuntimeProtocol(value: unknown): CliRuntimeProtocol | null {
   return value === 'legacy-stream-json' || value === 'trylo-v1' ? value : null;

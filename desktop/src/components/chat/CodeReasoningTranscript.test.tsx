@@ -15,6 +15,29 @@ import { CodeReasoningTranscript } from './CodeReasoningTranscript'
 import type { ThinkingMessage, ToolMessage } from './types'
 
 describe('approved event flow disclosure', () => {
+  it('keeps delivered reasoning readable after a mixed tool phase finishes', () => {
+    vi.useFakeTimers();
+    try {
+      const note = { ...thinking(), preview: '先核对文件内容，再验证修改结果。' };
+      const view = render(<CodeReasoningTranscript entries={[note, tool({ status: 'running' })]} active turnId="u1" phaseId="p1" />);
+      view.rerender(<CodeReasoningTranscript entries={[note, tool({ status: 'done' })]} active={false} turnId="u1" phaseId="p1" />);
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(view.container.querySelector('.code-reasoning__head')).toHaveAttribute('aria-expanded', 'true');
+      expect(view.container.querySelector('.disclosure')).toHaveClass('disclosure--open');
+      expect(view.getByText(note.preview)).toBeVisible();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('shows saved reasoning on history load and still respects a manual collapse', () => {
+    const entries = [thinking(), tool({ status: 'done' })];
+    const view = render(<CodeReasoningTranscript entries={entries} active={false} turnId="u1" phaseId="p1" />);
+    const head = view.container.querySelector('.code-reasoning__head')!;
+    expect(head).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(head);
+    view.rerender(<CodeReasoningTranscript entries={[...entries, { ...thinking(), id: 'th2' }]} active={false} turnId="u1" phaseId="p1" />);
+    expect(head).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('shows a reasoning-only entry in full without another disclosure', () => {
     const raw = '原始思考保留标点和换行。\n第二段也原样保留。';
     const view = render(<CodeReasoningTranscript entries={[

@@ -28,7 +28,7 @@ import { createComputerPreviewStream, resolveComputerPreviewPython } from './com
 
 /**
  * @param {{ appDataDir?: string, sidecarsDir?: string,
- *            log?: (m: string) => void, seam?: object }} [options]
+ *            log?: (m: string) => void, hostEntrypoint?: string, seam?: object }} [options]
  *   `seam` is a test-only injection point (`{ manifests, hermesManager,
  *   installRoot, overrides }`) so the method surface can be exercised
  *   without touching the real install root or spawning Python.
@@ -107,6 +107,7 @@ export function createToolingServices(options = {}) {
     hermes,
     storageRoot,
     browserObserver,
+    ...(options.hostEntrypoint ? { hostEntrypoint: options.hostEntrypoint } : {}),
     ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
   });

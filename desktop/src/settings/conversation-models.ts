@@ -20,6 +20,9 @@
 
 import {
   connectionFields,
+  sameConnection,
+  type ModelConnectionFields,
+  type SettingsSaveIntent,
   type ModelProfile,
   type TryloSettings,
 } from './settings-store';
@@ -122,10 +125,29 @@ export function saveConversationModels(map: ConversationModelMap): void {
 }
 
 /** The minimal connection subset the CLI spawn reads from settings. */
-export type RunConnection = Pick<
-  TryloSettings,
-  'apiKey' | 'apiHost' | 'apiModel' | 'apiFormat' | 'apiKeyHeader' | 'apiKeyPrefix' | 'extraHeadersText'
->;
+export type RunConnection = ModelConnectionFields;
+
+/** The run snapshot must not change the global settings displayed by the UI. */
+export function settingsForConversation(
+  settings: TryloSettings, workspaceKey: string, conversationId: string,
+  conversationModels: ConversationModelMap = EMPTY,
+): TryloSettings {
+  return { ...settings, ...resolveRunConnection(settings, workspaceKey, conversationId, conversationModels) };
+}
+
+/** Reconcile the active conversation when the user explicitly saves a connection. */
+export function conversationModelsAfterSettingsSave(
+  previous: TryloSettings, next: TryloSettings, map: ConversationModelMap,
+  workspaceKey: string, conversationId: string,
+  intent: SettingsSaveIntent = 'preferences',
+): ConversationModelMap {
+  if (!workspaceKey || !conversationId || (intent === 'preferences' && sameConnection(previous, next)
+      && previous.poolModel === next.poolModel && previous.activeModelProfileId === next.activeModelProfileId)) return map;
+  const profile = next.modelProfiles.find(profile => profile.id === next.activeModelProfileId);
+  const choice: ConversationModelChoice = next.poolModel.trim() ? { kind: 'pool', model: next.poolModel }
+    : profile && sameConnection(profile, next) ? { kind: 'profile', id: profile.id } : { kind: 'own' };
+  return setConversationChoice(map, workspaceKey, conversationId, choice);
+}
 
 /**
  * Expand a conversation's model choice into the concrete connection to spawn

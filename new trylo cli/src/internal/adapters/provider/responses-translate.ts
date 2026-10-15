@@ -1,5 +1,6 @@
 ﻿import type { ProviderEvent, ProviderFinishReason } from "../../ports/provider.js";
 import { parseToolInput } from "./invalid-tool-input.js";
+import { createResponsesSummary } from "./responses-summary.js";
 
 /**
  * Responses wire event -> ProviderEvent translation (WP18.2: C68).
@@ -25,7 +26,7 @@ type ResponsesToolAssembly = {
 
 type ResponsesState = {
   readonly textBlocks: Map<string, string>;
-  readonly reasoningBlocks: Map<string, string>;
+  readonly summary: ReturnType<typeof createResponsesSummary>;
   readonly tools: Map<string, ResponsesToolAssembly>;
   toolCallsEmitted: number;
   /** A terminal frame was already emitted; `complete()` must not invent one. */
@@ -49,7 +50,7 @@ function num(record: Record<string, unknown>, key: string): number {
 export function createResponsesTranslator() {
   const state: ResponsesState = {
     textBlocks: new Map(),
-    reasoningBlocks: new Map(),
+    summary: createResponsesSummary(),
     tools: new Map(),
     toolCallsEmitted: 0,
     finished: false,
@@ -90,7 +91,11 @@ function pushResponsesEvent(
     case "response.output_text.delta":
       return textDelta(state, payload);
     case "response.reasoning_summary_text.delta":
-      return reasoningDelta(state, payload);
+      return state.summary.delta(payload);
+    case "response.reasoning_summary_text.done":
+      return state.summary.textDone(payload);
+    case "response.reasoning_summary_part.done":
+      return state.summary.partDone(payload);
     case "response.function_call_arguments.delta":
       return toolArgumentsDelta(state, payload);
     case "response.output_item.done":
@@ -145,22 +150,6 @@ function textDelta(state: ResponsesState, payload: Record<string, unknown>): Pro
   return events;
 }
 
-/** Reasoning summary deltas; the wire's summaries are plain text. */
-function reasoningDelta(state: ResponsesState, payload: Record<string, unknown>): ProviderEvent[] {
-  const delta = str(payload, "delta");
-  if (delta.length === 0) {
-    return [];
-  }
-  const key = `reasoning-${num(payload, "output_index")}`;
-  const events: ProviderEvent[] = [];
-  if (!state.reasoningBlocks.has(key)) {
-    state.reasoningBlocks.set(key, key);
-    events.push({ type: "reasoning_start", blockId: key, redacted: false });
-  }
-  events.push({ type: "reasoning_delta", blockId: key, text: delta, redacted: false });
-  return events;
-}
-
 /**
  * Function argument fragments, keyed by the wire's `item_id`.
  *
@@ -201,12 +190,10 @@ function outputItemDone(state: ResponsesState, payload: Record<string, unknown>)
   if (!isRecord(item)) {
     return [];
   }
-  if (item["type"] === "reasoning" || item["type"] === "message") {
-    const isReasoning = item["type"] === "reasoning";
-    const blockId = `${isReasoning ? "reasoning" : "text"}-${num(payload, "output_index")}`;
-    const blocks = isReasoning ? state.reasoningBlocks : state.textBlocks;
-    if (!blocks.delete(blockId)) return [];
-    return [{ type: isReasoning ? "reasoning_end" : "text_end", blockId }];
+  if (item["type"] === "reasoning") return state.summary.itemDone(num(payload, "output_index"), item);
+  if (item["type"] === "message") {
+    const blockId = `text-${num(payload, "output_index")}`;
+    return state.textBlocks.delete(blockId) ? [{ type: "text_end", blockId }] : [];
   }
   if (item["type"] !== "function_call") {
     return [];
@@ -271,6 +258,7 @@ function completed(state: ResponsesState, payload: Record<string, unknown>): Pro
     return events;
   }
   const reason: ProviderFinishReason = status === "incomplete" ? "length" : "stop";
+  events.push(...state.summary.completed(detail["output"]));
   events.push(...closeOpenResponsesBlocks(state));
   events.push(...settleAllTools(state));
   events.push({
@@ -313,10 +301,7 @@ function closeOpenResponsesBlocks(state: ResponsesState): ProviderEvent[] {
     events.push({ type: "text_end", blockId });
     state.textBlocks.delete(blockId);
   }
-  for (const blockId of [...state.reasoningBlocks.keys()].sort()) {
-    events.push({ type: "reasoning_end", blockId });
-    state.reasoningBlocks.delete(blockId);
-  }
+  events.push(...state.summary.closeAll());
   return events;
 }
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { expect, it, vi } from 'vitest';
+import { expect, it, onTestFinished, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import type { LoopEvent } from './loop-events';
 import type { ResolvedToolRuntime } from '../tooling/types';
 import { applyEvents } from '../components/chat/events';
 import { toolPreviewState } from '../tooling/tool-preview-state';
+import { createNativeBrowserEngine } from './native-browser-engine.fixture';
 
 const h = vi.hoisted(() => ({ service: null as ProcessService | null }));
 vi.mock('./index', () => ({ hostAdapter: { get process() { return h.service; } } }));
@@ -26,13 +27,19 @@ it.each([
   const root = mkdtempSync(join(tmpdir(), 'trylo-browser-controller-'));
   const home = join(root, 'home'), workspace = join(root, 'workspace') as FilePath;
   mkdirSync(home); mkdirSync(workspace); writeFileSync(join(workspace, 'package.json'), '{}');
+  const browser = await createNativeBrowserEngine(join(root, 'chromium'), workspace, 'cli-browser-proof');
+  onTestFinished(() => browser.dispose());
   const outputs: { topic: string; data: Record<string, unknown> }[] = [];
-  let receiveFrame: () => void = () => {};
-  const firstFrame = new Promise<void>(done => { receiveFrame = done; });
   // @ts-expect-error Node sidecar exposes JavaScript, exercised through its real public API.
   const { createToolingServices } = await import('../../../desktop-services/src/tooling/index.mjs');
-  const tooling = createToolingServices({ appDataDir: root, emit: (topic: string, data: Record<string, unknown>) => {
-    outputs.push({ topic, data }); if (topic === 'tooling.viewportFrame') receiveFrame();
+  const tooling = createToolingServices({ appDataDir: root,
+    ...(process.env.TRYLO_BROWSER_HOST_ENTRY ? { hostEntrypoint: process.env.TRYLO_BROWSER_HOST_ENTRY } : {}),
+    emit: (topic: string, data: Record<string, unknown>) => {
+    outputs.push({ topic, data });
+    if (topic === 'tooling.nativeBrowserCommand') void browser.command(data as never).then(
+      result => tooling.nativeBrowserCommandResult({ id: data.id, result }),
+      error => tooling.nativeBrowserCommandResult({ id: data.id, error: String(error) }),
+    );
   } });
   const requests: { tools?: { function: { name: string } }[]; messages: { role: string; content?: string }[] }[] = [];
   const server = createServer((incoming, outgoing) => {
@@ -45,9 +52,6 @@ it.each([
       const port = (server.address() as { port: number }).port;
       const call = results.length === 0 ? { name: 'mcp__trylo-browser__browser_navigate', arguments: JSON.stringify({ url: `http://127.0.0.1:${port}/task` }) }
         : results.length === 1 && !denied ? { name: 'mcp__trylo-browser__browser_evaluate', arguments: JSON.stringify({ function: "() => { const b=document.querySelector('button'); b.click(); return b.textContent; }" }) } : null;
-      // Keep the real browser alive while the observer establishes its stream.
-      // This provider fixture completes only after the actual frame event, never a fabricated frame.
-      if (!call && !denied) await Promise.race([firstFrame, new Promise<void>(done => { const timer = setTimeout(done, 8000); firstFrame.then(() => clearTimeout(timer)); })]);
       outgoing.writeHead(200, { 'content-type': 'text/event-stream' });
       const delta = (value: Record<string, unknown>, finish: string | null = null) => outgoing.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: value, finish_reason: finish }] })}\n\n`);
       delta({ content: call ? '正在验证浏览器操作。' : denied ? '用户拒绝了浏览器操作。' : '已验证 CLI_BROWSER_OK。' });
@@ -70,7 +74,7 @@ it.each([
     const scope = { projectRoot: workspace, conversationId: 'cli-browser-proof' };
     const runtime = await tooling.resolveProfile({ ...scope, surface, computerUse: false });
     expect(runtime.ok).toBe(true);
-    const observer = await tooling.viewportStart(scope);
+    expect(runtime.serverNames, JSON.stringify(runtime.unavailableCapabilities)).toContain('trylo-browser');
     let finished: () => void = () => {}; const terminal = new Promise<void>(done => { finished = done; });
     const run = controller.run({ prompt: 'Open the test page, click its button, and report the observed result.', permissionLevel, codeMode: 'agent', priorMessages: [], surface,
       requestedProfileId: `${surface}.core.v1`, toolRuntime: runtime as ResolvedToolRuntime,
@@ -83,28 +87,42 @@ it.each([
       deadline = setTimeout(() => reject(new Error('CLI browser proof exceeded its deadline')), 60000);
     })]);
     expect(requests[0]?.tools?.some(tool => tool.function.name === 'mcp__trylo-browser__browser_navigate'),
-      JSON.stringify({ terminal: events.filter(event => event.type === 'loop_end'), stderr: service.stderr })).toBe(true);
+      JSON.stringify({ terminal: events.filter(event => event.type === 'loop_end'), stderr: service.stderr,
+        requestTools: requests.map(request => request.tools?.map(tool => tool.function.name)),
+        toolResults: events.filter(event => event.type === 'tool_result') })).toBe(true);
     expect(events.filter(event => event.type === 'loop_end')).toMatchObject([{ isError: denied }]);
     expect(approvalRequests).toBeGreaterThan(0);
-    if (process.env.TRYLO_BROWSER_PROOF_DIR) writeFileSync(join(process.env.TRYLO_BROWSER_PROOF_DIR,
-      `cli-${surface}-${permissionLevel}-denied-${denied}.json`), JSON.stringify({ surface, permissionLevel, denied, approvalRequests,
+    const observed = await browser.observe();
+    const browserStates = outputs.filter(event => event.topic === 'tooling.nativeBrowserState');
+    expect(browserStates.length).toBeGreaterThan(0);
+    expect(browserStates.every(event => event.data.scope === browser.scope)).toBe(true);
+    expect(browser.commands.every(command => command.scope === browser.scope)).toBe(true);
+    expect(observed.png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    if (process.env.TRYLO_BROWSER_PROOF_DIR) {
+      const name = `cli-${surface}-${permissionLevel}-denied-${denied}`;
+      writeFileSync(join(process.env.TRYLO_BROWSER_PROOF_DIR, `${name}.png`), observed.png);
+      writeFileSync(join(process.env.TRYLO_BROWSER_PROOF_DIR, `${name}.json`), JSON.stringify({ surface, permissionLevel, denied, approvalRequests,
       terminal: events.filter(event => event.type === 'loop_end'),
       toolResults: events.filter(event => event.type === 'tool_result'),
-      frameCount: outputs.filter(event => event.topic === 'tooling.viewportFrame').length,
-      frameScopes: [...new Set(outputs.filter(event => event.topic === 'tooling.viewportFrame').map(event => event.data.scope))],
+      browserStateCount: browserStates.length, browserScopes: [...new Set(browserStates.map(event => event.data.scope))],
+      observed: { url: observed.url, text: observed.text, pngBytes: observed.png.length },
       computerControl: false, nativeWebView: false }, null, 2));
+    }
     const state = toolPreviewState(applyEvents([], events), 'browser', { running: false });
     if (denied) {
       expect(state.stepCount).toBe(1);
       expect(events.some(event => event.type === 'tool_result' && !event.ok)).toBe(true);
       expect(outputs.some(event => event.topic === 'tooling.viewportFrame')).toBe(false);
       expect(events.some(event => event.type === 'tool_result' && event.output.includes('### Page'))).toBe(false);
+      expect(observed.url.startsWith('about:blank')).toBe(true);
+      expect(observed.text).not.toContain('CLI_BROWSER_OK');
       return;
     }
     expect(state.stepCount).toBe(2); expect(state.actions?.every(action => action.status === '已完成')).toBe(true);
     expect(events.some(event => event.type === 'tool_result' && event.output.includes('CLI_BROWSER_OK'))).toBe(true);
     expect(events.some(event => event.type === 'runtime_warning' && event.code === 'desktop_profile_unavailable')).toBe(false);
-    expect(outputs.some(event => event.topic === 'tooling.viewportFrame')).toBe(true);
-    expect(outputs.filter(event => event.topic === 'tooling.viewportFrame').every(event => event.data.scope === observer.scope)).toBe(true);
-  } finally { clearTimeout(deadline); await controller.stop(); await service.dispose(); tooling.dispose(); server.close(); }
+    expect(observed.url).toBe(`http://127.0.0.1:${(server.address() as { port: number }).port}/task`);
+    expect(observed.text).toBe('CLI_BROWSER_OK');
+    expect(service.children.size).toBe(0);
+  } finally { clearTimeout(deadline); await controller.stop(); await service.dispose(); tooling.dispose(); await browser.dispose(); server.closeAllConnections(); server.close(); }
 }, 120000);

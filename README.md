@@ -31,7 +31,7 @@ Full CLI packaging also needs the pinned sandbox/native helper inputs recorded w
 
 ## Current limits
 
-- Desktop retains legacy protocol adapters and currently defaults to the legacy route. The new `trylo-v1` route exists; the default migration is unfinished.
+- Public source builds default to the new `trylo-v1` CLI and package no legacy engine. Explicit legacy protocol adapters remain for externally configured runtimes.
 - Work's existing vendor/build closure and tests tied to historical evidence still need cleanup.
 - The directory preview is a proposal, not the active runtime layout.
 - Native desktop, installed artifacts, and Android device acceptance are recorded separately from source checks.
@@ -43,3 +43,5 @@ Only the new CLI source is included. The legacy CLI, proprietary CLI distributio
 First-party project code follows [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and component-level provenance. Source updates, website deployment, and binary releases are separate operations.
 
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
+
+Current source synchronization: [main snapshot and checks](docs/release/MAIN_SOURCE_SYNC_2026_10_15.md). The existing Desktop R3 download remains the previously published legacy-default build; this source update does not replace its archives.

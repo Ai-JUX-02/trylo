@@ -9,6 +9,12 @@
       "bundled": false,
       "requiredForOrdinaryWork": false,
       "status": "separate-experimental-dependency"
+    },
+    "legacyCliRuntime": {
+      "bundled": false,
+      "sourcePublished": false,
+      "mode": "external-compatibility-only"
     }
-  }
+  },
+  "defaultCliRuntime": "trylo-v1"
 }

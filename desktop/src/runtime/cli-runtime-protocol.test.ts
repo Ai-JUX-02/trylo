@@ -13,9 +13,9 @@ import {
 } from './cli-runtime-protocol';
 
 describe('CliRuntimeProtocol', () => {
-  it('defaults to the legacy contract until release parity passes', () => {
-    // §4.1: "默认保持 legacy-stream-json，直到发行 parity 通过".
-    expect(DEFAULT_CLI_RUNTIME_PROTOCOL).toBe('legacy-stream-json');
+  it('defaults to the new CLI for the public source distribution', () => {
+    // Product owner selected the new CLI for public source builds.
+    expect(DEFAULT_CLI_RUNTIME_PROTOCOL).toBe('trylo-v1');
   });
 
   it('parses only the two known values', () => {

@@ -98,7 +98,8 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
   // adapter and is only asked for its server definitions (§3.1).
   // `emit` also powers the viewport bridge's screencast frames
   // (`tooling.viewportFrame` / `tooling.viewportStatus` events).
-  const tooling = createToolingServices({ log: stderrDiagnostics, emit: emit.emit });
+  const tooling = createToolingServices({ log: stderrDiagnostics, emit: emit.emit,
+    hostEntrypoint: fileURLToPath(import.meta.url) });
 
   const ctx = {
     registry,
@@ -310,7 +311,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
 // Direct `node src/host.mjs` entry: build a listener with the real stdio.
 // pathToFileURL normalizes Windows drive letters/backslashes — a plain
 // `file://${argv[1]}` string never matches import.meta.url on win32.
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--native-browser-mcp') {
     await runNativeBrowserMcp({ gate: process.argv[3], entry: process.argv[4], args: process.argv.slice(5) });

@@ -239,3 +239,6 @@ new trylo cli/trylo-audit-*
 # Local release preparation and independent-workcopy metadata
 /.local-release/
 /WORKCOPY_*.json
+
+# Private local development overrides never belong in public source.
+.env.*.local
