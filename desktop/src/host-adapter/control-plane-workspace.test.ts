@@ -19,7 +19,7 @@ function clientWith(send: ControlPlaneClient['send']): ControlPlaneClient {
 describe('resolveControlPlaneWorkspace', () => {
   it('reuses a daemon workspace registered for the same Windows path', async () => {
     const send = vi.fn(async () => ({
-      workspaces: [{ id: 'existing', path: 'c:/work/demo-ws/' }],
+      workspaces: [{ id: 'existing', path: 'C:/work/demo-ws/' }],
     })) as unknown as ControlPlaneClient['send'];
 
     await expect(resolveControlPlaneWorkspace(clientWith(send), 'C:\\work\\demo-ws', 'trylo'))
@@ -31,14 +31,14 @@ describe('resolveControlPlaneWorkspace', () => {
   it('creates a workspace only when the path is not registered', async () => {
     const sendMock = vi.fn()
       .mockResolvedValueOnce({ workspaces: [] })
-      .mockResolvedValueOnce({ workspace: { id: 'created', path: 'D:/CC/new' } });
+      .mockResolvedValueOnce({ workspace: { id: 'created', path: 'C:/work/new' } });
     const send = sendMock as unknown as ControlPlaneClient['send'];
 
-    await expect(resolveControlPlaneWorkspace(clientWith(send), 'D:/CC/new', 'new'))
+    await expect(resolveControlPlaneWorkspace(clientWith(send), 'C:/work/new', 'new'))
       .resolves.toBe('created');
     expect(sendMock).toHaveBeenNthCalledWith(2, 'workspace.create', {
       name: 'new',
-      path: 'D:/CC/new',
+      path: 'C:/work/new',
     });
   });
 

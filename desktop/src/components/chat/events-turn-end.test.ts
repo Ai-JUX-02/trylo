@@ -113,4 +113,77 @@ describe('applyTurnEnd (v1.16.0)', () => {
       throw new Error('expected turn message');
     }
   });
+
+  it('marks a failed turn with tools-but-no-answer incomplete (tools ran ≠ delivered)', () => {
+    const tool: import('./types').ChatMessage = {
+      id: 'tool-x-1', kind: 'tool', role: 'assistant', createdAt: 200,
+      tool: 'Write', toolCallId: 'x', status: 'done', summary: 'f', input: {},
+    };
+    const out = applyEvents(
+      [
+        { id: 'u1', kind: 'text', role: 'user', createdAt: 100, text: 'hi' },
+        tool,
+      ],
+      [makeTurnEnd({ turn: 1, stopReason: 'failed', usage: { input_tokens: 16157, output_tokens: 364 } })],
+    );
+    const t = out.find((m) => m.kind === 'turn');
+    if (t && t.kind === 'turn') {
+      expect(t.status).toBe('error');
+      expect(t.incomplete).toBe(true);
+    } else {
+      throw new Error('expected turn message');
+    }
+  });
+
+  it('marks a failed turn with NO usage frame incomplete (resume/model-mismatch path)', () => {
+    const out = applyEvents(
+      [{ id: 'u1', kind: 'text', role: 'user', createdAt: 100, text: '你好' }],
+      [makeTurnEnd({ turn: 1, stopReason: 'failed', usage: undefined })],
+    );
+    const t = out.find((m) => m.kind === 'turn');
+    if (t && t.kind === 'turn') {
+      expect(t.status).toBe('error');
+      expect(t.incomplete).toBe(true);
+    } else {
+      throw new Error('expected turn message');
+    }
+  });
+
+  it('does NOT mark a completed tool-only turn incomplete (no text is normal there)', () => {
+    const tool: import('./types').ChatMessage = {
+      id: 'tool-x-1', kind: 'tool', role: 'assistant', createdAt: 200,
+      tool: 'Write', toolCallId: 'x', status: 'done', summary: 'f', input: {},
+    };
+    const out = applyEvents(
+      [
+        { id: 'u1', kind: 'text', role: 'user', createdAt: 100, text: 'hi' },
+        tool,
+      ],
+      [makeTurnEnd({ turn: 1, stopReason: 'tool_use', usage: { input_tokens: 10, output_tokens: 5 } })],
+    );
+    const t = out.find((m) => m.kind === 'turn');
+    if (t && t.kind === 'turn') {
+      expect(t.status).toBe('done');
+      expect(t.incomplete).toBeUndefined();
+    } else {
+      throw new Error('expected turn message');
+    }
+  });
+
+  it('does NOT mark a failed turn with a partial answer incomplete (the answer is the delivery)', () => {
+    const out = applyEvents(
+      [
+        { id: 'u1', kind: 'text', role: 'user', createdAt: 100, text: 'hi' },
+        { id: 'a1', kind: 'text', role: 'assistant', createdAt: 200, text: 'partial…' },
+      ],
+      [makeTurnEnd({ turn: 1, stopReason: 'failed', usage: { input_tokens: 10, output_tokens: 5 } })],
+    );
+    const t = out.find((m) => m.kind === 'turn');
+    if (t && t.kind === 'turn') {
+      expect(t.status).toBe('error');
+      expect(t.incomplete).toBeUndefined();
+    } else {
+      throw new Error('expected turn message');
+    }
+  });
 });

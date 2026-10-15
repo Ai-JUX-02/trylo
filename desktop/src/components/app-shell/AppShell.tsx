@@ -1,24 +1,20 @@
-// Trylo Desktop — AppShell. See spike-results/phase-2-ui-redesign.md.
-//
-// v1.5 layout: top bar (Code / Work) + (left rail | body
-// | right rail?).
-//
-// v1.15.7: the left rail is now a 3-section Cursor-style
-// sidebar (Workspaces / Files / Sessions) owned by App.
-// The shell just passes the new props through. The
-// hidden <input webkitdirectory> is kept as a final
-// fallback for browsers that still need it; the primary
-// path is tauri-plugin-dialog's `open({ directory: true })`.
-
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement, ReactNode } from 'react';
 import { TopBar } from './TopBar';
-import { BrowserPreviewPanel } from '../chat/BrowserPreviewPanel';
+import { BrowserToolSidebar } from '../chat/BrowserToolSidebar';
+import { Globe, Monitor } from 'lucide-react';
+import type { ChatMessage } from '../chat/types';
+import { toolPreviewState } from '../../tooling/tool-preview-state';
+import { useBrowserReplay } from '../../tooling/use-browser-replay';
+import { useComputerPreview } from '../../tooling/use-computer-preview';
+import { useToolWorkbenchLifecycle } from '../../tooling/use-tool-workbench-lifecycle';
+import type { ServiceManager } from '../../services-host/service-manager';
+import type { ToolingFacade } from '../../tooling/tooling-facade';
 import { LeftRail, type WorkspaceEntry } from './LeftRail';
 import { RightRail } from './RightRail';
 import { RailResizer } from './RailResizer';
 import { FilePeek } from './FilePeek';
 import { GitDiffView, type GitFileDiffData } from '../code-surface/GitDiffView';
-import { SettingsModal } from './SettingsModal';
+import { SettingsModal, type SettingsTab } from './SettingsModal';
 import { RemotePairingModal } from './RemotePairingModal';
 import type { FilePath, TopLevelMode } from '../../host-adapter/types';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
@@ -27,7 +23,7 @@ import type { PetStatusSnapshot, RemotePairingInfoResult, RemoteStatusResult } f
 import type { ToolPlatformState } from '../../tooling/use-tool-platform-state';
 import type { LearningPort } from '../../learning/learning-port';
 import type { BrowserPreviewController } from '../../tooling/use-browser-preview';
-import { pickFolder } from '../../host-adapter/pick-folder';
+import { useAppearance } from '../../settings/appearance-store';
 import {
   BackgroundActivityCenter,
   type ActivityItem,
@@ -68,7 +64,6 @@ export interface AppShellProps {
   readonly onUnarchiveSession: (id: string) => void;
 
   readonly topMode: TopLevelMode;
-  readonly onTopModeChange: (mode: TopLevelMode) => void;
   /** Content for the right side of the top bar. */
   readonly topBarRight?: ReactNode;
   /** Person | Team surface (spec §1.2): a second segmented control
@@ -95,15 +90,13 @@ export interface AppShellProps {
   /** File currently being peeked. */
   readonly peekFile?: { path: FilePath; content: string } | null;
   readonly onClosePeek?: () => void;
-  /** Preview-rail width (px), dragged via the peek resizer. */
-  readonly peekWidth?: number;
-  readonly onPeekWidthChange?: (w: number) => void;
   /** One-click full preview: the rail goes wide until toggled off. */
   readonly peekExpanded?: boolean;
   readonly onTogglePeekExpanded?: () => void;
   /** P2-1 (spec §9.6): an active Git diff right-pane, distinct from a plain
    *  file peek. Rendered in the same right area via a discriminated state. */
   readonly gitDiff?: {
+    readonly id?: string;
     readonly path: string;
     readonly diff?: GitFileDiffData;
     readonly error?: string;
@@ -114,6 +107,7 @@ export interface AppShellProps {
    *  differ. Rendered with priority over a plain `gitDiff` so the
    *  user sees the proposed change on top of the workspace diff. */
   readonly approvalDiff?: {
+    readonly id?: string;
     readonly path: string;
     readonly source: 'code' | 'work';
     readonly diff?: GitFileDiffData;
@@ -175,51 +169,94 @@ export interface AppShellProps {
    *  globe icon + one shell-level drawer shared by Code AND Work
    *  (2026-09-04 lightening pass). Absent → no icon, no panel. */
   readonly browserPreview?: BrowserPreviewController;
+  readonly toolMessages?: readonly ChatMessage[];
+  readonly serviceManager?: ServiceManager | null;
+  readonly toolingFacade?: ToolingFacade | null;
 }
 
 export function AppShell(props: AppShellProps): ReactElement {
-  // Hidden <input webkitdirectory> as a fallback for
-  // browsers that don't have tauri-plugin-dialog.
-  const inputRef = useRef<HTMLInputElement>(null);
+  useAppearance();
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
   // The embedded browser drawer: ONE shell-level entry, shared by
   // Code and Work. Closing the drawer keeps the browser alive.
   const [browserPreviewOpen, setBrowserPreviewOpen] = useState(false);
+  const [browserWidth, setBrowserWidth] = useState(480);
+  const [browserFullscreen, setBrowserFullscreen] = useState(false);
+  const [bodyWidth, setBodyWidth] = useState(window.innerWidth);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const observer = new ResizeObserver(() => setBodyWidth(body.getBoundingClientRect().width));
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+  const browserMaxWidth = Math.max(320, bodyWidth - (props.leftRailCollapsed ? 40 : props.leftWidth + 5) - 360 - 5);
+  const shownBrowserWidth = Math.min(browserWidth, browserMaxWidth);
+  useEffect(() => {
+    if (!browserPreviewOpen) setBrowserFullscreen(false);
+  }, [browserPreviewOpen]);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setBrowserFullscreen(false); };
+    window.addEventListener('keydown', escape);
+    const nativeEscape = (): void => setBrowserFullscreen(false);
+    window.addEventListener('trylo:exit-browser-fullscreen', nativeEscape);
+    return () => { window.removeEventListener('keydown', escape); window.removeEventListener('trylo:exit-browser-fullscreen', nativeEscape); };
+  }, []);
+  const setBrowserVisible = props.browserPreview?.setVisible;
+  useEffect(() => { setBrowserVisible?.(browserPreviewOpen); }, [browserPreviewOpen, setBrowserVisible]);
+  const [previewError, setPreviewError] = useState('');
+  const runActive = props.activeSessionId !== null && props.runningSessionIds.has(props.activeSessionId);
+  const browserState = toolPreviewState(props.toolMessages ?? [], 'browser', { running: runActive });
+  const computerState = toolPreviewState(props.toolMessages ?? [], 'computer', { running: runActive });
+  const previewScope = `${props.currentWorkspaceId}:${props.activeSessionId}:${props.topMode}`;
+  const browserReplay = useBrowserReplay(browserState, props.browserPreview, previewScope);
+  const workbench = useToolWorkbenchLifecycle({ scope: previewScope, running: runActive,
+    browser: browserState, computer: computerState, onError: setPreviewError,
+    showBrowser: () => { if (props.rightRailOpen) props.onToggleRightRail(); setBrowserPreviewOpen(true); } });
+  useComputerPreview(computerState, previewScope, { manager: props.serviceManager, facade: props.toolingFacade,
+    projectRoot: props.workspaces.find(workspace => workspace.id === props.currentWorkspaceId)?.root,
+    conversationId: props.activeSessionId, turnId: computerState.turnId, display: computerState.display,
+    enabled: runActive && computerState.hasStarted === true && workbench.computerVisible,
+    excludeWindow: workbench.computerHandle });
+  useEffect(() => { if (props.rightRailOpen) setBrowserPreviewOpen(false); }, [props.rightRailOpen]);
+  useEffect(() => {
+    const close = (): void => setBrowserPreviewOpen(false);
+    window.addEventListener('trylo:close-browser-preview', close);
+    return () => window.removeEventListener('trylo:close-browser-preview', close);
+  }, []);
 
   // Allow timeline cards (ToolCard / BrowserWorkflowPanel) to open
   // the preview drawer without lifting state to App: they dispatch
   // `trylo:open-browser-preview`.
+  const { rightRailOpen, onToggleRightRail } = props;
   useEffect(() => {
     const onOpen = (): void => {
-      if (props.browserPreview) setBrowserPreviewOpen(true);
+      if (rightRailOpen) onToggleRightRail();
+      setBrowserPreviewOpen(true);
     };
     window.addEventListener('trylo:open-browser-preview', onOpen as EventListener);
     return () => window.removeEventListener('trylo:open-browser-preview', onOpen as EventListener);
-  }, [props.browserPreview]);
+  }, [rightRailOpen, onToggleRightRail]);
+
+  const preview = props.approvalDiff ? (
+    <GitDiffView path={props.approvalDiff.path} diff={props.approvalDiff.diff}
+      notice="待审批变更（Diff 仅展示拟修改内容，不会自动批准）" onClose={props.approvalDiff.onClose} />
+  ) : props.peekFile && props.onClosePeek ? (
+    <FilePeek path={props.peekFile.path} content={props.peekFile.content}
+      expanded={props.peekExpanded ?? false} onToggleExpanded={props.peekExpanded ? props.onTogglePeekExpanded : undefined} onClose={props.onClosePeek} />
+  ) : props.gitDiff ? (
+    <GitDiffView path={props.gitDiff.path} diff={props.gitDiff.diff} error={props.gitDiff.error} onClose={props.gitDiff.onClose} />
+  ) : null;
+  const previewKey = props.approvalDiff ? `approval:${props.approvalDiff.id ?? props.approvalDiff.path}`
+    : props.peekFile ? `file:${props.peekFile.path}`
+    : props.gitDiff ? `diff:${props.gitDiff.id ?? props.gitDiff.path}` : null;
 
   return (
     <div className="app-shell" data-mode={props.topMode} style={props.style}>
-      <TopBar
-        topMode={props.topMode}
-        onTopModeChange={props.onTopModeChange}
-        right={props.topBarRight}
-        collaborationSwitch={props.topBarCollaborationSwitch}
-        onOpenSettings={() => props.onSettingsOpenChange(true)}
-        activeCodeRuns={props.activeCodeRuns}
-        onOpenActivityCenter={props.onOpenActivityCenter}
-        browserPreviewOpen={browserPreviewOpen && props.browserPreview !== undefined}
-        onToggleBrowserPreview={
-          props.browserPreview ? () => setBrowserPreviewOpen((o) => !o) : undefined
-        }
-        // 2026-08-29: TopBar "远程" button opens the pairing
-        // modal (which holds the QR + enable switch). Detailed
-        // config (port / tunnel / URL) stays in Settings.
-        remoteEnabled={props.remoteEnabled ?? false}
-        remoteRunning={props.remoteRunning ?? false}
-        onOpenRemotePairing={() => props.onRemotePairingOpenChange(true)}
-        onRemoteToggle={props.onRemoteToggle}
-      />
       <div
         className="app-shell__body"
+        ref={bodyRef}
         data-peek-open={props.peekFile ? 'true' : 'false'}
       >
         <LeftRail
@@ -240,6 +277,13 @@ export function AppShell(props: AppShellProps): ReactElement {
           onArchiveSession={props.onArchiveSession}
           onUnarchiveSession={props.onUnarchiveSession}
           onToggleCollapse={props.onToggleLeftRail}
+          onOpenActivity={props.onOpenActivityCenter}
+          activeRuns={props.activityItems?.length ?? props.activeCodeRuns}
+          onOpenTools={() => { setSettingsTab('tools'); props.onSettingsOpenChange(true); }}
+          onOpenLearning={props.onOpenLearningPending}
+          onOpenRemote={() => props.onRemotePairingOpenChange(true)}
+          remoteRunning={props.remoteRunning}
+          onOpenSettings={() => { setSettingsTab('connection'); props.onSettingsOpenChange(true); }}
         />
         {!props.leftRailCollapsed && (
           <RailResizer
@@ -251,9 +295,24 @@ export function AppShell(props: AppShellProps): ReactElement {
           />
         )}
         <div className="app-shell__main">
+          <TopBar
+            workspaceName={props.workspaces.find((ws) => ws.id === props.currentWorkspaceId)?.name ?? 'Trylo'}
+            conversationTitle={props.sessions.find((session) => session.id === props.activeSessionId)?.title}
+            right={<>
+              <button type="button" className={`top-bar__rail-toggle${browserPreviewOpen ? ' top-bar__rail-toggle--active' : ''}`} aria-label="浏览器侧栏" title="浏览器侧栏" aria-pressed={browserPreviewOpen} onClick={() => {
+                if (!browserPreviewOpen && props.rightRailOpen) props.onToggleRightRail();
+                setBrowserPreviewOpen(open => !open);
+              }}><Globe size={16} /><span>浏览器</span></button>
+              <button type="button" className={`top-bar__rail-toggle${runActive && computerState.hasTools ? ' top-bar__rail-toggle--active' : ''}`} aria-label="电脑悬浮窗" title={runActive && computerState.hasTools ? '电脑控制正在工作' : '电脑悬浮窗'} onClick={() => { setPreviewError(''); void workbench.openComputer(); }}><Monitor size={16} /><span>{runActive && computerState.hasTools ? '电脑工作中' : '电脑'}</span></button>
+              {props.topBarRight}
+            </>}
+            collaborationSwitch={props.topBarCollaborationSwitch}
+            collapsed={props.leftRailCollapsed}
+            onToggleLeftRail={props.onToggleLeftRail}
+          />
           {props.children}
         </div>
-        {props.rightRailOpen && (
+        {props.rightRailOpen && props.peekExpanded !== true && (
           <RailResizer
             side="right"
             width={props.rightWidth}
@@ -262,87 +321,27 @@ export function AppShell(props: AppShellProps): ReactElement {
             onChange={props.onRightWidthChange}
           />
         )}
+        {browserPreviewOpen && <>
+          {!browserFullscreen && <RailResizer side="right" width={shownBrowserWidth} min={320} max={browserMaxWidth} onChange={setBrowserWidth} />}
+          <BrowserToolSidebar key={`${previewScope}:${browserState.turnId}`} state={browserState} preview={props.browserPreview} replay={browserReplay}
+            width={shownBrowserWidth} running={runActive} fullscreen={browserFullscreen} onToggleFullscreen={() => setBrowserFullscreen(value => !value)}
+            suspended={props.settingsOpen || props.remotePairingOpen || props.activityOpen}
+            onClose={() => setBrowserPreviewOpen(false)} />
+        </>}
         <RightRail
           open={props.rightRailOpen}
+          preview={preview}
+          previewKey={previewKey}
+          onExpandPreview={props.peekFile && !props.peekExpanded ? props.onTogglePeekExpanded : undefined}
           root={props.fileTreeRoot}
           onClose={props.onToggleRightRail}
           onSelectFile={props.onSelectFile}
         />
-        {/* The drag width is ignored while expanded (the expanded class
-            owns the width), so the handle hides too — a visible but
-            dead handle would be a UI lie. */}
-        {props.peekFile && props.onClosePeek && props.onPeekWidthChange && props.peekExpanded !== true && (
-          <RailResizer
-            side="right"
-            width={props.peekWidth ?? 480}
-            min={320}
-            max={880}
-            onChange={props.onPeekWidthChange}
-          />
-        )}
-        {props.peekFile && props.onClosePeek && (
-          <FilePeek
-            path={props.peekFile.path}
-            content={props.peekFile.content}
-            width={props.peekExpanded === true ? undefined : (props.peekWidth ?? 480)}
-            expanded={props.peekExpanded ?? false}
-            onToggleExpanded={props.onTogglePeekExpanded}
-            onClose={props.onClosePeek}
-          />
-        )}
-        {props.gitDiff && (
-          <GitDiffView
-            path={props.gitDiff.path}
-            diff={props.gitDiff.diff}
-            error={props.gitDiff.error}
-            onClose={props.gitDiff.onClose}
-          />
-        )}
-        {props.approvalDiff && (
-          <GitDiffView
-            path={props.approvalDiff.path}
-            diff={props.approvalDiff.diff}
-            // P3: explicit "待审批变更" header hint so the user
-            // can never confuse this with a committed change.
-            error="待审批变更（Diff 仅展示拟修改内容，不会自动批准）"
-            onClose={props.approvalDiff.onClose}
-          />
-        )}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        // @ts-expect-error webkitdirectory is non-standard but
-        // works in Chromium and in the Tauri webview.
-        webkitdirectory=""
-        multiple={false}
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          const files = e.target.files;
-          if (!files || files.length === 0) return;
-          const first = files[0];
-          if (!first) return;
-          const fileWithPath = first as File & { path?: string };
-          const fullPath: string | undefined = fileWithPath.path;
-          if (fullPath) {
-            const cleaned = fullPath.replace(/[/\\][^/\\]+$/, '');
-            void pickFolder; // keep import in use
-            // Emit a click on the Open-folder button by
-            // dispatching a custom event the App listens
-            // for. (No App listener in v1.15.7 — the
-            // primary path is pickFolder from the rail.)
-            window.dispatchEvent(
-              new CustomEvent('trylo:open-folder', {
-                detail: { path: cleaned },
-              }),
-            );
-          }
-          e.target.value = '';
-        }}
-      />
       <SettingsModal
         open={props.settingsOpen}
         initial={props.settings}
+        initialTab={settingsTab}
         onSave={props.onSettingsSave}
         onClose={() => props.onSettingsOpenChange(false)}
         petStatus={props.petStatus}
@@ -363,12 +362,7 @@ export function AppShell(props: AppShellProps): ReactElement {
           panel serves Code and Work; floats over the main column
           below the top bar. The controller stays mounted while the
           drawer is closed, so the browser survives a re-open. */}
-      {props.browserPreview && browserPreviewOpen ? (
-        <BrowserPreviewPanel
-          preview={props.browserPreview}
-          onClose={() => setBrowserPreviewOpen(false)}
-        />
-      ) : null}
+      {previewError && <div role="alert" className="tool-preview-error" onClick={() => setPreviewError('')}>{previewError}</div>}
       {/* M4-D: Background Activity Center. Floats
           above the chat panel; closing returns focus
           to the trigger. See spec §8.5. */}

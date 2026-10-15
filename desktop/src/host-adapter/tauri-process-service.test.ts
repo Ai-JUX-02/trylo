@@ -98,4 +98,68 @@ describe('TauriProcessService', () => {
     expect(list[0]?.id).toBe('proc-trylo-1');
     expect(list[0]?.label).toBe('trylo-core');
   });
+
+  // ── P08 §4.2: one-shot stdin EOF + separate stderr ──────────────
+
+  it('closeInput forwards to process_close_input with the id', async () => {
+    await tauriProcessService.closeInput('proc-trylo-1');
+    expect(invokeMock).toHaveBeenCalledWith('process_close_input', {
+      id: 'proc-trylo-1',
+    });
+  });
+
+  it('closeInput does NOT stop the process', async () => {
+    // The whole point of closeInput over stop: the child keeps running.
+    await tauriProcessService.closeInput('proc-trylo-1');
+    expect(invokeMock).not.toHaveBeenCalledWith('process_stop', expect.anything());
+  });
+
+  it('spawn without onStderr leaves stderr uncaptured (legacy unchanged)', async () => {
+    await tauriProcessService.spawn({
+      command: 'node',
+      args: ['index.js'],
+      label: 'trylo-cli',
+      onOutput: vi.fn(),
+    });
+    const payload = invokeMock.mock.calls.find((c) => c[0] === 'process_spawn')?.[1] as
+      | Record<string, unknown>
+      | undefined;
+    expect(payload).toBeDefined();
+    // The channel object is always allocated (Tauri cannot take an
+    // optional Channel), but the capture flag is what decides whether
+    // the child's stderr is piped at all. Legacy ⇒ no pipe ⇒ no flood.
+    expect(payload!['captureStderr']).toBe(false);
+  });
+
+  it('spawn with onStderr asks Rust to capture and routes it separately', async () => {
+    const onOutput = vi.fn();
+    const onStderr = vi.fn();
+    await tauriProcessService.spawn({
+      command: 'node',
+      args: ['index.js'],
+      label: 'trylo-v1',
+      onOutput,
+      onStderr,
+    });
+    const payload = invokeMock.mock.calls.find((c) => c[0] === 'process_spawn')?.[1] as
+      | Record<string, unknown>
+      | undefined;
+    expect(payload!['captureStderr']).toBe(true);
+    // Two channels: [0] = stdout, [1] = stderr.
+    expect(channelInstances).toHaveLength(2);
+    const [stdoutCh, stderrCh] = channelInstances as [
+      { onmessage: ((msg: unknown) => void) | null },
+      { onmessage: ((msg: unknown) => void) | null },
+    ];
+    stderrCh.onmessage!('cannot resume session x: missing_session');
+    expect(onStderr).toHaveBeenCalledWith('cannot resume session x: missing_session');
+    // A pre-run failure is real evidence; it must not be mistaken for an
+    // event line on the stdout stream.
+    expect(onOutput).not.toHaveBeenCalled();
+
+    // And a stdout line still goes to stdout only.
+    stdoutCh.onmessage!('{"type":"run_start"}');
+    expect(onOutput).toHaveBeenCalledWith('{"type":"run_start"}');
+    expect(onStderr).toHaveBeenCalledTimes(1);
+  });
 });

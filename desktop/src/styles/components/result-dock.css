@@ -279,15 +279,19 @@
 }
 
 .git-diff-view__body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   position: relative;
 }
 
 .git-diff-view__monaco {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
 }
+
+.git-diff-view__notice { flex: 0 0 auto; margin: 0; padding: 10px 14px; font-size: 12px; color: var(--fg-muted); border-bottom: 1px solid var(--border); }
 
 .git-diff-view__degraded {
   margin: var(--space-3);

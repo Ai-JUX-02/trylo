@@ -1,0 +1,26 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Trylo app icon</title>
+  <desc id="desc">#111318 rounded tile with the cream Trylo mark centred on its ink centroid at 82% ink coverage — the same artwork as the Tauri bundle icons and the left-rail brand chip.</desc>
+  <!--
+    Vector source of the desktop app icon. Geometry mirrors
+    src-tauri/icons/_generate.ps1 (tile 942.08 @ 4% margin, radius
+    22%, ink coverage 0.82, mark scale 942.08*0.82/438) and
+    src/components/brand/Logo.tsx.
+
+    Placement is OPTICAL, not centroid: the mark's ink sits low-left
+    inside its box (two heavy chevrons carry ~65% of the mass), so a
+    centroid-centred mark reads as "pushed to the top" even though its
+    centroid is dead-centre. The eye tracks the outline, so the ink
+    BBOX centre (526, 491.5) is the baseline, plus a small upward
+    lift of 3 units (~0.7% of the tile) — standard optical centring.
+
+    Regenerate rasters with:
+      powershell -NoProfile -ExecutionPolicy Bypass -File src-tauri/icons/_generate.ps1
+  -->
+  <rect x="40.96" y="40.96" width="942.08" height="942.08" rx="207.26" fill="#111318" />
+  <g transform="translate(-14 17.5) scale(1.7637)" stroke="#F3E3A6" stroke-width="60" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M475 308 L475 444 L595 444" />
+    <path d="M337 675 L447 610 L397 512" />
+    <path d="M533 633 L593 537 L715 607" />
+  </g>
+</svg>

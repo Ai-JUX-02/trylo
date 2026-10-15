@@ -14,6 +14,8 @@ export type FileChangeTool = 'edit' | 'multiedit' | 'write' | 'notebookedit';
 export interface DiffLine {
   readonly kind: 'add' | 'del' | 'context';
   readonly text: string;
+  readonly oldNo?: number;
+  readonly newNo?: number;
 }
 
 export interface FileChange {
@@ -76,23 +78,23 @@ function diffLines(oldStr: string, newStr: string): DiffLine[] {
   let j = 0;
   while (i < n && j < m) {
     if (a[i] === b[j]) {
-      out.push({ kind: 'context', text: a[i]! });
+      out.push({ kind: 'context', text: a[i]!, oldNo: i + 1, newNo: j + 1 });
       i++;
       j++;
     } else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) {
-      out.push({ kind: 'del', text: a[i]! });
+      out.push({ kind: 'del', text: a[i]!, oldNo: i + 1 });
       i++;
     } else {
-      out.push({ kind: 'add', text: b[j]! });
+      out.push({ kind: 'add', text: b[j]!, newNo: j + 1 });
       j++;
     }
   }
   while (i < n) {
-    out.push({ kind: 'del', text: a[i]! });
+    out.push({ kind: 'del', text: a[i]!, oldNo: i + 1 });
     i++;
   }
   while (j < m) {
-    out.push({ kind: 'add', text: b[j]! });
+    out.push({ kind: 'add', text: b[j]!, newNo: j + 1 });
     j++;
   }
   return out;

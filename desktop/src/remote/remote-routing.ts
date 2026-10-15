@@ -45,7 +45,7 @@ export interface RemoteChatAttachment {
 /** Everything the router needs from the Desktop authorities. */
 export interface RemoteRouterContext {
   readonly workspaces: { list(): readonly RemoteProjectSummary[]; activeProjectId(): string; select(projectId: string): Promise<void> };
-  readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }> };
+  readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }>; create?(surface: RemoteTaskSurface): Promise<string> };
   readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; text: string; requestId: string; attachments?: readonly RemoteChatAttachment[] }) => Promise<unknown>;
   readonly cancelTask: (projectKey: string, conversationId: string) => Promise<void>;
   readonly approvals: ApprovalService;
@@ -149,6 +149,13 @@ export class RemoteRouter {
       return { ok: true, result: { accepted: true, projectId } };
     },
     session: async (payload) => {
+      const record = asRecord(payload);
+      if (record.create === true) {
+        if (!this.ctx.sessions.create) return { ok: false, error: { code: 'SESSION_CREATE_UNAVAILABLE', message: 'This Desktop cannot create remote conversations.', statusCode: 501 } };
+        const sessionId = await this.ctx.sessions.create(parseTaskSurface(record.surface));
+        this.ctx.onSelectionChanged();
+        return { ok: true, result: { accepted: true, sessionId, switching: false } };
+      }
       const sessionId = String(asRecord(payload).sessionId ?? '');
       if (!sessionId) throw new Error('missing sessionId');
       const outcome = await this.ctx.sessions.select(sessionId);

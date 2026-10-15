@@ -26,6 +26,7 @@ import type { LoopEvent } from '../host-adapter/loop-events';
 import type { ToolResultEvent } from '../host-adapter/loop-events';
 import {
   MAX_BINARY_BYTES,
+  parsePreviewReference,
   RENDERABLE_AUDIO_MIME,
   RENDERABLE_IMAGE_MIME,
   summarizeToolResultContent,
@@ -246,10 +247,10 @@ export async function openCachedToolResource(ref: BinaryRef): Promise<OpenToolRe
  *  Module-level so the open affordance shares the read path's rule. */
 function isInsideToolCacheRoot(root: string, path: string): boolean {
   if (path.includes('..')) return false;
-  const lower = (p: string) => p.replace(/[\\/]+$/, '').toLowerCase();
+  const lower = (p: string) => p.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
   const r = lower(root);
-  const p = path.toLowerCase();
-  return p.startsWith(`${r}/`) || p.startsWith(`${r}\\`);
+  const p = lower(path);
+  return p.startsWith(`${r}/`);
 }
 
 // ── materialization pump ──────────────────────────────────────────────
@@ -267,6 +268,9 @@ async function resolveBlock(
   block: AnyToolResultContent,
   store: ToolResultStore,
 ): Promise<ToolResultContent> {
+  if (block.type === 'text' && block.text.startsWith('TRYLO_PREVIEW_REF_V1 ')) {
+    return parsePreviewReference(block.text) ?? { type: 'text', text: '[original preview reference unavailable]' };
+  }
   if (block.type === 'image' && !('ref' in block)) {
     const ref = await store.writeBinary({ data: block.data, mimeType: block.mimeType });
     return ref
@@ -293,7 +297,7 @@ function hasRawBlocks(content: readonly AnyToolResultContent[] | undefined): boo
   return content.some((block) =>
     block.type === 'image' || block.type === 'audio'
       ? !('ref' in block)
-      : block.type === 'resource' && 'blob' in block);
+      : block.type === 'resource' && 'blob' in block || block.type === 'text' && block.text.startsWith('TRYLO_PREVIEW_REF_V1 '));
 }
 
 /** True when the batch contains a tool_result with raw (pre-store) binary
@@ -331,7 +335,7 @@ export async function materializeToolResultEvents(
   }
   return events.map((e) => {
     const content = resolved.get(e);
-    return content ? ({ ...e, content } as LoopEvent) : e;
+    return content ? ({ ...e, content, ...((e as ToolResultEvent).content?.some(block => block.type === 'text' && block.text.startsWith('TRYLO_PREVIEW_REF_V1 ')) ? { output: summarizeToolResultContent(content) } : {}) } as LoopEvent) : e;
   });
 }
 

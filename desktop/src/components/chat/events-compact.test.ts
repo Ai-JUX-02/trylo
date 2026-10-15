@@ -98,14 +98,15 @@ describe('applyCompact (v1.16.0)', () => {
   });
 
   it('sweeps ALL stale pending notices, not just the last one', () => {
-    // If a trigger's `compact` event was lost and a later trigger re-fired,
-    // the stream can hold more than one "Compacting…" notice. Put a message
-    // between two triggers so the dedupe (tail-only) appends a second notice.
-    const gap = applyEvents([], [
+    // Old persisted histories can contain two notices. Live retriggers now
+    // update the same row, so seed the historical corruption explicitly.
+    const live = applyEvents([], [
       makeTrigger({ seq: 1, ts: 1000 }),
       { type: 'text', seq: 2, ts: 1500, preview: 'hi', fullText: 'hi' } as never,
       makeTrigger({ seq: 3, ts: 1600, preTokens: 200_000, postTokens: 60_000 }),
     ]);
+    const firstNotice = live.find(message => message.kind === 'notice')!;
+    const gap = [...live, { ...firstNotice, id: 'legacy-pending-duplicate' }];
     const noticesBefore = gap.filter(
       (m) => m.kind === 'notice' && m.text.startsWith('Compacting context'),
     );

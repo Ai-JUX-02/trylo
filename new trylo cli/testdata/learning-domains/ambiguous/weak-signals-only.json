@@ -1,0 +1,51 @@
+{
+  "episodes": [
+    {
+      "id": "weak-1",
+      "conversationId": "conv-weak-1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test",
+        "language": "ts"
+      },
+      "baselinePromptHash": "ph_baseline_role",
+      "candidatePromptHash": "ph_candidate_role",
+      "candidatePatch": [
+        {
+          "op": "replace_section",
+          "section": "phrasing",
+          "fromHash": "p1",
+          "toHash": "p2"
+        }
+      ],
+      "versions": {
+        "model": "grok-4.6",
+        "toolset": "core-tools-1",
+        "codeBaseline": "git:4c3f565",
+        "workflow": "wf:none"
+      },
+      "baselineExternal": {
+        "kind": "test",
+        "result": "fail",
+        "ref": "self://gen-fail",
+        "selfGenerated": true
+      },
+      "candidateExternal": {
+        "kind": "test",
+        "result": "pass",
+        "ref": "self://gen-pass",
+        "selfGenerated": true
+      },
+      "weakSignals": [
+        { "kind": "llm_self_score", "note": "I did better" },
+        { "kind": "output_length", "note": "longer" },
+        { "kind": "no_complaint", "note": "user silent" }
+      ],
+      "privacy": {
+        "rawUserTextStored": false,
+        "allowedFields": ["id"]
+      }
+    }
+  ]
+}

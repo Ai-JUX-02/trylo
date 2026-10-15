@@ -19,7 +19,8 @@
 
 .settings-modal {
   width: min(860px, 94vw);
-  max-height: 85vh;
+  height: min(740px, 85dvh);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
@@ -673,3 +674,8 @@
   padding: 3px 10px;
   font-size: var(--text-xs);
 }
+
+.appearance__description { color: var(--fg-muted); font-size: 13px; }
+.appearance__options { display: flex; gap: 12px; margin: 24px 0; }
+.appearance__option { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 25px 20px; flex: 1; border: 1px solid var(--border); border-radius: 10px; }
+.appearance__option[aria-pressed='true'] { border-color: var(--fg); background: var(--bg-elevated); }

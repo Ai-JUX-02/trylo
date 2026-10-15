@@ -1,0 +1,1 @@
+{"hint": "Keep every path inside the workspace root.", "appliesWhen": {"tools": ["write_file"], "failureFamily": "containment"}, "labels": ["containment"], "family": "containment", "addLabels": [{"id": "path_scope", "gloss": "路径必须落在工作区里"}], "hook": {"labels": ["containment"], "need": "did a write land outside the root?"}}

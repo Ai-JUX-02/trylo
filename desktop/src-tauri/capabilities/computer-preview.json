@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "computer-preview",
+  "description": "Computer-tool observer subscribes to its own preview updates.",
+  "windows": ["computer-preview"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

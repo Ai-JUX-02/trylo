@@ -1,0 +1,17 @@
+{
+  "id": "spdx-and",
+  "name": "dual-and-sample",
+  "version": "1.0.0",
+  "spdx": "MIT AND Apache-2.0",
+  "tier": "B",
+  "role": "isolated-adapter",
+  "entersArtifact": true,
+  "hasNotice": true,
+  "noticeRequired": true,
+  "exceptionAdr": false,
+  "expect": "pass",
+  "parse": {
+    "operator": "AND",
+    "parts": ["MIT", "Apache-2.0"]
+  }
+}

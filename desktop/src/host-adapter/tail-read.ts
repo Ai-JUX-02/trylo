@@ -25,11 +25,8 @@ export interface TailReadDeps {
  * plus any leftover partial line. If the file has been truncated,
  * the caller resets to `pos` 0.
  *
- * NOTE on units: `pos` counts JS string characters while
- * `stat().size` counts UTF-8 bytes, so the `totalSize === pos`
- * fast-path only hits for pure-ASCII files. Multibyte files fall
- * through to a read that yields an empty delta — correct, just
- * one wasted read per idle tick.
+ * `pos` counts string characters. The optional previousByteSize is a separate
+ * stat receipt; only byte-to-byte comparisons may skip an unchanged file.
  *
  * For v1.8 the events file is small enough to read in full
  * each tick (one session ≤ ~1MB). Phase 3 will switch to
@@ -40,6 +37,7 @@ export async function tailRead(
   pos: number,
   leftover: string,
   deps: TailReadDeps,
+  previousByteSize?: number,
 ): Promise<TailReadResult> {
   let totalSize: number | null = null;
   try {
@@ -51,7 +49,7 @@ export async function tailRead(
   if (totalSize === null) {
     return { events: [], pos, leftover, totalSize: null };
   }
-  if (totalSize === pos) {
+  if (previousByteSize !== undefined && totalSize === previousByteSize) {
     return { events: [], pos, leftover, totalSize };
   }
   if (totalSize < pos) {
@@ -73,6 +71,10 @@ export async function tailRead(
   // "context compacted" pills. This slice is the single place that
   // guarantees at-most-once delivery per byte.
   const text = await deps.readFile(filePath);
+  if (text.length < pos) {
+    pos = 0;
+    leftover = '';
+  }
   const chunk = leftover + text.slice(pos);
   const lines = chunk.split('\n');
   const lastLine = lines.pop() ?? '';

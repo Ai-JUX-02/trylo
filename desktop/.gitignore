@@ -33,3 +33,6 @@ build/
 # Local data
 .trylo/
 *.tmp
+
+# Vite config-reload artifacts (regenerated on every config touch)
+vite.config.ts.timestamp-*.mjs

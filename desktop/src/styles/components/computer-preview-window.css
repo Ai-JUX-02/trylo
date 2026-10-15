@@ -1,0 +1,318 @@
+.computer-preview-window.computer-preview-window {
+  position: relative;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.computer-preview-window.computer-preview-window > header {
+  height: 36px;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--bg-panel);
+}
+
+.computer-preview-window .tool-preview-badge {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.computer-preview-window .tool-preview-badge[data-state='running'] {
+  color: var(--success);
+}
+.computer-preview-window .tool-preview-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.computer-preview-window .preview-activity {
+  min-height: 28px;
+  margin: 0;
+  padding: 4px 12px;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.computer-preview-window .preview-activity > div {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.computer-preview-window .preview-activity strong {
+  white-space: nowrap;
+}
+.computer-preview-window .preview-activity small {
+  font-size: 12px;
+}
+.computer-preview-window .preview-activity .tool-preview-status {
+  display: none;
+}
+.computer-preview-window .preview-activity[data-status='已完成'] .preview-activity__icon {
+  color: var(--success);
+}
+.computer-preview-window .preview-activity[data-status='已中断'] .preview-activity__icon,
+.computer-preview-window .preview-activity[data-status='已停止'] .preview-activity__icon,
+.computer-preview-window .preview-activity[data-status='等待工具操作'] .preview-activity__icon {
+  color: var(--fg-muted);
+}
+.computer-preview-window .preview-activity[data-status='失败'] > div {
+  display: block;
+}
+.computer-preview-window .preview-activity[data-status='失败'] small {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--danger);
+}
+
+.computer-preview-window .computer-preview-window__picture {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.computer-preview-window .preview-image {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+/* The existing zoom controls share the light toolbar; no second zoom system. */
+.computer-preview-window .preview-image__toolbar {
+  position: absolute;
+  z-index: 2;
+  right: 44px;
+  top: 0;
+  height: 36px;
+  padding: 0;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.computer-preview-window .preview-image__toolbar > div {
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.computer-preview-window .preview-image__toolbar button {
+  height: 26px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.computer-preview-window .preview-image__viewport {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.computer-preview-window .preview-image__empty {
+  padding: 24px 12px;
+  gap: 8px;
+  font-size: 13px;
+}
+.computer-preview-window .preview-image__empty p {
+  display: none;
+}
+.computer-preview-window .preview-image__empty svg {
+  color: var(--fg-muted);
+}
+.computer-preview-window .preview-image__target {
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+.computer-preview-window .preview-image__target[data-click='true'] {
+  animation: none;
+}
+
+.computer-preview-window .computer-preview-window__notice {
+  grid-area: 1 / 1;
+  align-self: start;
+  margin: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.computer-preview-window .computer-preview-window__notice svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.computer-preview-window .computer-preview-window__details {
+  margin-left: auto;
+  z-index: 4;
+}
+.computer-preview-window summary {
+  list-style: none;
+  cursor: pointer;
+}
+.computer-preview-window summary::-webkit-details-marker {
+  display: none;
+}
+.computer-preview-window .computer-preview-window__details > summary {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: var(--fg-muted);
+}
+.computer-preview-window .computer-preview-window__details[open] > summary,
+.computer-preview-window .computer-preview-window__details > summary:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+.computer-preview-window .computer-preview-window__details-panel {
+  position: absolute;
+  top: 36px;
+  right: 8px;
+  width: min(300px, calc(100% - 16px));
+  max-height: calc(100% - 72px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.computer-preview-window .computer-preview-window__details-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.computer-preview-window .computer-preview-window__details-panel dd {
+  margin: 0;
+  color: var(--fg);
+  text-align: right;
+}
+.computer-preview-window .computer-preview-window__details-panel p {
+  margin: 8px 0 0;
+}
+
+.computer-preview-window .computer-preview-window__history {
+  flex: none;
+  height: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+  z-index: 3;
+}
+.computer-preview-window .computer-preview-window__history > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 23px;
+  padding: 0 12px;
+}
+.computer-preview-window .computer-preview-window__history > summary:hover {
+  background: var(--bg-panel);
+}
+.computer-preview-window .computer-preview-window__history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.computer-preview-window .computer-preview-window__collapse {
+  display: none;
+}
+.computer-preview-window .computer-preview-window__history[open] .computer-preview-window__expand {
+  display: none;
+}
+.computer-preview-window
+  .computer-preview-window__history[open]
+  .computer-preview-window__collapse {
+  display: inline;
+}
+.computer-preview-window .computer-preview-window__history[open] summary svg {
+  transform: rotate(180deg);
+}
+.computer-preview-window .computer-preview-window__history-panel {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.computer-preview-window .computer-preview-window__history-panel > p {
+  margin: 0;
+  padding: 8px 12px;
+}
+.computer-preview-window .preview-actions {
+  max-height: 96px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.computer-preview-window .preview-actions li {
+  padding: 5px 0;
+  border-color: var(--border-faint);
+}
+.computer-preview-window .preview-actions li:first-child {
+  border-top: 0;
+}
+.computer-preview-window .preview-actions strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.computer-preview-window .preview-actions small,
+.computer-preview-window .preview-actions em {
+  font-size: 12px;
+}
+.computer-preview-window .preview-actions li[data-status='已完成'] > svg {
+  color: var(--success);
+}
+
+.computer-preview-window button:focus-visible,
+.computer-preview-window summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.computer-preview-window button:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+@media (max-width: 600px) {
+  .computer-preview-window .preview-image__toolbar > span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .computer-preview-window .preview-actions__spin,
+  .computer-preview-window .preview-image__target {
+    animation: none;
+  }
+}

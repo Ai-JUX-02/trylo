@@ -35,6 +35,8 @@ vi.mock('./Message', () => ({
 }));
 
 import { MessageList } from './MessageList';
+import type { ListItem } from './MessageList';
+import { normalizeMessageIds } from './message-identity';
 
 function user(id: string, text: string, createdAt: number): ChatMessage {
   return {
@@ -48,6 +50,44 @@ function user(id: string, text: string, createdAt: number): ChatMessage {
 }
 
 describe('MessageList turn projection', () => {
+  it('shows one row per invocation on both surfaces while retaining real repeated commands', () => {
+    const first: ChatMessage = {id:'tool-a',kind:'tool',role:'assistant',createdAt:101,
+      toolCallId:'call-a',tool:'Bash',status:'running',summary:'same command',input:{command:'same command'}};
+    const messages: ChatMessage[] = [user('replay-turn','check',100),first,
+      {...first,id:'receipt-a',status:'done'},
+      {...first,id:'tool-b',toolCallId:'call-b',status:'done'}];
+    for (const surface of ['code','work'] as const) {
+      const view=render(<MessageList messages={messages} surface={surface}/>);
+      expect(view.container.querySelectorAll('.tool--event')).toHaveLength(2);
+      view.unmount();
+    }
+    expect(messages).toHaveLength(4);
+  });
+
+  it('keeps Code and Work virtual rows unique and stable after restoring collided history', () => {
+    const legacy: ChatMessage[] = [user('u1', 'first', 100),
+      { id: 'warn-7', role: 'system', kind: 'notice', text: 'checkpoint', createdAt: 101 },
+      { id: 'text-1', role: 'assistant', kind: 'text', text: 'answer one', createdAt: 102 },
+      user('u2', 'second', 200),
+      { id: 'warn-7', role: 'system', kind: 'notice', text: 'denied', createdAt: 201 },
+      { id: 'text-1', role: 'assistant', kind: 'text', text: 'answer two', createdAt: 202 },
+    ];
+    const messages = normalizeMessageIds(legacy);
+    const capturedKeys = () => {
+      const props = virtuoso.captured.at(-1)!;
+      const keyFor = props.computeItemKey as (index: number, item: ListItem) => string;
+      return (props.data as readonly ListItem[]).map((item, index) => keyFor(index, item));
+    };
+    for (const surface of ['code', 'work'] as const) {
+      const view = render(<MessageList surface={surface} messages={messages} />);
+      const first = capturedKeys();
+      expect(new Set(first).size).toBe(first.length);
+      view.rerender(<MessageList surface={surface} messages={normalizeMessageIds([...messages])} />);
+      expect(capturedKeys()).toEqual(first);
+      view.unmount();
+    }
+    expect(messages).toHaveLength(legacy.length);
+  });
   it('keeps the user row and metadata before the first thinking event', () => {
     const messages: ChatMessage[] = [
       user('u1', 'question', 100),
@@ -88,7 +128,7 @@ describe('MessageList turn projection', () => {
 
     expect(screen.getByTestId('message-u1')).toHaveTextContent('question');
     expect(screen.getByTestId('message-turn-1')).toBeInTheDocument();
-    expect(screen.getByLabelText('Trylo Code 思考与行动')).toHaveTextContent('分析中');
+    expect(screen.getByLabelText('执行过程')).toHaveTextContent('分析中');
     expect(screen.getByTestId('message-a1')).toHaveTextContent('answer');
   });
 
@@ -114,7 +154,7 @@ describe('MessageList turn projection', () => {
     render(<MessageList messages={messages} running />);
 
     expect(screen.getByTestId('message-a1')).toHaveAttribute('data-turn-active', 'false');
-    expect(screen.getByLabelText('Trylo Code 思考与行动')).toHaveClass('code-reasoning--active');
+    expect(screen.getByLabelText('执行过程')).toHaveClass('code-reasoning--active');
   });
 
   it('keeps successive reasoning and tool events in one readable Code transcript', () => {
@@ -138,8 +178,8 @@ describe('MessageList turn projection', () => {
 
     render(<MessageList surface="code" messages={messages} running />);
 
-    expect(screen.getAllByLabelText('Trylo Code 思考与行动')).toHaveLength(1);
-    const transcript = screen.getByLabelText('完整思考过程');
+    expect(screen.getAllByLabelText('执行过程')).toHaveLength(1);
+    const transcript = screen.getByLabelText('按时间顺序的执行过程');
     expect(transcript).toHaveTextContent('读取相关文件并确认状态');
     expect(transcript).toHaveTextContent('读取配置');
     expect(transcript).toHaveTextContent('问题来自缺少默认配置');
@@ -167,11 +207,12 @@ describe('MessageList turn projection', () => {
 
     render(<MessageList surface="code" messages={messages} running />);
 
-    const blocks = screen.getAllByLabelText('Trylo Code 思考与行动');
+    const blocks = screen.getAllByLabelText('执行过程');
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).not.toHaveClass('code-reasoning--active');
     expect(blocks[1]).toHaveClass('code-reasoning--active');
-    expect(screen.getByText('已运行 1 次操作')).toBeInTheDocument();
+    expect(blocks[0]?.querySelector('.code-reasoning__head')).toHaveTextContent('读取完成 · app.ts');
+    expect(blocks[0]?.querySelector('.code-reasoning__meta')).toHaveTextContent('1 次操作');
   });
 
   it('keeps history-revived Work narration rows visible in the turn projection', () => {
@@ -212,7 +253,7 @@ describe('MessageList turn projection', () => {
 
     render(<MessageList surface="work" messages={messages} running />);
 
-    const transcript = screen.getByLabelText('Trylo Code 思考与行动');
+    const transcript = screen.getByLabelText('执行过程');
     const answer = screen.getByTestId('message-a1');
     // The transcript must appear BEFORE the assistant's final text — never a
     // block dumped at the very bottom of the output.
@@ -249,13 +290,13 @@ describe('MessageList turn projection', () => {
       { id: 'a1', kind: 'text', role: 'assistant', createdAt: 130, text: '检查完成', turnId: 'u1' },
     ];
     const live = render(<MessageList surface="work" messages={runningMsgs} running />);
-    expect(live.getByLabelText('Trylo Code 思考与行动')).toHaveClass('code-reasoning--active');
+    expect(live.getByLabelText('执行过程')).toHaveClass('code-reasoning--active');
     live.unmount();
 
     // Once the phase's tool is done the transcript collapses — even while the
     // overall task is still `running`. No spinner left.
     render(<MessageList surface="work" messages={finished} running />);
-    expect(screen.getByLabelText('Trylo Code 思考与行动')).not.toHaveClass('code-reasoning--active');
+    expect(screen.getByLabelText('执行过程')).not.toHaveClass('code-reasoning--active');
   });
 
   // ── Adversarial: projection invariants the scroll-performance work relies on ──
@@ -283,7 +324,7 @@ describe('MessageList turn projection', () => {
     render(<MessageList surface="code" messages={messages} running />);
 
     // Both runs survive the projection as separate blocks…
-    expect(screen.getAllByLabelText('Trylo Code 思考与行动')).toHaveLength(2);
+    expect(screen.getAllByLabelText('执行过程')).toHaveLength(2);
     // …and every item key stays unique — duplicate React keys would corrupt
     // Virtuoso reconciliation the moment the list grows.
     const props = virtuoso.captured.at(-1)!;
@@ -313,7 +354,7 @@ describe('MessageList turn projection', () => {
 
     render(<MessageList surface="work" messages={messages} running />);
 
-    expect(screen.getAllByLabelText('Trylo Code 思考与行动')).toHaveLength(2);
+    expect(screen.getAllByLabelText('执行过程')).toHaveLength(2);
     const props = virtuoso.captured.at(-1)!;
     const keys = (props.data as readonly { id?: string; key?: string }[]).map(
       (item) => item.key ?? item.id,
@@ -336,6 +377,6 @@ describe('MessageList turn projection', () => {
     // The reverse suffix walk must agree with the old per-phase scan: an
     // assistant answer AFTER the phase means the block is not "current",
     // even while the turn is still running.
-    expect(screen.getByLabelText('Trylo Code 思考与行动')).not.toHaveClass('code-reasoning--active');
+    expect(screen.getByLabelText('执行过程')).not.toHaveClass('code-reasoning--active');
   });
 });

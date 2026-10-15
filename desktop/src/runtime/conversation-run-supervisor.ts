@@ -25,8 +25,16 @@ import {
 } from './code-permission-registry';
 import type { FilePath } from '../host-adapter/types';
 import type { PermissionLevel } from '../permission/permission-policy';
+import {
+  DEFAULT_CLI_RUNTIME_PROTOCOL,
+  type CliRuntimeProtocol,
+} from './cli-runtime-protocol';
+import { getCliRuntimeResolution } from './cli-runtime-resolution';
+import { effectiveV1CliPath } from '../host-adapter/cli-runtime-path';
 import type { ResolvedToolRuntime, ToolRuntimeResolver, ToolSurface } from '../tooling/types';
 import type { ToolLeaseGrant, ToolRiskRouter } from '../tooling/tool-risk-classifier';
+// Round-3 P0-5: see ./steer-delivery.ts — `steerCode` answers WHY, not whether.
+import { STEER_NOT_RUNNING, type SteerDelivery } from './steer-delivery';
 
 function controllerKey(projectKey: string, conversationId: string): string {
   return `${projectKey}::${conversationId}`;
@@ -209,9 +217,11 @@ export class ConversationRunSupervisor {
     projectKey: string,
     conversationId: string,
     prompt: string,
-  ): Promise<boolean> {
+  ): Promise<SteerDelivery> {
     const controller = this.controllers.get(controllerKey(projectKey, conversationId));
-    return controller ? controller.steer(prompt) : Promise.resolve(false);
+    // Round-3 P0-5: "no controller" means no live run to inject into — which is
+    // its own answer, not a generic failure the user should retry blindly.
+    return controller ? controller.steer(prompt) : Promise.resolve(STEER_NOT_RUNNING);
   }
 
   /** Stop one Team seat / CLI task on a live conversation process. */
@@ -431,6 +441,10 @@ export function settingsForCodeRun(
     apiKeyPrefix?: string;
     extraHeadersText?: string;
     systemPrompt?: string;
+    /** P08 §3.4: new-CLI provider selection (no credential). */
+    providerId?: string;
+    /** P08 §4.1: which CLI contract to spawn. */
+    cliRuntimeProtocol?: CliRuntimeProtocol;
   },
   cwd: FilePath,
 ): SettingsForCodeRun {
@@ -439,8 +453,29 @@ export function settingsForCodeRun(
   const model = settings.poolModel?.trim()
     ? settings.poolModel
     : (settings.apiModel || undefined);
+  // P08 §4.1 — THE BRANCH THAT MATTERS.
+  //
+  // Which CLI to spawn is decided by the PROTOCOL, not by whether the
+  // resource resolver happened to find a new CLI on this machine:
+  //
+  //   legacy-stream-json → the configured path, untouched. It points at
+  //                        the old runtime, which is exactly right, and
+  //                        replacing it would hand `-p --input-format …`
+  //                        to a CLI that has no `-p`.
+  //   trylo-v1           → the new CLI, resolved from packaged resources
+  //                        when the configured value is empty or is the
+  //                        legacy runtime's own default.
+  //
+  // The first cut of this called `effectiveV1CliPath` unconditionally;
+  // the audit (P0) caught it, and the combination test below pins it.
+  const protocol = settings.cliRuntimeProtocol ?? DEFAULT_CLI_RUNTIME_PROTOCOL;
+  const resolution = getCliRuntimeResolution();
+  const cliPath =
+    protocol === 'trylo-v1'
+      ? effectiveV1CliPath(settings.cliPath, resolution).path
+      : settings.cliPath;
   return {
-    cliPath: settings.cliPath,
+    cliPath: cliPath as FilePath,
     cwd,
     apiKey: settings.apiKey || undefined,
     apiHost: settings.apiHost || undefined,
@@ -450,5 +485,17 @@ export function settingsForCodeRun(
     apiKeyPrefix: settings.apiKeyPrefix || undefined,
     extraHeadersText: settings.extraHeadersText || undefined,
     systemPrompt: settings.systemPrompt || undefined,
+    // P08 §3.4: provider selection travels with the run; the credential
+    // never does (the new CLI reads its own ledger).
+    providerId: settings.providerId || undefined,
+    // P08 §4.1: snapshotted with the rest of the contract so the run
+    // cannot be re-routed by a settings change after it started.
+    cliRuntimeProtocol: protocol,
+    // P08 §WP6 (audit P1): the pinned Node travels WITH the script — the
+    // two come from one resolution and must not be separated, or a
+    // machine without Node on PATH fails despite the bundle carrying one.
+    ...(protocol === 'trylo-v1' && resolution?.nodeProgram
+      ? { cliNodeProgram: resolution.nodeProgram }
+      : {}),
   };
 }

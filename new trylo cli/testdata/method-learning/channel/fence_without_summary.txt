@@ -1,0 +1,5 @@
+I checked the root before writing, so the file landed inside it.
+
+```trylo-learning
+{"hint":"keep the write inside the workspace root","appliesWhen":{"tools":["write_file"]},"labels":["containment"],"family":"containment"}
+```

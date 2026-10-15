@@ -1,0 +1,11 @@
+[
+  {
+    "id": "withdrawn-1",
+    "type": "feedback",
+    "origin": "user-stated",
+    "scope": "user",
+    "version": 1,
+    "state": "withdrawn",
+    "body": "this correction was withdrawn"
+  }
+]

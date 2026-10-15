@@ -1,0 +1,17 @@
+{
+  "protocolVersion": "0.0",
+  "eventId": "evt-valid-1",
+  "sequence": 0,
+  "timestamp": "2026-09-12T00:00:00.000Z",
+  "sessionId": "ses-1",
+  "turnId": "trn-1",
+  "attemptId": "att-1",
+  "correlationId": "cor-1",
+  "kind": "text",
+  "payload": {
+    "role": "assistant",
+    "text": "ok"
+  },
+  "producerId": "cli",
+  "producerSequence": 1
+}

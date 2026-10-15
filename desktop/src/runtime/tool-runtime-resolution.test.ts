@@ -72,6 +72,14 @@ vi.mock('../host-adapter/index', async () => ({
   },
 }));
 
+// Round-3 P1-10: the pre-spawn runtime guard stays out of these suites (its
+// own suite proves it with an injected probe); the mocked hostAdapter would
+// otherwise hang every run on the real probe timeout.
+vi.mock('./cli-runtime-guard', () => ({
+  verifyCliRuntime: vi.fn(async () => ({ ok: true })),
+  resetCliRuntimeGuardForTests: vi.fn(),
+}));
+
 // Import AFTER the mock.
 import { ConversationRunSupervisor } from './conversation-run-supervisor';
 import { CodeRunController } from './code-run-controller';

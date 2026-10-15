@@ -1,0 +1,14 @@
+{
+  "id": "unknown-unlicensed",
+  "name": "mystery-pkg",
+  "version": "0.0.1",
+  "spdx": "UNLICENSED",
+  "tier": "B",
+  "role": "library",
+  "entersArtifact": true,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "fail",
+  "failReason": "unknown/UNLICENSED"
+}

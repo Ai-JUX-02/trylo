@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Wrench,
+  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -81,7 +82,6 @@ export function PermissionLevelPicker(
   const labelId = useId();
 
   const current = describeLevel(props.level);
-  const CurrentIcon = ICONS[props.level];
 
   const closeAndRestore = useCallback((): void => {
     setOpen(false);
@@ -205,8 +205,8 @@ export function PermissionLevelPicker(
         }
         disabled={props.disabled}
       >
-        <CurrentIcon size={14} strokeWidth={2} aria-hidden="true" />
-        <span className="permission-picker__trigger-label">{current.label}</span>
+        <SlidersHorizontal size={14} strokeWidth={1.65} aria-hidden="true" />
+        <span className="permission-picker__trigger-label">{current.value === 'workspace_write' ? '自动编辑' : current.label}</span>
         {props.pendingNextTurn ? (
           <span className="permission-picker__pending" aria-label="下轮生效">
             下轮生效

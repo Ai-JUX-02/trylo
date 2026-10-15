@@ -22,6 +22,9 @@ import { createToolPackageManager } from './tool-package-manager.mjs';
 import { createToolHealthService } from './tool-health-service.mjs';
 import { createToolProfileService } from './tool-profile-service.mjs';
 import { createViewportBridge } from './viewport-bridge.mjs';
+import { createBrowserObserver } from './browser-observer.mjs';
+import { createNativeBrowserService } from './native-browser-service.mjs';
+import { createComputerPreviewStream, resolveComputerPreviewPython } from './computer-preview-stream.mjs';
 
 /**
  * @param {{ appDataDir?: string, sidecarsDir?: string,
@@ -70,6 +73,7 @@ export function createToolingServices(options = {}) {
   const health = createToolHealthService({
     packages,
     catalog,
+    browserBackend: enableRepositoryTools || seam.nativeBrowser ? 'native' : 'screencast',
     // Test seam: replaces the `--version` child-process probe so health can
     // be exercised without a real binary.
     ...(seam.probe ? { probe: seam.probe } : {}),
@@ -88,12 +92,22 @@ export function createToolingServices(options = {}) {
     manager: seam.hermesManager ?? null,
   });
 
+  const emitViewport = (topic, payload) => options.emit?.(`tooling.${topic}`, payload);
+  const browserObserver = createBrowserObserver({ storageRoot, emit: emitViewport });
+  const nativeBrowser = createNativeBrowserService({ emit: emitViewport, ...(seam.nativeBrowser ?? {}) });
+  const computerPreview = createComputerPreviewStream({
+    emit: emitViewport,
+    resolveExecutable: () => resolveComputerPreviewPython({ catalog, packages }),
+    ...(seam.computerPreview ?? {}),
+  });
   const profiles = createToolProfileService({
     catalog,
     packages,
     health,
     hermes,
     storageRoot,
+    browserObserver,
+    ...(enableRepositoryTools || seam.nativeBrowser ? { nativeBrowser } : {}),
     ...(seam.profilesRoot ? { profilesRoot: seam.profilesRoot } : {}),
   });
 
@@ -101,12 +115,11 @@ export function createToolingServices(options = {}) {
   // (downloads, screenshots) into the .trylo/out deliverable root.
   const promoter = createArtifactPromoter();
 
-  // The IDE-style embedded browser panel (fork of vscode-browser-preview's
-  // CDP-screencast architecture). Owns ONE panel browser; MCP servers keep
-  // owning theirs. Frames flow to the renderer as `viewportFrame` events.
+  // Legacy viewport RPCs remain compatible. The native sidebar connects
+  // through nativeBrowser and never starts this screenshot bridge.
   const viewport = createViewportBridge({
     log,
-    emit: typeof options.emit === 'function' ? options.emit : null,
+    emit: emitViewport,
     storageRoot,
   });
 
@@ -186,6 +199,12 @@ export function createToolingServices(options = {}) {
 
   return {
     catalog,
+    nativeBrowserOpen: params => nativeBrowser.open(params),
+    nativeBrowserState: params => nativeBrowser.snapshot(params),
+    nativeBrowserControl: params => nativeBrowser.control(params),
+    nativeBrowserSelect: params => nativeBrowser.select(params),
+    nativeBrowserCreate: params => nativeBrowser.create(params),
+    nativeBrowserCommandResult: params => nativeBrowser.commandResult(params),
 
     /** `tooling.resolveProfile` — compose a Profile for one run. */
     resolveProfile(params = {}) {
@@ -303,22 +322,44 @@ export function createToolingServices(options = {}) {
     /** `tooling.viewportStart` — spawn (or attach to) the panel browser and
      *  begin streaming screencast frames as `viewportFrame` events. */
     viewportStart(params = {}) {
+      if (params.conversationId) return browserObserver.watch(params);
       return viewport.start(params);
+    },
+
+    /** `tooling.viewportResize` — keep the emulated page box equal to the panel's
+     *  own box, so the streamed frame fills the sidebar at any size. */
+    viewportResize(params = {}) {
+      return browserObserver.currentBridge()?.resize(params) ?? viewport.resize(params);
     },
 
     /** `tooling.viewportNavigate` — the panel's URL bar. */
     viewportNavigate(params = {}) {
+      if (browserObserver.currentBridge()) return browserObserver.currentBridge().navigate(params);
       return viewport.navigate(params);
     },
 
     /** `tooling.viewportInput` — the USER's pointer/keys on the panel. */
     viewportInput(params = {}) {
+      if (browserObserver.currentBridge()) return browserObserver.currentBridge().input(params);
       return viewport.input(params);
     },
 
     /** `tooling.viewportStop` — exit the panel browser process tree. */
     viewportStop() {
+      void browserObserver.stop();
       return viewport.stop();
+    },
+
+    computerPreviewStart(params = {}) {
+      return computerPreview.start(params);
+    },
+
+    computerPreviewStop(params = {}) {
+      return computerPreview.stop(params);
+    },
+
+    computerPreviewAck(params = {}) {
+      return computerPreview.ack(params);
     },
 
     /** Diagnostics-only: the Profiles this build knows (§4.1). */
@@ -337,9 +378,12 @@ export function createToolingServices(options = {}) {
 
     /** Bounded flush on host exit. Nothing here holds a process. */
     dispose() {
+      void nativeBrowser.dispose();
       toolResultCache.stop();
       health.clearCache();
       void viewport.stop();
+      void browserObserver.stop();
+      computerPreview.dispose();
     },
   };
 }

@@ -1,0 +1,5 @@
+{
+  "formatVersion": 1,
+  "provider": "openai-compatible",
+  "endpoint": "https://example.test/v1"
+}

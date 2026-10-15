@@ -43,6 +43,7 @@ try {
   try {
     $esbuildOut = & npx esbuild src/host.mjs `
       --bundle --platform=node --format=esm --target=node22 `
+      --banner:js="import { createRequire as createNodeRequire } from 'node:module'; const require = createNodeRequire(import.meta.url);" `
       --outfile=dist/host.bundle.mjs 2>&1
     $esbuildExitCode = $LASTEXITCODE
   } finally {
@@ -98,6 +99,10 @@ foreach ($t in $targets) {
   Copy-Item -Recurse -Force "$($t.src)\*" $t.dst
 }
 
+# Legacy .js adapters are CommonJS even when resources are staged below the
+# desktop package's type=module boundary. The entry bundle remains explicit .mjs.
+Set-Content -LiteralPath (Join-Path $dsRoot "package.json") -Value '{"private":true,"type":"commonjs"}' -Encoding utf8
+
 # Python bytecode is machine/version-specific build residue, not a runtime
 # source artifact. Never let a developer's __pycache__ leak into the bundle.
 $hermesResourceDir = Join-Path $sidecarPub "hermes-capabilities"
@@ -144,6 +149,10 @@ $nodeTargetDir = Join-Path $resources "runtime\node\win-x64"
 New-Item -ItemType Directory -Force -Path $nodeTargetDir | Out-Null
 Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $nodeTargetDir "node.exe") -Force
 Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.exe"
+
+Write-Host "prepare-sidecars: stage and probe the new CLI"
+node (Join-Path $PSScriptRoot "stage-cli.mjs")
+if ($LASTEXITCODE -ne 0) { throw "stage-cli failed (exit $LASTEXITCODE)" }
 
 # Verify what actually landed in resources/ (audit §3.2 W4: a copy that
 # silently produced an incomplete tree used to reach `tauri build` and only

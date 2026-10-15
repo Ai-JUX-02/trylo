@@ -1,0 +1,55 @@
+[
+  {
+    "type": "run_start",
+    "sessionId": "<ID>",
+    "turnId": "<ID>",
+    "providerId": "fixture-write"
+  },
+  {
+    "type": "tool_use",
+    "name": "write_file",
+    "toolCallId": "<ID>"
+  },
+  {
+    "type": "tool_result",
+    "status": "success",
+    "toolCallId": "<ID>",
+    "truncated": false
+  },
+  {
+    "type": "tool_use",
+    "name": "read_file",
+    "toolCallId": "<ID>"
+  },
+  {
+    "type": "tool_result",
+    "status": "success",
+    "toolCallId": "<ID>",
+    "truncated": false
+  },
+  {
+    "type": "message_start"
+  },
+  {
+    "type": "message_delta",
+    "text": "The workspace file fixture-output.txt now contains: the fixture wrote this line"
+  },
+  {
+    "type": "message_end"
+  },
+  {
+    "type": "usage",
+    "usage": {
+      "inputTokens": 64,
+      "outputTokens": 28,
+      "totalTokens": 92
+    }
+  },
+  {
+    "type": "run_result",
+    "status": "completed",
+    "finishReason": "stop",
+    "iterations": 3,
+    "durationMs": 0
+  }
+]

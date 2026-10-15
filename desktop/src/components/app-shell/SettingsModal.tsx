@@ -1,3 +1,4 @@
+import { AppearanceSettings } from './AppearanceSettings';
 // Trylo Desktop — Settings modal. See v1.15-handoff §1.2.
 //
 // v1.15.2: full port of the legacy `tryloCode` config shape.
@@ -29,6 +30,7 @@ import {
   type TryloSettings,
 } from '../../settings/settings-store';
 import { PERMISSION_LEVELS, type PermissionLevel } from '../../permission/permission-policy';
+import type { CliRuntimeProtocol } from '../../runtime/cli-runtime-protocol';
 import { testConnection, type TestConnectionResult } from '../../host-adapter/test-connection';
 import type {
   PetStatusSnapshot,
@@ -43,7 +45,10 @@ import {
   type ToolPlatformState,
 } from '../../tooling/use-tool-platform-state';
 
+export type SettingsTab = 'connection' | 'appearance' | 'behavior' | 'tools' | 'remote' | 'subconnections' | 'learning' | 'runtime';
+
 export interface SettingsModalProps {
+  readonly initialTab?: SettingsTab;
   readonly open: boolean;
   readonly initial: TryloSettings;
   readonly onClose: () => void;
@@ -155,16 +160,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   // Sidebar tab state
-  type SettingsTab = 'connection' | 'behavior' | 'tools' | 'remote' | 'subconnections' | 'learning' | 'runtime';
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('connection');
   const TABS: readonly { id: SettingsTab; label: string }[] = [
-    { id: 'connection', label: '连接' },
-    { id: 'behavior', label: '行为' },
-    { id: 'tools', label: '工具面' },
+    { id: 'connection', label: '模型连接' },
+    { id: 'appearance', label: '外观' },
+    { id: 'behavior', label: '行为与运行' },
+    { id: 'tools', label: '工具与控制' },
     { id: 'remote', label: '远程' },
-    { id: 'subconnections', label: '子连接' },
     { id: 'learning', label: '学习' },
-    { id: 'runtime', label: '运行时' },
   ] as const;
   // Remote pairing QR moved to the TopBar "远程" button
   // (RemotePairingModal) — 2026-08-29. Settings keeps only
@@ -172,12 +175,13 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
 
   useEffect(() => {
     if (props.open) {
+      setSettingsTab(props.initialTab ?? 'connection');
       setForm(toFormState(props.initial));
       setTestResult(null);
       setTestError(null);
       setProfileName('');
     }
-  }, [props.open, props.initial]);
+  }, [props.open, props.initial, props.initialTab]);
 
   if (!props.open) return null;
 
@@ -396,8 +400,9 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
   };
 
   // ── Render content by selected tab ─────────────────────
-  const renderContent = (): ReactElement => {
-    switch (settingsTab) {
+  const renderSection = (tab: SettingsTab): ReactElement => {
+    switch (tab) {
+      case 'appearance': return <AppearanceSettings />;
       case 'connection':
         return (
           <>
@@ -669,6 +674,24 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
                 </select>
                 <span className="settings-modal__hint">
                   应用于 Code 与 Work 双方；会话可在 composer 临时覆盖。
+                </span>
+              </label>
+
+              <label className="settings-modal__field">
+                <span className="settings-modal__label">CLI runtime</span>
+                <select
+                  className="settings-modal__input"
+                  value={form.cliRuntimeProtocol}
+                  onChange={(e) =>
+                    set('cliRuntimeProtocol', e.target.value as CliRuntimeProtocol)
+                  }
+                >
+                  <option value="legacy-stream-json">旧 CLI（默认）</option>
+                  <option value="trylo-v1">新 CLI — trylo-v1（开发预览）</option>
+                </select>
+                <span className="settings-modal__hint">
+                  新 CLI 是「一轮一个进程」，支持流式输出、工具调用、会话恢复和逐项审批。
+                  真实模型可使用已有 OpenAI 格式连接，或新 CLI 已配置的 provider 与凭据；默认仍是旧 CLI。
                 </span>
               </label>
 
@@ -1094,6 +1117,18 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
     }
   };
 
+  const navigationTab = settingsTab === 'subconnections' ? 'connection'
+    : settingsTab === 'runtime' ? 'behavior' : settingsTab;
+  const renderContent = (): ReactElement => {
+    if (navigationTab === 'connection') {
+      return <>{renderSection('connection')}{renderSection('subconnections')}</>;
+    }
+    if (navigationTab === 'behavior') {
+      return <>{renderSection('behavior')}{renderSection('runtime')}</>;
+    }
+    return renderSection(navigationTab);
+  };
+
   return (
     <div
       className="settings-modal__backdrop"
@@ -1123,14 +1158,14 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <button
                 key={tab.id}
                 type="button"
-                className={`settings-modal__sidebar-item${settingsTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
+                className={`settings-modal__sidebar-item${navigationTab === tab.id ? ' settings-modal__sidebar-item--active' : ''}`}
                 onClick={() => setSettingsTab(tab.id)}
               >
                 {tab.label}
               </button>
             ))}
           </nav>
-          <div className="settings-modal__content">
+          <div className="settings-modal__content" key={navigationTab}>
             {renderContent()}
           </div>
         </div>

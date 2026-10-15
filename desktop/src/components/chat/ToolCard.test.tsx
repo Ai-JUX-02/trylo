@@ -183,6 +183,17 @@ describe('runtime artifact parsing (PR-3 收口)', () => {
     expect(twice).toHaveLength(1)
     expect(runtimeArtifactsOf(undefined)).toEqual([])
   })
+
+  it('keeps same-name files from different runtime dirs (Round-3 P2)', () => {
+    const artifacts = runtimeArtifactsOf(
+      '- [a](.trylo/runtime/browser/conv-1/report.pdf)\n- [b](.trylo/runtime/browser/conv-2/report.pdf)',
+    )
+    expect(artifacts).toHaveLength(2)
+    expect(artifacts.map((a) => a.display)).toEqual([
+      '.trylo/runtime/browser/conv-1/report.pdf',
+      '.trylo/runtime/browser/conv-2/report.pdf',
+    ])
+  })
 })
 
 describe('promote affordance (PR-3 收口, §7.3)', () => {

@@ -40,6 +40,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { ToolMessage } from './types'
+import { toolEventStatus, toolEventTarget, toolEventTargetLabel, toolEventVerb } from './tool-event-presentation'
 import type { BinaryRef, ToolResultContent } from '../../tooling/tool-result-content'
 import { openCachedToolResource, useBinaryRefObjectUrl } from '../../tooling/tool-result-store'
 import {
@@ -54,6 +55,7 @@ import { providerRoutingLabelForTool } from '../../tooling/providers/provider-ob
 
 export interface ToolCardProps {
   readonly message: ToolMessage
+  readonly variant?: 'event'
   /** PR-3 遗留收口 (§6.5/§7.3): promote one of the conversation's runtime
    *  artifacts into `.trylo/out`. The HOST supplies the conversation scope
    *  (projectRoot + conversationId); the card only proposes the file name it
@@ -122,8 +124,11 @@ export function runtimeArtifactsOf(
     // no segment may be `..` (the promoter would refuse anyway).
     if (segments.length < 5 || segments.includes('..')) continue
     const fileName = segments[segments.length - 1]!
-    if (fileName === '' || seen.has(fileName)) continue
-    seen.add(fileName)
+    // Round-3 P2: dedupe by the FULL display path, never by basename. Two
+    // same-name files in different runtime dirs are two deliverables; the
+    // old basename key swallowed the second one and it read as missing.
+    if (fileName === '' || seen.has(display)) continue
+    seen.add(display)
     out.push({ fileName, display })
     if (out.length >= 6) break
   }
@@ -146,7 +151,7 @@ const TOOL_META: Record<
 }
 
 function toolMeta(name: string): { label: string; Icon: LucideIcon } {
-  const m = TOOL_META[name]
+  const m = TOOL_META[name.toLowerCase()]
   if (m) return m
   return { label: name || 'tool', Icon: Terminal }
 }
@@ -204,7 +209,7 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
   // now derive `open` from status by default, and only
   // remember the user's manual click.
   const [userOverride, setUserOverride] = useState<boolean | null>(null)
-  const open = userOverride ?? m.status === 'running'
+  const open = userOverride ?? (m.status === 'running' || (props.variant === 'event' && m.status === 'error'))
   // The body is the expensive part of a card — the full output text
   // lands in the DOM and the result goes through regex/JSON parsing.
   // A scrolling virtualized list mounts collapsed cards in bulk, so the
@@ -218,15 +223,17 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
   }, [open])
   const showBody = open || everOpenRef.current
   const onToggle = (): void => {
-    setUserOverride((prev) => (prev === null ? !(m.status === 'running') : !prev))
+    setUserOverride(!open)
   }
 
   const meta = toolMeta(m.tool)
   const StatusIcon = STATUS_ICON[m.status]
+  const eventRow = props.variant === 'event'
+  const target = toolEventTarget(m)
 
   return (
     <div
-      className={`tool tool--${m.status} tool-tone-${TOOL_META[m.tool]?.tone ?? 'other'}`}
+      className={`tool tool--${m.status} tool-tone-${TOOL_META[m.tool.toLowerCase()]?.tone ?? 'other'}${eventRow ? ' tool--event' : ''}`}
       role="listitem"
     >
       <button
@@ -244,10 +251,10 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
         <span className="tool__icon" aria-hidden="true">
           <meta.Icon size={14} strokeWidth={2.2} />
         </span>
-        <span className="tool__name">{meta.label}</span>
-        <span className="tool__summary">{m.summary || '…'}</span>
+        <span className="tool__name">{eventRow ? toolEventVerb(m.tool) : meta.label}</span>
+        <span className="tool__summary" title={target}>{eventRow ? toolEventTargetLabel(m) : m.summary || '…'}</span>
         {m.durationMs !== undefined && (
-          <span className="tool__time">{(m.durationMs / 1000).toFixed(1)}s</span>
+          <span className="tool__time">{(m.durationMs / 1000).toFixed(1)}{eventRow ? ' 秒' : 's'}</span>
         )}
         <span className="tool__status">
           <StatusIcon
@@ -256,7 +263,7 @@ function ToolCardImpl(props: ToolCardProps): ReactElement {
             className={m.status === 'running' ? 'tool__status-icon--spin' : undefined}
           />
           <span>
-            {m.status === 'running' ? `${activityLabel(m.tool)}…` : statusLabel(m.status)}
+            {eventRow ? toolEventStatus(m.status) : m.status === 'running' ? `${activityLabel(m.tool)}…` : statusLabel(m.status)}
           </span>
         </span>
       </button>
@@ -301,6 +308,7 @@ function isCdpTool(tool: string): boolean {
 
 function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): ReactElement {
   const m = props.message
+  const eventRow = props.card.variant === 'event'
   // The affordance exists ONLY for the managed MCP tools whose servers
   // actually write the runtime temp dir (§8.2). A Bash `ls` that happens to
   // print a `.trylo/runtime/…` path must never grow a promote button.
@@ -334,8 +342,8 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
   )
   return (
     <div className="tool__body">
-      <Field label="status">
-        <span>{statusLabel(m.status)}</span>
+      <Field label={eventRow ? '状态' : 'status'}>
+        <span>{eventRow ? toolEventStatus(m.status) : statusLabel(m.status)}</span>
         {m.durationMs !== undefined && (
           <span className="tool__row-extra"> · {(m.durationMs / 1000).toFixed(1)}s</span>
         )}
@@ -347,7 +355,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
         />
       )}
       {m.input !== undefined && (
-        <Field label="input">
+        <Field label={eventRow ? (m.tool.toLowerCase() === 'bash' ? '命令' : '输入') : 'input'}>
           <ToolInput tool={m.tool} input={m.input} />
         </Field>
       )}
@@ -360,7 +368,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
           resources, structured summaries. The collapsed text view falls
           back to `outputText` (old sessions migrated on history load). */}
       {visibleOutputContent !== undefined && visibleOutputContent.length > 0 ? (
-        <Field label={m.outputError ? 'error' : 'output'}>
+        <Field label={eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'}>
           <ToolResultBlocks
             blocks={visibleOutputContent}
             onOpen={props.card.onOpenCachedResource}
@@ -368,7 +376,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
         </Field>
       ) : (
         (visibleOutputText !== undefined || m.outputError !== undefined) && (
-          <Field label={m.outputError ? 'error' : 'output'}>
+          <Field label={eventRow ? (m.outputError ? '错误' : '输出') : m.outputError ? 'error' : 'output'}>
             <pre className={`tool__code ${m.outputError ? 'tool__code--err' : ''}`}>
               {m.outputError ?? visibleOutputText ?? ''}
             </pre>
@@ -384,7 +392,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
           <div className="tool__promote-list">
             {runtimeArtifacts.map((artifact) => (
               <PromoteRuntimeArtifactButton
-                key={artifact.fileName}
+                key={artifact.display}
                 packageId={packageId}
                 artifact={artifact}
                 onPromote={props.card.onPromoteRuntimeArtifact!}
@@ -419,7 +427,7 @@ function ToolCardBody(props: { message: ToolMessage; card: ToolCardProps }): Rea
       {isComputerTool(m.tool) && (
         <Field label="电脑控制">
           <span className="tool__muted">
-            白名单 {WINDOWS_TOOL_NAMES.length} 工具 · 截图 1920×1080 上限 · 不持久化 · WatchDog 关闭
+            白名单 {WINDOWS_TOOL_NAMES.length} 工具 · 原图可在电脑悬浮窗查看
           </span>
         </Field>
       )}

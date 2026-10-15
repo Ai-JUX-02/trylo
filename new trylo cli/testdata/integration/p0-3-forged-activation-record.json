@@ -1,0 +1,26 @@
+{
+  "id": "integration/p0-3-forged-activation-record",
+  "attack": "Board assets/proposals 为空时仅凭一条伪造 ActivationRecord 制造生产工具视图",
+  "kind": "forged-activation-record",
+  "activation": {
+    "activationId": "act:docs:tool_package",
+    "scope": "docs",
+    "assetKind": "tool_package",
+    "pointer": "active",
+    "versionId": "pkg:pdf-lint:1.0.0",
+    "boardSequence": 2,
+    "generation": 1
+  },
+  "package": {
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "catalogState": "verified"
+  },
+  "validation": {
+    "validationId": "val-1",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "stages": [{ "stage": "independent_verdict", "passed": true, "detail": "ok" }],
+    "verdict": "pass",
+    "actor": "verifier"
+  },
+  "expect": { "ok": false, "reason": "missing_asset_link" }
+}

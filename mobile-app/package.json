@@ -1,12 +1,16 @@
 {
   "name": "trylocode",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "node scripts/serve-dist.mjs",
+    "preview:remote": "node scripts/preview-remote.mjs",
+    "preview:remote:v2": "node scripts/preview-remote-v2.mjs",
+    "test:remote": "node --test tests/remote-connection.test.mjs tests/remote-gateway-integration.test.mjs",
+    "test:remote:ui": "node ../desktop/node_modules/vitest/vitest.mjs run --config tests/vitest.config.mts",
     "cap:sync": "cap sync",
     "android:add": "cap add android",
     "android:open": "cap open android",

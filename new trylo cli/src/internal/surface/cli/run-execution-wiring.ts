@@ -1,0 +1,35 @@
+import { createNodeSpawner, type ShellSpawner } from "../../adapters/tools/mutating/shell-spawn.js";
+import { createWindowsShellBoundary } from "../../adapters/sandbox/windows-shell-boundary.js";
+import type { ProcessSessionRegistry } from "../../adapters/process-session/session-registry.js";
+import { createSessionViewForRun } from "./session-view-wiring.js";
+import { hostProcessEnvironment } from "../../adapters/sandbox/executable.js";
+
+export type RunExecution = {
+  readonly sessions: ProcessSessionRegistry;
+  readonly spawner: ShellSpawner;
+  readonly close: () => Promise<void>;
+};
+
+/** The prepared session lends this entire execution resource, never half its policy. */
+export function createRunExecution(workspaceRoot: string, options: {
+  homeDir?: string;
+  env?: Readonly<Record<string, string | undefined>>;
+  platform?: NodeJS.Platform;
+} = {}): RunExecution {
+  const platform = options.platform ?? process.platform;
+  const sessions = createSessionViewForRun(options);
+  const boundary = platform === "win32" ? createWindowsShellBoundary(workspaceRoot, options.env ?? hostProcessEnvironment()) : undefined;
+  const spawner = boundary === undefined ? createNodeSpawner() : boundary.spawner(createNodeSpawner(boundary.helperEnvironment));
+  return {
+    sessions: boundary === undefined ? sessions : {
+      ...sessions,
+      start: async request => sessions.start({ ...request, argv: await boundary.wrap(request.argv), env: boundary.helperEnvironment() }),
+    },
+    spawner,
+    close: async () => {
+      // Do not revoke a live child's approved ACL before its tree is drained.
+      await sessions.shutdown();
+      await boundary?.close();
+    },
+  };
+}

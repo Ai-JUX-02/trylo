@@ -1,0 +1,14 @@
+{
+  "id": "missing-notice",
+  "name": "apache-leaf-no-notice",
+  "version": "1.0.0",
+  "spdx": "Apache-2.0",
+  "tier": "B",
+  "role": "isolated-adapter",
+  "entersArtifact": true,
+  "hasNotice": false,
+  "noticeRequired": true,
+  "exceptionAdr": false,
+  "expect": "fail",
+  "failReason": "Apache-2.0 missing NOTICE"
+}

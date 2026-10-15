@@ -15,12 +15,17 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import { Message } from './Message';
 import { StreamingIndicator } from './StreamingIndicator';
-import { createFollowController } from './follow-controller';
+import {
+  createFollowController,
+  shouldForceTailPin,
+  shouldShowFollowPill,
+} from './follow-controller';
 import { VirtuosoItem } from './virtuoso-item';
 // 2026-09-10 (applyWorkItem deletion面): WorkWorkflowCard deleted with the
 // WorkflowMessage chain (zero production producers). The linear rail /
 // narration / deliverable panels below are different kinds and stay.
 import { DeliverableProgressPanel } from './DeliverableProgressPanel';
+import { coalesceToolReplays } from './coalesce-tool-replays';
 import {
   CodeReasoningTranscript,
   type CodeProcessEntry,
@@ -97,6 +102,11 @@ export type ListItem = ChatMessage | CodeProcessItem;
 function isCodeProcessItem(item: ListItem): item is CodeProcessItem {
   return item.kind === '__code_process';
 }
+
+/** Round-3 (P1-6): how far from the bottom still counts as "at the tail".
+ *  Used only to decide whether the index-based pin actually landed; it is
+ *  never used to disarm following (that is the follow controller's job). */
+const TAIL_TOLERANCE = 4;
 
 // The row roots (.message, .code-reasoning, .tool, …) carry vertical
 // margins for inter-row spacing. Virtuoso measures each row through its
@@ -188,10 +198,19 @@ export function MessageList(props: MessageListProps): ReactElement {
   // grows at the bottom, Virtuoso reports not-at-bottom for the frames
   // before our scrollToIndex re-pins, and `!atBottom` alone would blink the
   // pill on every delta. A pinned (following) view never shows the pill;
-  // a disarmed view always may.
-  const showScrollBtn =
-    !atBottom && !followRef.current.isFollowing() && props.messages.length > 0;
+  // a disarmed LIVE view may.
+  //
+  // Round-3 (P1-6 → P0): the pill is gated on `running`. In a finished
+  // conversation a visible ↓ means we failed to pin the ending — a
+  // successful delivery must never read as a silent failure. See
+  // shouldShowFollowPill in ./follow-controller.
   const running = props.running === true;
+  const showScrollBtn = shouldShowFollowPill({
+    running,
+    atBottom,
+    following: followRef.current.isFollowing(),
+    messageCount: props.messages.length,
+  });
 
   // v1.16.5+ (spec §5.3): the footer indicator is driven by
   // the shared view state, not by `running`. The three-dot
@@ -284,7 +303,7 @@ export function MessageList(props: MessageListProps): ReactElement {
 
     const flushTurn = (): void => {
       if (!currentTurn) return;
-      const turnMsgs = currentTurn.msgs;
+      const turnMsgs = coalesceToolReplays(currentTurn.msgs);
       if ((props.surface ?? 'code') === 'code') {
         type PhaseGroup = {
           firstIndex: number;
@@ -439,6 +458,38 @@ export function MessageList(props: MessageListProps): ReactElement {
 
   // Refs that survive across renders without re-triggering them.
   const lastUserMsgIdRef = useRef<string | null>(null);
+  // Round-3 (P1-6): the scroller element itself. Declared before the pin
+  // effect so the absolute tail scroll can read real geometry.
+  const scrollerElRef = useRef<HTMLElement | null>(null);
+
+  /** THE one scroll driver. Two steps, both of them needed:
+   *  1. `scrollToIndex` asks Virtuoso to align the last item's end with the
+   *     viewport. It is an OFFSET request, computed from Virtuoso's own
+   *     measured sizes — when the last row is the single giant process block
+   *     of a long run (dozens of tool rows in one item), a stale measurement
+   *     lands it short of the real bottom and nothing ever corrects it. That
+   *     is the frozen view the owner was shown: a finished, honest summary
+   *     sitting two screenshots above the fold.
+   *  2. The absolute clamp is the part that cannot be defeated: scroll the
+   *     element to its own content height, then let the browser clamp. A
+   *     no-op whenever step 1 already landed. */
+  const pinToTail = useCallback(
+    (behavior: 'auto' | 'smooth' = 'auto'): void => {
+    virtuosoRef.current?.scrollToIndex({
+      index: items.length - 1,
+      align: 'end',
+      // 'auto' (instant) during a live run: dozens of smooth animations
+      // back-to-back fight the user's own scrolling and make the tail
+      // feel laggy. 'smooth' is reserved for the explicit pill click.
+      behavior,
+    });
+    const el = scrollerElRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance > TAIL_TOLERANCE) el.scrollTop = el.scrollHeight;
+    },
+    [items.length],
+  );
 
   // When items change (a new user turn lands, or streaming content
   // grows), auto-scroll ONLY if we're still in follow mode.
@@ -471,25 +522,42 @@ export function MessageList(props: MessageListProps): ReactElement {
     // new `items` identity) doesn't schedule a render per delta. The
     // functional form lets React bail out when the value is unchanged.
     setAtBottom(true);
-    virtuosoRef.current?.scrollToIndex({
-      index: items.length - 1,
-      align: 'end',
-      // 'auto' (instant) during a live run: dozens of smooth animations
-      // back-to-back fight the user's own scrolling and make the tail
-      // feel laggy. 'smooth' is reserved for the explicit pill click.
-      behavior: 'auto',
-    });
-  }, [items]);
+    pinToTail('auto');
+  }, [items, pinToTail]);
+
+  // Round-3 (P1-6 → P0): the run-end pin. `running` flipping true → false is
+  // the terminal edge of a turn, and the final answer IS the payload of that
+  // edge — so it goes to the bottom unconditionally, even if follow was
+  // disarmed and even if the reader had scrolled away. Paired with the
+  // pill being hidden while `running` is false, there is no way for a
+  // completed delivery to be left off-screen with no affordance: the
+  // transcript either shows the ending, or it is still running.
+  const wasRunningRef = useRef(running);
+  useEffect(() => {
+    const wasRunning = wasRunningRef.current;
+    wasRunningRef.current = running;
+    if (!shouldForceTailPin(wasRunning, running)) return;
+    followRef.current.rearm();
+    setAtBottom(true);
+    pinToTail('auto');
+  }, [running, pinToTail]);
 
   // The scroller's own scroll events are the ONE disarm signal — they fire
   // for every input method (wheel, scrollbar drag, touch, Home/End,
   // keyboard) and for none of our own pin scrolls (those only move
   // scrollTop down). Attached through Virtuoso's `scrollerRef` below.
-  const scrollerElRef = useRef<HTMLElement | null>(null);
   const handleScrollerScroll = useCallback((): void => {
     const el = scrollerElRef.current;
     if (!el) return;
-    const disarmed = followRef.current.onScroll(el.scrollTop);
+    // Round-3 (P1-6): the controller needs the whole geometry, not just
+    // scrollTop — see follow-controller.ts. A row collapsing ABOVE the tail
+    // moves scrollTop up by the height it lost, and the browser does that on
+    // the user's behalf; only the un-explained remainder is the user.
+    const disarmed = followRef.current.observe({
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    });
     if (disarmed) {
       // Mirror to the pill state immediately; Virtuoso's
       // atBottomStateChange will agree a moment later.
@@ -535,6 +603,8 @@ export function MessageList(props: MessageListProps): ReactElement {
                 entries={item.entries}
                 turnId={item.turnId}
                 phaseId={item.phaseId}
+                workspacePath={props.workspacePath}
+                onOpenArtifact={props.onOpenArtifact}
                 active={item.active && meta?.isActive === true}
               />
             );
@@ -651,11 +721,7 @@ export function MessageList(props: MessageListProps): ReactElement {
           onClick={() => {
             followRef.current.rearm();
             setAtBottom(true);
-            virtuosoRef.current?.scrollToIndex({
-              index: items.length - 1,
-              align: 'end',
-              behavior: 'smooth',
-            });
+            pinToTail('smooth');
           }}
           aria-label="Follow latest"
           title="Follow latest"

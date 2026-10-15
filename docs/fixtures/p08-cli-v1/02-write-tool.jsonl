@@ -1,0 +1,19 @@
+{"type":"run_start","sessionId":"eph-de97bc4b-5903-4743-8b29-6ef2807e85da","turnId":"turn-8034e725-3528-415c-b51f-77deb2c01a79","providerId":"fixture-write","model":"default"}
+{"type":"tool_use","toolCallId":"fx-write-1","name":"write_file"}
+{"type":"warning","code":"checkpoint","message":""}
+{"type":"tool_result","toolCallId":"fx-write-1","status":"succeeded","output":"","truncated":false}
+{"type":"usage","usage":{"inputTokens":16,"outputTokens":8,"totalTokens":24}}
+{"type":"tool_use","toolCallId":"fx-read-1","name":"read_file"}
+{"type":"tool_result","toolCallId":"fx-read-1","status":"succeeded","output":"","truncated":false}
+{"type":"usage","usage":{"inputTokens":16,"outputTokens":8,"totalTokens":24}}
+{"type":"message_start"}
+{"type":"message_delta","text":"The workspac"}
+{"type":"message_delta","text":"e file fixtu"}
+{"type":"message_delta","text":"re-output.tx"}
+{"type":"message_delta","text":"t now contai"}
+{"type":"message_delta","text":"ns: the fixt"}
+{"type":"message_delta","text":"ure wrote th"}
+{"type":"message_delta","text":"is line"}
+{"type":"usage","usage":{"inputTokens":32,"outputTokens":12,"totalTokens":44}}
+{"type":"message_end"}
+{"type":"run_result","status":"completed","finishReason":"stop","sessionId":"eph-de97bc4b-5903-4743-8b29-6ef2807e85da","turnId":"turn-8034e725-3528-415c-b51f-77deb2c01a79","iterations":3,"usage":{"inputTokens":64,"outputTokens":28,"totalTokens":92},"durationMs":74,"lastMessage":"The workspace file fixture-output.txt now contains: the fixture wrote this line"}

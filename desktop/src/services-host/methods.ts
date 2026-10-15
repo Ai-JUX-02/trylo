@@ -549,6 +549,11 @@ export interface RemoteTraceEvent {
   readonly phase?: string;
   readonly mode?: string;
   readonly at?: number;
+  readonly turnId?: string;
+  readonly toolCallId?: string;
+  readonly input?: string;
+  readonly output?: string;
+  readonly durationMs?: number;
 }
 export interface RemoteAssistantEvent {
   readonly type: 'assistant';
@@ -631,6 +636,7 @@ export interface RemoteSessionSummary {
   readonly id: string;
   readonly title: string;
   readonly preview?: string;
+  readonly surface?: 'code' | 'work';
   readonly updatedAt?: number;
   readonly workspace?: {
     readonly id?: string;
@@ -643,6 +649,20 @@ export interface RemoteSessionStateEvent {
   readonly activeSessionId: string;
   readonly sessions: readonly RemoteSessionSummary[];
   readonly at?: number;
+  readonly conversation?: readonly RemoteConversationItem[];
+}
+export interface RemoteConversationItem {
+  readonly id: string;
+  readonly role: 'user' | 'assistant' | 'thinking' | 'tool';
+  readonly text: string;
+  readonly title?: string;
+  readonly at: number;
+  readonly status?: 'streaming' | 'done' | 'error' | 'interrupted';
+  readonly turnId?: string;
+  readonly toolCallId?: string;
+  readonly input?: string;
+  readonly output?: string;
+  readonly durationMs?: number;
 }
 export interface RemotePermissionSummary {
   readonly requestId: string;
@@ -1082,14 +1102,32 @@ export interface PermissionDecisionEvent {
 /** The embedded browser panel's state machine push
  *  (`tooling.viewportStatus`): stopped/starting/running/error + detail. */
 export interface ViewportStatusEvent {
+  readonly scope?: string;
   readonly state: 'stopped' | 'starting' | 'running' | 'error';
   readonly detail?: string;
   readonly url?: string;
+  readonly targetId?: string;
+}
+
+export interface ViewportActionEvent {
+  readonly scope?: string;
+  readonly kind: 'click' | 'move' | 'type' | 'scroll';
+  readonly x?: number;
+  readonly y?: number;
+  readonly target?: string;
+  readonly timestamp: number;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
 }
 
 /** One `Page.screencastFrame` relayed as a `tooling.viewportFrame` event:
- *  a base64 JPEG plus the frame metadata the panel needs for input mapping. */
+ *  base64 image data plus the metadata the panel needs for input mapping. */
 export interface ViewportFrameEvent {
+  readonly scope?: string;
+  readonly receivedAt?: number;
+  readonly targetId?: string;
+  readonly url?: string;
+  readonly mimeType?: string;
   readonly data: string;
   readonly deviceWidth: number;
   readonly deviceHeight: number;
@@ -1104,6 +1142,24 @@ export interface ViewportStartResult {
   readonly cdpPort?: number;
   readonly url?: string;
   readonly alreadyRunning?: boolean;
+}
+
+/** The panel's own pixel box. The page is emulated to exactly this size so the
+ *  screencast frame matches the sidebar instead of letterboxing inside it. */
+export interface ViewportResizeParams {
+  readonly width: number;
+  readonly height: number;
+  readonly deviceScaleFactor?: number;
+}
+
+export interface ViewportResizeResult {
+  readonly ok: boolean;
+  readonly reasonCode?: string;
+  readonly error?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly deviceScaleFactor?: number;
+  readonly unchanged?: boolean;
 }
 
 export interface ViewportNavigateResult {
@@ -1134,6 +1190,42 @@ export interface ViewportInputResult {
 
 export interface ViewportStopResult {
   readonly ok: boolean;
+}
+
+export interface ComputerPreviewStartParams {
+  readonly projectRoot: string;
+  readonly conversationId: string;
+  readonly display?: number;
+  readonly excludeWindow?: number;
+  readonly streamId?: string;
+}
+
+export interface ComputerPreviewResult {
+  readonly ok: boolean;
+  readonly error?: string;
+  readonly streamId?: string;
+}
+
+export interface ComputerPreviewFrameEvent {
+  readonly scope: string;
+  readonly streamId: string;
+  readonly data: string;
+  readonly mimeType: 'image/png' | 'image/jpeg';
+  readonly width: number;
+  readonly height: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly cursorX?: number;
+  readonly cursorY?: number;
+  readonly timestamp: number;
+  readonly seq: number;
+}
+
+export interface ComputerPreviewStatusEvent {
+  readonly scope: string;
+  readonly streamId: string;
+  readonly state: 'starting' | 'running' | 'stopped' | 'error';
+  readonly detail?: string;
 }
 
 /** `pet.status` event payload. Same shape as the `pet.status` query result
@@ -1177,10 +1269,26 @@ export interface ServiceEventMap {
   readonly ready: ReadyEvent;
   readonly 'servicehost.exit': ServiceHostExitEvent;
   readonly 'tooling.viewportFrame': ViewportFrameEvent;
+  readonly 'tooling.nativeBrowserState': NativeBrowserState;
+  readonly 'tooling.nativeBrowserCommand': import('../host-adapter/native-browser').NativeBrowserCommand & { readonly id: string };
   readonly 'tooling.viewportStatus': ViewportStatusEvent;
+  readonly 'tooling.viewportAction': ViewportActionEvent;
+  readonly 'tooling.computerPreviewFrame': ComputerPreviewFrameEvent;
+  readonly 'tooling.computerPreviewStatus': ComputerPreviewStatusEvent;
 }
 
 export type ServiceEventTopic = keyof ServiceEventMap;
+
+export interface NativeBrowserState {
+  readonly ok: boolean;
+  readonly scope: string;
+  readonly state: 'running' | 'error';
+  readonly detail: string;
+  readonly control: 'agent' | 'pending' | 'user';
+  readonly inFlight: number;
+  readonly activeLabel: string;
+  readonly tabs: readonly { readonly id: string; readonly label: string; readonly title: string; readonly url: string; readonly popup?: boolean }[];
+}
 
 // ── method table (name → params/result) ──────────────────────────────
 
@@ -1242,10 +1350,20 @@ export interface ServiceMethodMap {
   readonly 'tooling.sweepToolCache': { params: Record<string, never>; result: ToolingSweepToolCacheResult };
   readonly 'tooling.officeValidationCapabilities': { params: { readonly refresh?: boolean }; result: ToolingOfficeValidationCapabilitiesResult };
   readonly 'tooling.validateOfficeArtifacts': { params: ToolingValidateOfficeArtifactsParams; result: ToolingValidateOfficeArtifactsResult };
-  readonly 'tooling.viewportStart': { params: { readonly cdpPort?: number }; result: ViewportStartResult };
+  readonly 'tooling.viewportStart': { params: { readonly cdpPort?: number; readonly projectRoot?: string; readonly conversationId?: string; readonly viewportWidth?: number; readonly viewportHeight?: number }; result: ViewportStartResult };
+  readonly 'tooling.nativeBrowserOpen': { params: { readonly projectRoot: string; readonly conversationId: string }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserState': { params: { readonly scope: string }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserControl': { params: { readonly scope: string; readonly heldByUser: boolean }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserSelect': { params: { readonly scope: string; readonly label: string }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserCreate': { params: { readonly scope: string }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserCommandResult': { params: { readonly id: string; readonly result?: import('../host-adapter/native-browser').NativeBrowserRecord; readonly error?: string }; result: { readonly ok: boolean } };
+  readonly 'tooling.viewportResize': { params: ViewportResizeParams; result: ViewportResizeResult };
   readonly 'tooling.viewportNavigate': { params: { readonly url: string }; result: ViewportNavigateResult };
   readonly 'tooling.viewportInput': { params: ViewportInputParams; result: ViewportInputResult };
   readonly 'tooling.viewportStop': { params: undefined; result: ViewportStopResult };
+  readonly 'tooling.computerPreviewStart': { params: ComputerPreviewStartParams; result: ComputerPreviewResult };
+  readonly 'tooling.computerPreviewStop': { params: { readonly scope?: string; readonly streamId?: string } | undefined; result: ComputerPreviewResult };
+  readonly 'tooling.computerPreviewAck': { params: { readonly scope: string; readonly streamId: string; readonly seq: number }; result: ComputerPreviewResult };
 }
 
 export type ServiceMethodName = keyof ServiceMethodMap;

@@ -25,5 +25,5 @@ export const VirtuosoItem = forwardRef<
   const { item: _item, context: _context, ...rest } = props;
   void _item;
   void _context;
-  return <div {...rest} ref={ref} style={{ ...props.style, display: 'flow-root' }} />;
+  return <div {...rest} ref={ref} className="conversation-row" style={{ ...props.style, display: 'flow-root' }} />;
 });

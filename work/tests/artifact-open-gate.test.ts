@@ -26,7 +26,7 @@ describe("validateArtifactTarget (§9.3, M3-P1-11)", () => {
   });
 
   it("is case-insensitive on Windows drive and directory casing", () => {
-    const verdict = validateArtifactTarget("c:\\work\\DEMO-WS\\out\\a.md", "c:/work/demo-ws");
+    const verdict = validateArtifactTarget("C:\\work\\demo-ws\\out\\a.md", "C:/work/demo-ws");
     assert.equal(verdict.ok, true);
   });
 

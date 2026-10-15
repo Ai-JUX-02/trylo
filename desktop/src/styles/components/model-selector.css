@@ -2,14 +2,38 @@
  *
  * A chip in the InputBar action row that opens a listbox of
  * configurable models (user + built-in free compute pool).
- * The popover reuses .mode-popover styling; only the chip and
- * its anchoring are defined here.
+ *
+ * The popover container reuses .mode-popover (base surface) plus
+ * .mode-popover--anchored (fixed placement, computed in the
+ * component, mirroring ModePopover). The ROWS are styled here under
+ * .model-selector__*: they used to lean on .mode-popover__item /
+ * __label / __hint classes that were never defined in any
+ * stylesheet, so the <li> rows shipped unstyled — default <ul>
+ * bullets and jammed inline text — until the 2026-10-13 redesign.
+ *
+ * Load-order note: index.css imports this file AFTER
+ * mode-popover.css, so the equal-specificity overrides below
+ * (.model-selector__popover width/shadow) win.
  */
 
+/* Row state tints live HERE, not on --brand-soft: that token is shared
+ * by ~30 other surfaces and the 2026-10-14 feedback was specifically
+ * that the selected row's #f7efd9 wash (light) and the 2px #946d22
+ * focus ring read too heavy. These two are deliberately much quieter
+ * — the check mark is now the only saturated thing in the row. Dark
+ * theme: selected wash unchanged (#352d1c), ring drops to the dark
+ * --brand-edge so it stays a hairline instead of a bright gold band. */
 .model-selector {
   position: relative;
   display: inline-flex;
   align-items: center;
+  --model-row-current: #fcfaf5;
+  --model-row-ring: #e2d7b4;
+}
+
+:root[data-theme='dark'] .model-selector {
+  --model-row-current: #352d1c;
+  --model-row-ring: var(--brand-edge);
 }
 
 .model-selector__chip {
@@ -20,8 +44,13 @@
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
-  background: var(--ink-subtle);
-  color: var(--fg-muted-2);
+  /* Both values below were undefined custom properties before
+   * 2026-10-13 (--ink-subtle / --fg-muted-2 do not exist in
+   * tokens.css): the background silently fell back to transparent
+   * and the label inherited the body ink, heavier than the sibling
+   * mode chip. */
+  background: var(--bg-panel);
+  color: var(--fg-muted);
   font-size: var(--text-xs);
   line-height: 1;
   cursor: pointer;
@@ -31,7 +60,7 @@
 }
 
 .model-selector__chip:hover {
-  background: var(--ink-hover);
+  background: var(--bg-elevated);
   color: var(--fg);
 }
 
@@ -43,8 +72,94 @@
   flex-shrink: 0;
 }
 
+/* ---------- popover ---------- */
+
 .model-selector__popover {
-  /* Anchor the list above the chip like the mode popover. */
-  left: 50%;
-  transform: translateX(-50%);
+  /* Wider than the 260px base: single-line rows need room for the
+   * check slot + label + right-aligned hint. */
+  width: 272px;
+  box-shadow:
+    0 10px 28px rgba(38, 39, 37, 0.1),
+    0 1px 4px rgba(38, 39, 37, 0.05);
+}
+
+.model-selector__group-heading {
+  display: block;
+  padding: 6px 10px 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.model-selector__divider {
+  height: 1px;
+  background: var(--border-faint);
+  margin: 4px 8px;
+}
+
+.model-selector__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- rows ---------- */
+
+.model-selector__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-selector__item:hover {
+  background: var(--bg-elevated);
+}
+
+.model-selector__item--current {
+  background: var(--model-row-current);
+}
+
+/* Pinned so hovering the selected row does not darken it back to
+ * --bg-elevated (that would read as a de-selection). */
+.model-selector__item--current:hover {
+  background: var(--model-row-current);
+}
+
+/* Keyboard focus (arrow navigation). An inset ring so it reads on
+ * top of both the plain and the current backgrounds; 1px at a faded
+ * edge tone — the old 2px full --brand ring was the loudest thing in
+ * the popover. */
+.model-selector__item--focus {
+  box-shadow: inset 0 0 0 1px var(--model-row-ring);
+}
+
+/* Reserved check slot: always present so labels align whether or
+ * not the row is the current one. */
+.model-selector__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--brand);
+}
+
+.model-selector__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-selector__hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--fg-muted);
 }

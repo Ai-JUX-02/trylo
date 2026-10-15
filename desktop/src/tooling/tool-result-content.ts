@@ -150,6 +150,9 @@ export function parseToolResultBlock(block: unknown): AnyToolResultContent | nul
   switch (block['type']) {
     case 'text': {
       const text = block['text'];
+      if (typeof text === 'string' && text.startsWith('TRYLO_PREVIEW_REF_V1 ')) {
+        return parsePreviewReference(text);
+      }
       return typeof text === 'string' ? { type: 'text', text } : null;
     }
     case 'image':
@@ -188,6 +191,20 @@ export function parseMcpMetaStructured(mcpMeta: unknown): AnyToolResultContent |
   const structured = mcpMeta['structuredContent'];
   if (structured === undefined || structured === null) return null;
   return { type: 'structured', value: structured };
+}
+
+/** Native workbench originals travel as cache metadata, separate from the model image. */
+export function parseMcpPreview(mcpMeta: unknown): ToolResultContent | null {
+  if (!isRecord(mcpMeta) || !isRecord(mcpMeta['_meta'])) return null;
+  const ref = normalizeBinaryRef(mcpMeta['_meta']['trylo/preview']);
+  if (!ref || ref.storage !== 'ephemeral-tool-cache' || ref.mimeType !== 'image/png' || ref.size > MAX_BINARY_BYTES) return null;
+  return { type: 'image', ref, alt: '原始电脑画面' };
+}
+
+export function parsePreviewReference(text: string): ToolResultContent | null {
+  if (!text.startsWith('TRYLO_PREVIEW_REF_V1 ')) return null;
+  try { return parseMcpPreview({ _meta: { 'trylo/preview': JSON.parse(text.slice(21)) } }); }
+  catch { return null; }
 }
 
 /** Text summary for a tool_result: joins text blocks; binary blocks
@@ -279,6 +296,11 @@ export function normalizePersistedToolResultContent(value: unknown): readonly To
       case 'text': {
         const text = item['text'];
         if (typeof text !== 'string') break;
+        if (text.startsWith('TRYLO_PREVIEW_REF_V1 ')) {
+          const preview = parsePreviewReference(text);
+          if (preview) out.push(preview);
+          break;
+        }
         out.push({ type: 'text', text: looksLikeBase64(text) ? '[binary content removed from the session record]' : text });
         break;
       }

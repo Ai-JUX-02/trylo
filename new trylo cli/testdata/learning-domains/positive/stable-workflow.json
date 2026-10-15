@@ -1,0 +1,40 @@
+{
+  "episodes": [
+    {
+      "id": "w1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "trajectory": {
+        "nodeIds": ["repro", "patch", "verify"],
+        "stepCount": 3,
+        "hadFailureRecovery": true,
+        "hadChecks": true
+      },
+      "nodeInputs": { "repro": "failing test", "patch": "diff", "verify": "command" },
+      "nodeOutputs": { "repro": "stack", "patch": "files", "verify": "exit_code" },
+      "fallback": "repro",
+      "outcome": "success"
+    },
+    {
+      "id": "w2",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "trajectory": {
+        "nodeIds": ["repro", "patch", "verify"],
+        "stepCount": 3,
+        "hadFailureRecovery": true,
+        "hadChecks": true
+      },
+      "nodeInputs": { "repro": "failing test", "patch": "diff", "verify": "command" },
+      "nodeOutputs": { "repro": "stack", "patch": "files", "verify": "exit_code" },
+      "fallback": "repro",
+      "outcome": "failure"
+    }
+  ]
+}

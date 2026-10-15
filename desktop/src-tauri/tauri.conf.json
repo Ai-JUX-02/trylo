@@ -26,7 +26,7 @@
     ],
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws: wss:; font-src 'self' data:",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost ws: wss:; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]
@@ -51,7 +51,9 @@
       "resources/sidecars/desktop-companion/publish",
       "resources/sidecars/hermes-capabilities",
       "resources/work",
-      "resources/workd"
+      "resources/workd",
+      "resources/cli",
+      "resources/runtime"
     ]
   }
 }

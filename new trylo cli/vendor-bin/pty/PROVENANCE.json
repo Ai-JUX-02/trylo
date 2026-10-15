@@ -1,0 +1,105 @@
+{
+  "$comment": [
+    "Provenance for the vendored PTY sidecar. Read together with vendor-bin/pty/src/main.rs,",
+    "which is the exact source that produced the artifacts below. Nothing here is inferred:",
+    "every hash was computed from the file in this tree, and every command was run as written.",
+    "",
+    "This file is the ledger that lets a reviewer answer three questions without trusting",
+    "this repository: what source produced the binary, what was built from it, and does the",
+    "binary in the tree still match that source."
+  ],
+  "helper": {
+    "name": "trylo-pty",
+    "version": "0.1.0",
+    "protocolVersion": 2,
+    "language": "rust",
+    "purpose": "ConPTY sidecar. Node has no pseudo-terminal; this is the only Windows implementation reachable from TypeScript."
+  },
+  "source": {
+    "path": "vendor-bin/pty/src/main.rs",
+    "sha256": "0572800c539a58fa25aecbbe4877f7676857cc1b061f3b2b8489c5bdd27c4d1c",
+    "bytes": 21748,
+    "origin": "Written for WP06 against the mechanism in the two audited sources below. Not a copy of either: Codex's utils/pty is a Rust library with no executable, and the old CLI has no PTY at all (measured: no node-pty in its package.json, zero matches for `pty.spawn` across 1969 TS sources).",
+    "referenceSources": [
+      {
+        "what": "ConPTY spawn / resize / terminal plumbing",
+        "where": "open/01-agent-cli-runtimes/codex/codex-rs/utils/pty/src/win/",
+        "authority": "read-only reference",
+        "note": "Confirms that resize is reachable: MasterPty::resize(&self) exists in portable-pty 0.8.1 at src/lib.rs:91. The desktop helper's comment claiming otherwise is wrong, and this sidecar relies on the real signature."
+      },
+      {
+        "what": "Session-shaped execution: a process that outlives one tool call",
+        "where": "open/01-agent-cli-runtimes/codex/codex-rs/core/src/unified_exec/",
+        "authority": "read-only reference",
+        "note": "Supplied the three-terminal-state model and the yield bounds. Its TerminalSize, PtyHandles and mpsc plumbing are Tokio-specific and did not carry over."
+      }
+    ]
+  },
+  "build": {
+    "command": "cargo build --release --offline",
+    "cwd": "vendor-bin/pty",
+    "targetDir": "vendor-bin/pty/target (not committed)",
+    "toolchain": "rustc 1.97.1 (8bab26f4f 2026-07-14), cargo 1.97.1 (c980f4866 2026-06-30)",
+    "targetTriple": "x86_64-pc-windows-msvc",
+    "profile": "release, opt-level=1, lto=true, codegen-units=1, strip=true",
+    "measuredSeconds": 10.44,
+    "offline": "All crates resolved from the local cargo registry cache. portable-pty 0.8.1 and its transitive deps were already present, so the build needs no network. Verified by `cargo build --release --offline` completing."
+  },
+  "dependencies": {
+    "portable-pty": "0.8.1",
+    "serde": "1.0.229 (derive)",
+    "serde_json": "1.0.151",
+    "note": "serde_json was chosen over a hand-written JSON parser for the control frames. A parser written for this would have had to handle surrogate pairs and backslash escapes correctly by hand, and a mistake there corrupts a path silently. The hot path carries raw bytes and never parses JSON at all."
+  },
+  "artifacts": {
+    "trylo-pty-win-x64": {
+      "path": "vendor-bin/pty/win-x64/trylo-pty.exe",
+      "sha256": "ae9f7f6606b34fff023edbb49b1cf187dbea50faa0b97c3208e99a1caf526ac4",
+      "bytes": 475136,
+      "platform": "win32",
+      "arch": "x64"
+    }
+  },
+  "unsupportedPlatforms": {
+    "comment": "Recorded rather than omitted. A platform with no artifact must fail loudly at load time, not fall back to pipes and report a PTY that does not exist.",
+    "win32-arm64": "not built — no toolchain or machine to verify it on",
+    "linux-x64": "not built",
+    "linux-arm64": "not built",
+    "darwin-x64": "not built",
+    "darwin-arm64": "not built"
+  },
+  "knownConstraints": [
+    "portable-pty builds the CreateProcessW environment block from exactly what CommandBuilder was given. An empty block is not an empty environment, it is an invalid one: CreateProcessW answers ERROR_INVALID_PARAMETER (87). The sidecar therefore restores SystemRoot/COMSPEC/PATH/TEMP after env_clear(). Measured both ways on this machine.",
+    "portable-pty does NOT resolve programs by PATH the way Node does. CommandBuilder::search_path reads PATH from the builder's own env (portable-pty-0.8.1/src/cmdbuilder.rs:532, the #[cfg(windows)] branch), and this sidecar clears that env on purpose so a terminal program inherits nothing it should not. The caller therefore resolves the name first: `adapters/sandbox/resolve-executable-path.ts` (same PATH/PATHEXT rules as the rest of the CLI) hands this sidecar an absolute path, and the sidecar refuses a non-absolute one with pty_program_not_absolute. There is exactly one answer to \"what runs\" and it is produced before this process is asked.",
+    "An interactive shell's prompt draws under ConPTY but a typed line may not echo, because cmd.exe applies console line editing that a pipe never triggers. This is real-terminal behaviour, not a defect, and it is why the pipes path and this path cannot be one implementation."
+  ],
+  "protocolHistory": [
+    {
+      "version": 1,
+      "change": "initial framing: hello/spawn/write/eof/resize/kill, events hello/ready/data/exit/error",
+      "status": "superseded"
+    },
+    {
+      "version": 2,
+      "change": "data frames carry [u32 idLen][id][raw bytes] so output is attributable to the session that produced it. Version 1 sent bare bytes, so a parent running two terminals at once delivered each session's output into every session's buffer with no way to tell.",
+      "status": "current"
+    }
+  ],
+  "invariants": [
+    {
+      "invariant": "the sidecar never resolves a program name",
+      "enforcedBy": "spawn_session rejects a non-absolute program with pty_program_not_absolute",
+      "why": "the sidecar's environment is deliberately cleared, so its own PATH search would be a second, unapproved answer to what runs"
+    },
+    {
+      "invariant": "data frames name the session that produced them",
+      "enforcedBy": "EV_DATA payload is [u32 idLen][id][raw bytes]; the host delivers only to the named session",
+      "why": "protocol 1 broadcast every byte to every session, so two live terminals contaminated each other's buffers"
+    },
+    {
+      "invariant": "a terminal state stays readable after the helper dies",
+      "enforcedBy": "the host retires terminal sessions into a bounded map that outlives the sidecar",
+      "why": "lost is the state a caller most needs to read and the moment it becomes true is when the helper disappears"
+    }
+  ]
+}

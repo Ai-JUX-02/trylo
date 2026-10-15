@@ -10,7 +10,7 @@
     "build:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prepare-sidecars.ps1 && pnpm build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "tauri:dev": "node scripts/start-desktop-dev.mjs",
     "tauri:build": "tauri build",
     "lint": "eslint src --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",

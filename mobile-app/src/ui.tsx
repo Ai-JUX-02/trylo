@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useRef, useState } from 'react';
+import { isValidElement, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -28,12 +28,12 @@ export function formatRecentTime(value: string | number, language: UiLanguage = 
 }
 
 export function BrandMark({ small = false }: { small?: boolean }) {
+  const gradientId = `trylo-gold-${useId().replace(/:/g, '')}`;
   return (
     <div className={`brand-mark${small ? ' brand-mark--small' : ''}`} aria-label="Trylo">
       <svg viewBox="0 0 1024 1024" fill="none" aria-hidden="true">
-        <path d="M462 236 L462 420 L624 420" />
-        <path d="M276 732 L424 644 L356 512" />
-        <path d="M540 676 L622 546 L786 640" />
+        <defs><linearGradient id={gradientId} x1="232" y1="220" x2="812" y2="804" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#F0DE91" /><stop offset="0.55" stopColor="#DEC86F" /><stop offset="1" stopColor="#C6AB50" /></linearGradient></defs>
+        <g stroke={`url(#${gradientId})`} strokeWidth="64" strokeLinecap="round" strokeLinejoin="round"><path d="M462 236 L462 420 L624 420" /><path d="M276 732 L424 644 L356 512" /><path d="M540 676 L622 546 L786 640" /></g>
       </svg>
     </div>
   );

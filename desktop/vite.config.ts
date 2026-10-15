@@ -56,6 +56,7 @@ export default defineConfig({
   // Tauri expects a fixed port. Fail if it's not available.
   clearScreen: false,
   server: {
+    fs: { allow: [fileURLToPath(new URL('../', import.meta.url))] },
     port: 1420,
     strictPort: true,
     host: host || false,
@@ -83,6 +84,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 3500,
     // Monaco bundles a few workers; let Vite know.
     rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        computerPreview: fileURLToPath(new URL('./computer-preview.html', import.meta.url)),
+      },
       output: {
         manualChunks: {
           // Monaco + monaco-vscode-api is large; split it out for caching.

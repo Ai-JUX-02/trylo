@@ -15,6 +15,7 @@
 
 import type { PermissionLevel } from '../permission/permission-policy';
 import type { ResolvedToolRuntime } from './types';
+import type { CliRuntimeProtocol } from '../runtime/cli-runtime-protocol';
 
 /**
  * Two independent 32-bit FNV-1a variants, concatenated into a 64-bit
@@ -147,6 +148,8 @@ export function fingerprintForRun(input: {
   readonly permissionLevel: PermissionLevel;
   readonly extraCliArgs: readonly string[];
   readonly toolRuntime: ResolvedToolRuntime | null;
+  /** P08 §4.1: which CLI contract the spawn speaks. */
+  readonly cliRuntimeProtocol?: CliRuntimeProtocol;
   /**
    * Effective spawn env for THIS process (Profile env + TRYLO_TEAM_SURFACE).
    * When omitted, falls back to `toolRuntime.spawnEnv`. A Work degrade
@@ -157,12 +160,19 @@ export function fingerprintForRun(input: {
 }): string {
   const runtime = input.toolRuntime;
   const spawnEnv = input.spawnEnv ?? runtime?.spawnEnv ?? {};
+  // P08 §4.1: the protocol is part of the runtime identity, because a
+  // process is fixed to one wire contract at spawn time.
+  //
+  // The legacy key is left BYTE-IDENTICAL: a plain Code run must keep
+  // exactly the same warm/prewarm reuse behaviour it had before P08, so
+  // the suffix is appended only for the opt-in protocol.
+  const suffix = input.cliRuntimeProtocol === 'trylo-v1' ? ':v1' : '';
   if (!runtime) {
-    if (Object.keys(spawnEnv).length === 0) return legacyFingerprint(input.extraCliArgs);
-    return `legacy:${JSON.stringify(input.extraCliArgs)}:env:${spawnEnvHash(spawnEnv)}`;
+    if (Object.keys(spawnEnv).length === 0) return `${legacyFingerprint(input.extraCliArgs)}${suffix}`;
+    return `legacy:${JSON.stringify(input.extraCliArgs)}:env:${spawnEnvHash(spawnEnv)}${suffix}`;
   }
 
-  return runtimeFingerprint({
+  return `${runtimeFingerprint({
     cliPath: input.cliPath,
     cwdCanonical: input.cwd,
     providerFormat: input.apiFormat ?? 'anthropic',
@@ -181,5 +191,5 @@ export function fingerprintForRun(input: {
     permissionSettingsHash: runtime.permissionSettingsHash,
     spawnEnv,
     extraCliArgs: input.extraCliArgs,
-  });
+  })}${suffix}`;
 }

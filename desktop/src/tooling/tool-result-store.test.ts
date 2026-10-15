@@ -89,6 +89,13 @@ describe('tool-result-store: readBinaryBytes guards', () => {
     expect(await store.readBinaryBytes({ ...ref, mimeType: 'application/octet-stream' })).toBeNull();
   });
 
+  it('reads a native Windows cache path when the renderer root uses mixed separators', async () => {
+    const { deps, store, ref } = await fixture();
+    const nativePath = ref.path.replaceAll('/', '\\');
+    deps.files.set(nativePath, deps.files.get(ref.path)!);
+    expect((await store.readBinaryBytes({ ...ref, path: nativePath }))?.length).toBe(ref.size);
+  });
+
   it('returns null for expired/missing files', async () => {
     const { deps, store, ref } = await fixture();
     deps.files.clear();
@@ -132,6 +139,19 @@ describe('materializeToolResultEvents — the ordered BinaryRef pump', () => {
     const out = await materializeToolResultEvents(events, store);
     const e = out[0] as ToolResultEvent;
     expect(e.content).toEqual([{ type: 'text', text: '[image could not be cached — dropped]' }]);
+  });
+
+  it('normalizes native preview references in high-level CLI events before UI and persistence', async () => {
+    const deps = fakeDeps();
+    const store = makeStore(deps);
+    const ref = await store.writeBinary({ data: PNG, mimeType: 'image/png' });
+    const events = [toolResultEvent([{ type: 'text', text: 'TRYLO_PREVIEW_REF_V1 ' + JSON.stringify(ref) }])];
+    const out = await materializeToolResultEvents(events, store);
+    const event = out[0] as ToolResultEvent;
+    expect(event.content).toEqual([{ type: 'image', ref, alt: '原始电脑画面' }]);
+    expect(event.output).toBe('[image]');
+    expect(JSON.stringify(event)).not.toContain('TRYLO_PREVIEW_REF_V1');
+    expect([...deps.files.keys()]).toHaveLength(1);
   });
 
   it('materializes blob resources and leaves pure-text batches untouched', async () => {

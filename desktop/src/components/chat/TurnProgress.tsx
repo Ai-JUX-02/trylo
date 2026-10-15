@@ -23,7 +23,7 @@
 // See App.tsx isTurnActive and the MessageList wiring.
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { Logo } from '../brand/Logo';
+import { Clock3 } from 'lucide-react';
 
 export interface TurnProgressProps {
   /** Unix ms when this turn started. The row is hidden
@@ -34,13 +34,28 @@ export interface TurnProgressProps {
    *  arrived. The row renders a frozen
    *  "已工作 0:12" instead of a live counter when
    *  defined. */
-  readonly finalElapsedMs?: number;
+  /** The settled elapsed time. `undefined` = never recorded;
+   *  `null` = an older persisted row that never recorded one.
+   *  NEITHER is an elapsed time — see the render branch below
+   *  (P0-3: `??` used to fall through to `now - turnStartedAt`,
+   *  which grew on every remount while wearing the settled
+   *  "已工作" prefix).
+   */
+  readonly finalElapsedMs?: number | null;
   /** v1.16.4: true when this turn is the active one
    *  (last user message AND CLI still running). When
    *  false, the row is static — it shows
    *  `finalElapsedMs` if set, or nothing useful
    *  otherwise. */
   readonly isActive: boolean;
+}
+
+/** True when this turn actually recorded an elapsed time. A
+ *  persisted `null` counts as "never recorded", exactly like a
+ *  missing value (P0-3).
+ */
+function hasFrozenElapsed(value: number | null | undefined): boolean {
+  return value !== undefined && value !== null;
 }
 
 function formatElapsed(ms: number): string {
@@ -66,7 +81,10 @@ export function TurnProgress(props: TurnProgressProps): ReactElement | null {
     // pauses weirdly" bug: each row runs its own
     // interval only for its own active window.
     if (!props.isActive) return;
-    if (props.finalElapsedMs !== undefined) return;
+    // P0-3: a persisted `null` must stop the tick as well. The old
+    // strict `!== undefined` let a null row keep ticking (and
+    // therefore keep growing) while rendering as "已工作".
+    if (hasFrozenElapsed(props.finalElapsedMs)) return;
     tickRef.current = window.setInterval(() => setNow(Date.now()), 1000);
     return () => {
       if (tickRef.current !== null) {
@@ -77,20 +95,47 @@ export function TurnProgress(props: TurnProgressProps): ReactElement | null {
   }, [props.turnStartedAt, props.isActive, props.finalElapsedMs]);
 
   if (props.turnStartedAt === null) return null;
-  const elapsedMs = props.finalElapsedMs ?? now - props.turnStartedAt;
+  // P0-3: `??` cannot be used here. On an inactive turn the tick
+  // interval never starts, so `now` is just the MOUNT time — the
+  // fallback grew on every remount (0:55 → 4:44 → 20:00+) while
+  // wearing the settled "已工作" prefix, i.e. a fabricated number
+  // that looked authoritative. A turn without a recorded value now
+  // says so instead of inventing one.
+  const frozenElapsed = props.finalElapsedMs ?? null;
+  const hasFrozen = hasFrozenElapsed(props.finalElapsedMs);
+  // Narrowed on `frozenElapsed` itself (not on the `hasFrozen`
+  // boolean) so TypeScript sees a plain `number` below.
+  const elapsedMs = frozenElapsed !== null ? frozenElapsed : now - props.turnStartedAt;
   // v1.16.4: a spinner + live counter is only shown
   // when the turn is BOTH still waiting for first
   // output AND the active turn. Once frozen (or once
   // a later turn starts), the row is a static label
   // — no animation, no ticking.
-  const isLive = props.isActive && props.finalElapsedMs === undefined;
+  // P0-3: `!hasFrozen` rather than `=== undefined`, so a persisted
+  // `null` is treated exactly like a missing value.
+  const isLive = props.isActive && !hasFrozen;
+  // A finished turn with no recorded elapsed time states that it
+  // does not know — it never invents one.
+  if (!isLive && !hasFrozen) {
+    return (
+      <div className="turn-progress" role="status">
+        <span
+          className="turn-progress__logo"
+          aria-hidden="true"
+        >
+          <Clock3 size={14} aria-hidden="true" />
+        </span>
+        <span className="turn-progress__timer">耗时未知</span>
+      </div>
+    );
+  }
   return (
     <div className="turn-progress" role="status" aria-live="polite">
       <span
         className="turn-progress__logo"
         aria-hidden="true"
       >
-        <Logo size={16} decorative />
+        <Clock3 size={14} aria-hidden="true" />
       </span>
       <span className="turn-progress__timer">
         {isLive ? formatElapsed(elapsedMs) : `已工作 ${formatElapsed(elapsedMs)}`}

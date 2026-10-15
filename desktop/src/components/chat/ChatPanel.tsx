@@ -33,7 +33,7 @@ import {
   type WorkAttachmentEntry,
 } from '../../attachments/attachment-acquisition';
 import { AgentConversationSurface } from './AgentConversationSurface';
-import { EmptyState, WorkLanding } from './EmptyState';
+import { EmptyState, WorkLanding, CodeStarters, WorkStarters } from './EmptyState';
 import { InputBar } from './InputBar';
 import type { ModelChoice } from './ModelSelector';
 import type { LearningStatusChipProps } from '../user-learning/LearningStatusChip';
@@ -65,6 +65,7 @@ export interface ChatPanelProps {
   readonly context: TryloHandlerContext;
   readonly activeSession: TryloSession | null;
   readonly topMode: TopLevelMode;
+  readonly onTopModeChange?: (mode: TopLevelMode) => void;
   readonly codeMode: CodeMode;
   readonly onCodeModeChange: (mode: CodeMode) => void;
   // v1.16.1: plan → agent transition. App.tsx swaps
@@ -260,17 +261,19 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
   return (
     <AgentConversationSurface
       surface="code"
+      artifactHost={props.artifactHost}
       messages={props.messages}
       running={running}
       viewState={codeViewState}
       emptyState={
         <EmptyState
           codeMode={props.codeMode}
-          onSuggestion={props.onSend}
         />
       }
+      starterSlot={<CodeStarters codeMode={props.codeMode} onSuggestion={props.onTextChange} />}
       composer={
         <InputBar
+          onTopModeChange={props.onTopModeChange}
           codeMode={props.codeMode}
           onCodeModeChange={props.onCodeModeChange}
           onSend={props.onSend}
@@ -331,6 +334,8 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
       onCancelEdit={props.onCancelEdit}
       workspacePath={props.workspaceRoot}
       onOpenArtifact={props.onOpenCodeArtifact}
+      onRespondApproval={props.onRespondApproval}
+      onOpenApprovalPreview={props.onOpenApprovalPreview}
       resultDockSlot={props.codeResultDock}
       personTeamStatusBarSlot={props.personTeamStatusBar}
       cognitionBadgeSlot={props.cognitionBadgeSlot}
@@ -388,14 +393,8 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
       messages={props.workMessages}
       running={props.workRunning}
       viewState={workViewState}
-      emptyState={
-        <WorkLanding
-          hasApiKey={props.hasApiKey}
-          onPickStarter={
-            props.onPickWorkStarter ?? (() => undefined)
-          }
-        />
-      }
+      emptyState={<WorkLanding />}
+      starterSlot={<WorkStarters hasApiKey={props.hasApiKey} onPickStarter={props.onPickWorkStarter ?? ((seed) => props.onWorkInputChange(seed))} />}
       bannerSlot={
         props.hasApiKey === false
           ? <ApiKeyMissingBanner onOpenSettings={props.onOpenSettings} />
@@ -407,9 +406,10 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
       learningReceiptSlot={props.learningReceiptSlot}
       composer={
         <InputBar
+          onTopModeChange={props.onTopModeChange}
           conversationKind="work"
           codeMode="agent"
-          onCodeModeChange={() => undefined}
+          onCodeModeChange={props.onCodeModeChange}
           text={props.workInput}
           onTextChange={props.onWorkInputChange}
           onSend={props.onWorkSend}

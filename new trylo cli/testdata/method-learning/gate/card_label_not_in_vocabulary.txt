@@ -1,0 +1,1 @@
+{"hint": "keep paths inside the root", "labels": ["not_a_word"]}

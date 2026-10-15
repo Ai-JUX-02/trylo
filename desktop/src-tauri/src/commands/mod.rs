@@ -5,6 +5,7 @@
 // them so `lib.rs` can list them in `tauri::generate_handler!`.
 
 pub mod attachment_staging;
+pub mod cli_runtime;
 pub mod conversation_history;
 pub mod diagnostics;
 pub mod error;
@@ -21,6 +22,7 @@ pub mod lsp_stop;
 pub mod node_runtime;
 pub mod pick_folder;
 pub mod process_list;
+pub mod process_close_input;
 pub mod process_send;
 pub mod process_spawn;
 pub mod process_state;
@@ -45,3 +47,5 @@ pub mod workd;
 pub mod workd_state;
 pub mod write_file;
 pub mod write_file_bytes;
+pub mod computer_preview;
+pub mod native_browser;

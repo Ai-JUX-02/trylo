@@ -1,0 +1,13 @@
+{
+  "id": "apache-c-compiler",
+  "name": "typescript",
+  "version": "5.8.3",
+  "spdx": "Apache-2.0",
+  "tier": "C",
+  "role": "compiler",
+  "entersArtifact": false,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "pass"
+}

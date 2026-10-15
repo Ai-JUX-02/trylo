@@ -76,6 +76,7 @@ const SETTINGS: TryloSettings = {
   hermesWorkLearning: true,
   cliPath: 'C:/trylo-cli/cli.js',
   workspace: 'C:/work/demo-ws',
+  cliRuntimeProtocol: 'legacy-stream-json',
   userLearning: {
     enabled: false,
     defaultMode: 'shadow',

@@ -1,0 +1,39 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-wp19",
+    "noEmitOnError": false,
+    "declaration": false
+  },
+  "include": [
+    "src/internal/ports/media.ts",
+    "src/internal/ports/provider.ts",
+    "src/internal/protocol/envelope.ts",
+    "src/internal/protocol/transcript.ts",
+    "src/internal/contract/index.ts",
+    "src/internal/adapters/media/**/*.ts",
+    "src/internal/adapters/provider/capabilities.ts",
+    "src/internal/adapters/provider/model-catalog.ts",
+    "src/internal/adapters/provider/model-catalog.test.ts",
+    "src/internal/adapters/provider/openai-compatible.ts",
+    "src/internal/adapters/provider/responses.ts",
+    "src/internal/adapters/provider/responses-stream.ts",
+    "src/internal/adapters/provider/responses.test.ts",
+    "src/internal/adapters/provider/openai-compatible.test.ts",
+    "src/internal/adapters/provider/responses-translate.ts",
+    "src/internal/adapters/provider/openai-stream.ts",
+    "src/internal/adapters/provider/openai-translate.ts",
+    "src/internal/adapters/provider/coalesce-deltas.ts",
+    "src/internal/adapters/provider/sse.ts",
+    "src/internal/adapters/provider/structured-output.ts",
+    "src/internal/adapters/tools/read-only/**/*.ts",
+    "src/internal/adapters/tools/shared/workspace.ts",
+    "src/internal/adapters/tools/file-finder/file-finder.ts",
+    "src/internal/adapters/tools/file-finder/*.ts",
+    "src/internal/adapters/project-instructions/appendix.ts",
+    "src/internal/adapters/text-cut.ts",
+    "src/internal/domain/voice-session.ts",
+    "src/internal/domain/voice-session.test.ts",
+    "src/internal/adapters/voice/**/*.ts"
+  ]
+}

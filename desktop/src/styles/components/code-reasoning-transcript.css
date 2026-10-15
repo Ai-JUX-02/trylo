@@ -1,220 +1,43 @@
-/* Trylo Code — one readable reasoning document, not a pile of event cards. */
+.code-reasoning { --process-title: #4b5344; --process-text: #60685a; --process-meta: #697161; --process-rail: #8e9a86; --process-hover: #f2f4ef; --reasoning-ink: #737373; --reasoning-label: #6b6b6b; --reasoning-outdent: 23px; margin: 6px 0 8px; min-width: 0; font-size: 12px; }
+:root[data-theme='dark'] .code-reasoning { --process-title: #c4cebc; --process-text: #b2bba9; --process-meta: #a5af9d; --process-rail: #7f8e74; --process-hover: #2a2e28; --reasoning-ink: #b5b5b5; --reasoning-label: #a6a6a6; }
+.code-reasoning__head { display: flex; align-items: center; flex-wrap: wrap; width: 100%; gap: 9px; padding: 7px 0; color: var(--process-meta); text-align: left; font: 12px/1.7 var(--font-body); }
+.code-reasoning__summary { flex: 1; min-width: 0; color: var(--process-title); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.code-reasoning__meta { font-size: 11px; color: var(--process-meta); white-space: nowrap; margin-left: auto; }
+.code-reasoning__state { display: inline-flex; color: var(--process-meta); }
+.code-reasoning__state--error { color: var(--danger); }
+.code-reasoning__state--running { animation: transcript-spin 1.5s linear infinite; }
+.code-reasoning__transcript { margin: 12px 0 0 23px; padding: 0; border-left: 0; min-width: 0; }
+.code-reasoning__note { margin: 12px 0 14px calc(-1 * var(--reasoning-outdent)); padding: 0; }
+.code-reasoning__passage { margin: 0; min-width: 0; background: transparent; color: var(--reasoning-ink); line-height: 1.8; }
+.code-reasoning__passage-label { display: inline; margin: 0 10px 0 0; color: var(--reasoning-label); font: 500 12px/1.5 var(--font-body); }
+.code-reasoning__passage-mark { display: inline-block; width: 10px; height: 1px; margin-right: 6px; background: currentColor; vertical-align: 3px; }
+.code-reasoning__passage-text { font: 400 14px/1.8 var(--font-body); color: var(--reasoning-ink); white-space: normal; overflow-wrap: anywhere; }
+.code-reasoning__passage--short .code-reasoning__passage-text,
+.code-reasoning__passage--short .code-reasoning__passage-text > p { display: inline; margin: 0; }
+.code-reasoning__passage--long .code-reasoning__passage-label { display: block; margin: 0 0 8px; }
+.code-reasoning__passage-text p { margin: 0 0 12px; }
+.code-reasoning__passage-text p:last-child { margin-bottom: 0; }
+.code-reasoning__passage-text ul, .code-reasoning__passage-text ol { margin: 0 0 12px; padding-left: 1.35em; }
+.code-reasoning__passage-text li { margin: 3px 0; }
+.code-reasoning__passage-text li p { margin-bottom: 0; }
+.code-reasoning__passage-text pre { margin: 0 0 12px; padding: 0; border: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-reasoning__passage-text code { font: 12px/1.8 var(--font-mono); color: inherit; background: transparent; }
+.code-reasoning__passage-text h1, .code-reasoning__passage-text h2, .code-reasoning__passage-text h3 { font-size: 14px; font-weight: 550; line-height: 1.8; margin: 14px 0 6px; }
+.code-reasoning__tool { margin: 0; min-width: 0; }
+.code-reasoning__thought-detail { margin-top: 5px; color: var(--process-meta); font-size: 11px; }
+.code-reasoning__thought-detail > summary { cursor: pointer; }
+.code-reasoning__thought-detail[open] > summary { margin-bottom: 8px; }
+.code-reasoning__takeover-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg); }
+.code-reasoning__head:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
+.code-reasoning--thinking { margin: 4px 0 6px; }
+.code-reasoning--thinking .code-reasoning__head { width: fit-content; max-width: 100%; gap: 4px; padding: 4px 0; }
+.code-reasoning--thinking .code-reasoning__summary { color: var(--process-meta); font-size: 12px; font-weight: 400; }
+.code-reasoning--thinking .code-reasoning__transcript { margin: 0; }
+.code-reasoning--thinking .code-reasoning__note { margin: 12px 0 14px; padding: 0; }
+@keyframes transcript-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .code-reasoning { --reasoning-outdent: 20px; } .code-reasoning__transcript { margin-left: 20px; } .code-reasoning--thinking .code-reasoning__transcript { margin-left: 0; } .code-reasoning__meta { margin-left: auto; } }
+@media (prefers-reduced-motion: reduce) { .code-reasoning__state--running { animation: none; } }
 
-.code-reasoning {
-  width: 100%;
-  margin: 3px 0 7px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-}
-
-.code-reasoning--active {
-  padding-left: 9px;
-  border-left: 1px solid color-mix(in srgb, var(--brand) 17%, var(--border));
-}
-
-.code-reasoning__head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 6px 2px;
-  border: 0;
-  background: transparent;
-  color: var(--ink-paper);
-  text-align: left;
-  cursor: pointer;
-}
-
-.code-reasoning__head:hover {
-  color: var(--ink-paper);
-}
-
-/* A finished tool block collapsed to a quiet history row. It must sit a
- * tier below the thinking summary so it stops competing for attention —
- * the active row stays bright so the user can still follow the live run. */
-.code-reasoning--tools:not(.code-reasoning--active) .code-reasoning__summary {
-  color: var(--ink-fog);
-}
-
-.code-reasoning--tools:not(.code-reasoning--active) .code-reasoning__head:hover .code-reasoning__summary {
-  color: var(--ink-paper);
-}
-
-.code-reasoning__head:focus-visible {
-  outline: 0;
-  box-shadow: inset 2px 0 color-mix(in srgb, var(--brand) 45%, var(--border));
-}
-
-.code-reasoning__state {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 0;
-  color: var(--ink-fog);
-  background: transparent;
-}
-
-.code-reasoning--active .code-reasoning__state {
-  color: color-mix(in srgb, var(--brand) 58%, var(--ink-fog));
-  background: transparent;
-}
-
-.code-reasoning--active .code-reasoning__state svg {
-  animation: code-reasoning-spin 1.4s linear infinite;
-}
-
-@keyframes code-reasoning-spin {
-  to { transform: rotate(360deg); }
-}
-
-.code-reasoning__summary {
-  overflow: hidden;
-  color: var(--ink-paper);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  font-weight: 520;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.code-reasoning__meta {
-  color: var(--ink-mute);
-  font-family: var(--font-body);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-
-/* §11.3 用户接管 (WCC-P2-04): aggregate badge over the segment's
- * trylo-target takeover facts. Warn tone — this is the one state where
- * the DESKTOP was taken from the agent mid-run. */
-.code-reasoning__takeover-badge {
-  display: inline-flex;
-  flex: none;
-  gap: 4px;
-  align-items: center;
-  padding: 1px 8px;
-  border: 1px solid color-mix(in srgb, var(--warn, #d9a666) 55%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--warn, #d9a666) 12%, transparent);
-  color: color-mix(in srgb, var(--warn, #d9a666) 82%, var(--ink-paper));
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 560;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-
-.code-reasoning__transcript {
-  padding: 1px 4px 10px 27px;
-  border-top: 0;
-}
-
-.code-reasoning__tool-group {
-  max-width: 76ch;
-  padding: 5px 0 4px 18px;
-  border-left: 1px solid var(--border-strong);
-}
-
-.code-reasoning__tool-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ink-mute);
-  font: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
-}
-
-.code-reasoning__tool-summary:hover {
-  color: var(--ink-paper);
-  background: var(--ink-hover);
-}
-
-.code-reasoning__tool-list {
-  padding-top: 4px;
-}
-
-.code-reasoning__passage {
-  position: relative;
-  max-width: 72ch;
-  padding: 14px 0 13px 18px;
-  border-left: 1px solid var(--border-strong);
-}
-
-.code-reasoning__passage::before {
-  position: absolute;
-  top: 20px;
-  left: -3px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink-mute);
-  content: '';
-}
-
-.code-reasoning__passage-label {
-  margin-bottom: 6px;
-  color: var(--ink-mute);
-  font-family: var(--font-body);
-  font-size: 10.5px;
-  letter-spacing: 0.035em;
-}
-
-.code-reasoning__passage-text {
-  color: color-mix(in srgb, var(--ink-paper) 88%, var(--ink-fog));
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.68;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-.code-reasoning__tool {
-  max-width: 76ch;
-  padding: 2px 0 3px 18px;
-  border-left: 1px solid var(--border-strong);
-}
-
-.code-reasoning__tool .tool {
-  margin: 2px 0;
-}
-
-/* Finished tools read as quiet transcript rows. Their details remain one
- * click away, but a completed run no longer looks like nested card stacks. */
-.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) {
-  border-color: transparent;
-  background: transparent;
-}
-
-.code-reasoning__tool .tool:not(.tool--running):not(.tool--error):hover {
-  border-color: color-mix(in srgb, var(--border) 55%, transparent);
-}
-
-.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) .tool__head--collapsed {
-  padding-inline: 6px;
-}
-
-.code-reasoning__tool .tool:not(.tool--running):not(.tool--error) .tool__body {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-@media (max-width: 720px) {
-  .code-reasoning__meta { display: none; }
-  .code-reasoning__transcript { padding-left: 20px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .code-reasoning--active .code-reasoning__state svg { animation: none; }
-}
+/* Keep virtual row heights measurable during live growth; the item wrapper
+   remains flow-root. No height interpolation around the process transcript. */
+.code-reasoning > .disclosure { transition: none; }

@@ -24,6 +24,7 @@ import { motionPolicyFor } from './motion-policy';
 import {
   type ConversationRunViewState,
   deriveConversationRunViewState,
+  viewStateLabel,
   viewStateTone,
 } from './view-state';
 
@@ -57,29 +58,9 @@ function basenameOf(p: string): string {
 
 /** The single status label for a view state. */
 function stateLabel(state: ConversationRunViewState): string {
-  switch (state) {
-    case 'idle':
-      return '已就绪';
-    case 'preparing':
-      return '正在准备…';
-    case 'waiting_first_output':
-    case 'tool_running':
-      return '正在执行…';
-    case 'thinking':
-      return '思考中…';
-    case 'finalizing':
-      return '正在收尾…';
-    case 'awaiting_input':
-      return '等待你的回复';
-    case 'reconnecting':
-      return '正在重新连接…';
-    case 'completed':
-      return '已完成';
-    case 'failed':
-      return '失败';
-    case 'cancelled':
-      return '已停止';
-  }
+  // Round-3 P2: one wording per state — see viewStateLabel. The local switch
+  // it replaced is gone so a new state cannot grow a second phrasing here.
+  return viewStateLabel(state);
 }
 
 export function ProcessHeader(props: ProcessHeaderProps): ReactElement | null {
@@ -101,21 +82,50 @@ export function ProcessHeader(props: ProcessHeaderProps): ReactElement | null {
     let turn = 0;
     let tools = 0;
     let lastTurn = 0;
-    let firstTs: number | null = null;
-    let lastTs: number | null = null;
+    // P0-1a (2026-10-03): the row shows the CURRENT TURN's elapsed time,
+    // not the whole conversation's. It used to be `lastTs - firstTs`
+    // across every message — a 4-turn conversation that had run for
+    // 336.9s displayed "336.9s" while turn 2 was in flight, which is the
+    // SESSION total, not the turn. The per-turn truth already exists on
+    // the user message: `finalElapsedMs` (frozen by turn-timer.ts when
+    // the first model output lands) or, while that turn is still in
+    // flight, `now - turnStartedAt`.
+    //
+    // No timer is introduced here: the value is recomputed whenever the
+    // message list changes, which during a live run happens on every
+    // streamed token. A frozen turn renders a constant either way.
+    let currentTurnMs: number | null = null;
+    // P0-1c: the visible turn number counts USER turns. A `kind:'turn'`
+    // record cannot be trusted for it — the v1 adapter stamps `turn: 1`
+    // on every event it projects, so `Math.max(turn, m.turn)` pinned
+    // this row at "Turn 1" forever.
+    let userTurns = 0;
     for (const m of props.messages) {
-      if (firstTs === null) firstTs = m.createdAt;
-      lastTs = m.createdAt;
       if (m.kind === 'turn') {
         turn = Math.max(turn, m.turn);
         lastTurn = m.turn;
       } else if (m.kind === 'tool') {
         tools += 1;
+      } else if (m.kind === 'text' && m.role === 'user') {
+        userTurns += 1;
+        const started = m.turnStartedAt;
+        if (started !== undefined) {
+          // P0-3: same guard as TurnProgress. A turn that never
+          // recorded an elapsed time is only allowed to count live
+          // while the run is actually in flight; once it is over,
+          // `now - turnStartedAt` is a number that grows with the
+          // clock and means nothing.
+          const frozen = m.finalElapsedMs;
+          currentTurnMs =
+            frozen !== undefined && frozen !== null
+              ? frozen
+              : props.running
+                ? Math.max(0, Date.now() - started)
+                : null;
+        }
       }
     }
-    const durationMs =
-      firstTs !== null && lastTs !== null ? lastTs - firstTs : 0;
-    return { turn, lastTurn, tools, durationMs };
+    return { turn, lastTurn, tools, userTurns, currentTurnMs };
   }, [props.messages]);
 
   const tone = viewStateTone(viewState);
@@ -147,11 +157,15 @@ export function ProcessHeader(props: ProcessHeaderProps): ReactElement | null {
       {showStats ? (
         <>
           <span className="process-header__sep">·</span>
-          <span>Turn {stats.lastTurn || stats.turn}</span>
+          <span>Turn {stats.userTurns}</span>
           <span className="process-header__sep">·</span>
           <span>{stats.tools} tool{stats.tools === 1 ? '' : 's'}</span>
           <span className="process-header__sep">·</span>
-          <span>{(stats.durationMs / 1000).toFixed(1)}s</span>
+          <span>
+            {stats.currentTurnMs === null
+              ? '耗时未知'
+              : `${(stats.currentTurnMs / 1000).toFixed(1)}s`}
+          </span>
         </>
       ) : (
         isIdle && isEmpty && props.workspace && (

@@ -1,12 +1,25 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
 import type { FilePath } from '../../host-adapter/types';
 import { LeftRail } from './LeftRail';
 
 vi.mock('./WorkspaceTree', () => ({
   WorkspaceTree: () => <div data-testid="workspace-tree" />,
+}));
+
+// The profile store never resolves in these wiring tests: the row
+// renders its closed-state labels from the hook's initial state,
+// and no async setState lands outside act(). The store itself is
+// covered by user-profile/profile-store.test.ts.
+vi.mock('../../user-profile/profile-store', () => ({
+  userProfileStore: {
+    load: () => new Promise<never>(() => undefined),
+    save: () => new Promise<never>(() => undefined),
+    importAvatar: () => new Promise<never>(() => undefined),
+    pickImage: () => new Promise<never>(() => undefined),
+  },
 }));
 
 function session(
@@ -126,5 +139,64 @@ describe('LeftRail project conversations', () => {
     const toggle = screen.getByRole('button', { name: /archived/i });
     expect(toggle).toBeInTheDocument();
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('LeftRail profile row', () => {
+  function setupRail(): { onOpenSettings: Mock } {
+    const onOpenSettings = vi.fn();
+    render(
+      <LeftRail
+        workspaces={[{ id: 'ws-1', root: 'D:/project' as FilePath, name: 'project' }]}
+        currentWorkspaceId="ws-1"
+        sessions={[session('code-1', 'code', 100)]}
+        activeSessionId="code-1"
+        collapsed={false}
+        runningSessionIds={new Set<string>()}
+        onSwitchWorkspace={vi.fn()}
+        onOpenFolder={vi.fn()}
+        onCloseWorkspace={vi.fn()}
+        onSelectSession={vi.fn()}
+        onNewSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onRenameSession={vi.fn()}
+        onArchiveSession={vi.fn()}
+        onUnarchiveSession={vi.fn()}
+        onToggleCollapse={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    return { onOpenSettings };
+  }
+
+  it('shows the workspace label and settings hint while closed', () => {
+    setupRail();
+    expect(screen.getByText('本地工作区')).toBeInTheDocument();
+    expect(screen.getByText('设置与连接')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '用户资料' })).toBeNull();
+  });
+
+  it('opens the profile card when the row is clicked', () => {
+    const { onOpenSettings } = setupRail();
+    fireEvent.click(screen.getByRole('button', { name: '用户资料' }));
+    expect(screen.getByRole('dialog', { name: '用户资料' })).toBeInTheDocument();
+    // The card swaps the row labels to the profile identity.
+    expect(screen.getByText('用户资料')).toBeInTheDocument();
+    expect(onOpenSettings).not.toHaveBeenCalled();
+  });
+
+  it('opens settings directly from the gear without opening the card', () => {
+    const { onOpenSettings } = setupRail();
+    fireEvent.click(screen.getByRole('button', { name: '设置' }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: '用户资料' })).toBeNull();
+  });
+
+  it('toggles the card closed when the row is clicked again', () => {
+    setupRail();
+    fireEvent.click(screen.getByRole('button', { name: '用户资料' }));
+    expect(screen.getByRole('dialog', { name: '用户资料' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '用户资料' }));
+    expect(screen.queryByRole('dialog', { name: '用户资料' })).toBeNull();
   });
 });

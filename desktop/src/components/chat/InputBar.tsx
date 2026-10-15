@@ -1,25 +1,8 @@
-// Trylo Desktop — InputBar. See spike-results/phase-2-ui-redesign.md.
-//
-// v1.7: the + indicator opens a ModePopover (Chat / Plan
-// / Agent). The popover is a real listbox, keyboard
-// navigable, dismissable on Escape / outside click.
-//
-// v1.15: a 24px status line is rendered ABOVE the input
-// box (not inside it). The status line reuses ProcessHeader
-// and shows the agent state (ready / running / error) plus
-// the workspace root. See v1.15-handoff §1.1.
-//
-// v1.16.0: a 24px action row is rendered BELOW the input
-// box. It hosts the ContextRing (tokens / window) on the
-// left; the right side is reserved for upcoming items
-// (attach, permission dropdown, model picker). The layout
-// mirrors Codex's chat input — input → action row below.
-
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement } from 'react';
-import type { CodeMode } from '../../host-adapter/types';
+import type { CodeMode, TopLevelMode } from '../../host-adapter/types';
 import type { ChatMessage } from './types';
 import type { Attachment, FailedAttachment } from '../../host-adapter/attachment-utils';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Plus, ChevronDown, Code2, BriefcaseBusiness, Folder, MoreHorizontal } from 'lucide-react';
 import { ModePopover } from './ModePopover';
 import { ModelSelector, type ModelChoice } from './ModelSelector';
 import { PermissionLevelPicker } from './PermissionLevelPicker';
@@ -34,25 +17,10 @@ import { WorkTaskMenu } from '../work/WorkTaskMenu';
 import type { ConversationRunViewState } from './view-state';
 import type { PermissionLevel } from '../../permission/permission-policy';
 
-const CODE_LABEL: Record<CodeMode, string> = {
-  chat:      'Chat',
-  plan:      'Plan',
-  agent:     'Agent',
-  cognition: 'Cognition',
-};
-
+const CODE_LABEL: Record<CodeMode, string> = { agent: '执行', chat: '对话', plan: '计划', cognition: '偏好' };
 const CODE_PLACEHOLDER: Record<CodeMode, string> = {
-  chat:      'What are you building?',
-  plan:      'What do you want to design first?',
-  agent:     'Tell the agent what to do…',
-  cognition: 'Tell Trylo how you like to work. This does not write code…',
-};
-
-const CODE_HINT: Record<CodeMode, string> = {
-  chat:      'Ask anything',
-  plan:      'Design first',
-  agent:     'Build + test',
-  cognition: 'Learn you',
+  agent: '描述任务，或添加文件…', chat: '讨论代码，或描述你遇到的问题…',
+  plan: '说说你想实现什么，我们先梳理方案…', cognition: '说说你希望 Trylo 怎样与你合作…',
 };
 
 export interface InputBarProps {
@@ -62,6 +30,7 @@ export interface InputBarProps {
    * inheriting Code-only controls.
    */
   readonly conversationKind?: 'code' | 'work';
+  readonly onTopModeChange?: (mode: TopLevelMode) => void;
   readonly codeMode: CodeMode;
   readonly onCodeModeChange: (mode: CodeMode) => void;
   readonly onSend: (text: string) => void;
@@ -204,274 +173,70 @@ export interface InputBarProps {
 
 export function InputBar(props: InputBarProps): ReactElement {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const plusRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { text, onSend } = props;
   const isWork = props.conversationKind === 'work';
-
-  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+  const canSend = props.canSend !== false && props.text.trim().length > 0;
+  const resize = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
-    const max = 160; // 约 6-7 行，超过滚动
-    const next = Math.min(el.scrollHeight, max);
-    el.style.height = `${next}px`;
-    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+    el.style.height = `${Math.max(62, Math.min(el.scrollHeight, 160))}px`;
+    el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
   }, []);
-
-  useEffect(() => {
-    autoResize(textareaRef.current);
-  }, [text, autoResize]);
-
-  const onSubmit = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault();
-      const trimmed = text.trim();
-      if (trimmed === '') return;
-      onSend(trimmed);
-    },
-    [text, onSend],
-  );
-
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-        e.preventDefault();
-        const trimmed = text.trim();
-        if (trimmed === '') return;
-        onSend(trimmed);
-      }
-    },
-    [text, onSend],
-  );
-
-  return (
-    <div className="input-bar-wrapper">
-      <ProcessHeader
-        messages={props.messages}
-        running={props.running}
-        error={props.error}
-        workspace={props.workspace}
-        viewState={props.viewState}
-        onStop={props.onStop}
-      />
-      <form
-        className={
-          'input-bar'
-          + (isWork ? ' input-bar--work' : '')
-          + (!isWork && props.codeMode === 'plan' ? ' input-bar--plan' : '')
-          + (!isWork && props.codeMode === 'cognition' ? ' input-bar--cognition' : '')
-          + (props.isDragging ? ' input-bar--dragging' : '')
-        }
-        onSubmit={onSubmit}
-      >
-        {isWork ? (
-          <div className="input-bar__work-mode-group">
-            <span className="input-bar__mode input-bar__mode--static" aria-label="Work conversation">
-              <span className="input-bar__kind-mark" aria-hidden="true">W</span>
-              <span className="input-bar__mode-label">Work</span>
-            </span>
-            {props.onRunAsTask && (
-              <WorkTaskMenu onRunTask={props.onRunAsTask} />
-            )}
-            {props.onOpenCognition && (
-              <button
-                type="button"
-                className="input-bar__cognition-entry"
-                title="说说这次报告/交付希望我怎么把握"
-                disabled={props.cognitionEnabled === false}
-                onClick={() => props.onOpenCognition?.()}
-              >
-                聊聊你怎么做报告
-              </button>
-            )}
-          </div>
-        ) : (
-          <button
-            ref={plusRef}
-            type="button"
-            className="input-bar__mode"
-            title="Code sub-mode"
-            aria-label={`Code sub-mode: ${CODE_LABEL[props.codeMode]}`}
-            aria-haspopup="listbox"
-            aria-expanded={popoverOpen}
-            onClick={() => setPopoverOpen((v) => !v)}
-          >
-            <span className="input-bar__mode-plus" aria-hidden="true">+</span>
-            <span className="input-bar__mode-label">{CODE_LABEL[props.codeMode]}</span>
+  useEffect(() => { resize(textareaRef.current); }, [props.text, resize]);
+  const send = (): void => { if (canSend) props.onSend(props.text.trim()); };
+  const submit = (event: FormEvent): void => { event.preventDefault(); send(); };
+  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault(); send();
+    }
+  };
+  const workspaceName = props.workspace?.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop();
+  return <div className="input-bar-wrapper">
+    <form className={`input-bar${isWork ? ' input-bar--work' : ''}${props.isDragging ? ' input-bar--dragging' : ''}`} onSubmit={submit}>
+      <textarea ref={textareaRef} className="input-bar__input" value={props.text}
+        onChange={(event) => props.onTextChange(event.target.value)} onKeyDown={keyDown}
+        placeholder={props.viewState === 'awaiting_input' ? '直接回复，任务会从这里继续…'
+          : props.running ? '输入调整方向，Enter 发送后续消息…'
+          : isWork ? '描述你想完成的工作，或添加资料…' : CODE_PLACEHOLDER[props.codeMode]}
+        rows={2} spellCheck={false} autoComplete="off" aria-label="Message" />
+      <AttachmentList attachments={props.attachments} onRemove={props.onRemoveAttachment}
+        loading={props.attachmentLoading} failed={props.failed} onDismissFailed={props.onDismissFailed} onRetryFailed={props.onRetryFailed} />
+      <div className="input-bar__toolbar">
+        <button type="button" className="input-bar__attach" onClick={props.onAddAttachment} title="添加文件或图片" aria-label="Attach files"><Plus size={18} /></button>
+        <div className="input-bar__mode-anchor">
+          <button ref={plusRef} type="button" className="input-bar__mode" aria-label={`任务类型: ${isWork ? 'Work' : 'Code'}`} aria-haspopup="menu" aria-expanded={popoverOpen} onClick={() => setPopoverOpen((open) => !open)}>
+            {isWork ? <BriefcaseBusiness size={14} /> : <Code2 size={14} />}
+            <span>{isWork ? 'Work' : 'Code'}{!isWork && props.codeMode !== 'agent' ? ` · ${CODE_LABEL[props.codeMode]}` : ''}</span><ChevronDown size={12} />
           </button>
-        )}
-        {!isWork && popoverOpen && (
-          <ModePopover
-            current={props.codeMode}
-            onSelect={props.onCodeModeChange}
-            onClose={() => setPopoverOpen(false)}
-            anchorRef={plusRef}
-          />
-        )}
-        {/* v1.16.2: attachment button. Sits between the
-            mode picker and the input. Sibling of +,
-            not child — keeps the file picker independent
-            of the mode dropdown. P2-1 Work Package B:
-            rendered on BOTH surfaces (Code + Work). */}
-        <button
-          type="button"
-          className="input-bar__attach"
-          onClick={props.onAddAttachment}
-          title="Attach files (Office docs, images, text)"
-          aria-label="Attach files"
-        >
-          <span aria-hidden="true">📎</span>
-        </button>
-        <textarea
-          ref={textareaRef}
-          className="input-bar__input"
-          value={props.text}
-          onChange={(e) => {
-            props.onTextChange(e.target.value);
-            autoResize(e.target);
-          }}
-          onKeyDown={onKeyDown}
-          placeholder={props.viewState === 'awaiting_input'
-            ? '直接回复，任务会从这里继续…'
-            : props.running
-              ? '输入调整方向，Enter 立即引导当前任务…'
-              : isWork
-                ? '在当前工作区研究、整理或生成产物…'
-                : `${CODE_PLACEHOLDER[props.codeMode]}  ·  ${CODE_HINT[props.codeMode]}`}
-          rows={1}
-          spellCheck={false}
-          autoComplete="off"
-          aria-label="Message"
-        />
-        {/* 2026-09-03 (run controls §UI-B): queue hint while a run is live and
-            messages are pended behind it. Default is queue; the inline
-            interrupt affordance steers the oldest one immediately. */}
-        {props.running && (props.queuedCount ?? 0) > 0 && (
-          <span className="input-bar__queued" role="status">
-            <span className="input-bar__queued-count">{props.queuedCount} 条已排队</span>
-            {props.onInterruptQueued && (
-              <button
-                type="button"
-                className="input-bar__queued-interrupt"
-                onClick={props.onInterruptQueued}
-                title="立即把这条消息插进当前任务（打断）"
-              >
-                立即打断
-              </button>
-            )}
-          </span>
-        )}
-        {/* The send slot is ALWAYS the arrow; the single Stop control lives
-            in the ProcessHeader above (dedupe, spec UI-de-dup). The arrow
-            stays enabled whenever there is text, even while a run is active —
-            that message either queues or interrupts (see App.onSend). */}
-        <button
-          type="submit"
-          className="input-bar__send"
-          disabled={props.canSend === false || props.text.trim() === ''}
-          title={props.running ? '发送（可排队或打断）' : '发送'}
-          aria-label={props.running ? '发送（可排队或打断）' : '发送'}
-        >
-          <ArrowUp size={16} strokeWidth={2.2} aria-hidden="true" />
-        </button>
-      </form>
-      {/* v1.16.2: attachment chips strip. Sits between
-          the input row and the action row; null when
-          the list is empty (no extra height). */}
-      <AttachmentList
-        attachments={props.attachments}
-        onRemove={props.onRemoveAttachment}
-        loading={props.attachmentLoading}
-        failed={props.failed}
-        onDismissFailed={props.onDismissFailed}
-        {...(props.onRetryFailed ? { onRetryFailed: props.onRetryFailed } : {})}
-      />
-      {/* v1.16.0: bottom action row (Codex-style). The
-          ContextRing sits on the right with the new
-          onCompact prop — clicking the ring opens a
-          popover with usage + a "Compact now" action.
-          The left side is a flex spacer for future
-          items (attach button could move here, etc.).
-          Don't disturb the ring's right anchor.
-
-          P2 (spec §3.2): the permission level chip lives
-          on the LEFT of the action row on both Code and
-          Work surfaces — same chip, same four levels, same
-          keyboard model. The chat/plan/agent selector in
-          the input row above is the interaction intent and
-          stays decoupled from the permission chip. */}
-      {isWork ? (
-        <div className="input-bar__actions">
-          <PermissionLevelPicker
-            level={props.permissionLevel}
-            source={props.permissionSource}
-            {...(props.permissionPendingNextTurn !== undefined
-              ? { pendingNextTurn: props.permissionPendingNextTurn }
-              : {})}
-            onChange={props.onPermissionLevelChange}
-          />
-          {/* Tool-profile chip: which MCP servers THIS run sees. Work
-              only — the Code surface mounts no trylo servers. */}
-          {props.toolProfileId ? (
-            <ToolProfileChip
-              profileId={props.toolProfileId}
-              {...(props.onOpenToolSettings ? { onOpenToolSettings: props.onOpenToolSettings } : {})}
-            />
-          ) : null}
-          {props.learning ? <LearningStatusChip {...props.learning} /> : null}
-          {props.onLearningDirectiveChange ? (
-            <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />
-          ) : null}
-          <div className="input-bar__actions-spare" aria-hidden="true" />
-          {props.onSelectPool ? (
-            <ModelSelector
-              configuredModel={props.configuredModel ?? ''}
-              poolModel={props.poolModel ?? ''}
-              savedProfiles={props.savedProfiles}
-              activeProfileId={props.activeProfileId ?? ''}
-              onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
-              onSelectPool={props.onSelectPool}
-              onSelectProfile={props.onSelectProfile}
-            />
-          ) : null}
-          {/* 2026-09-04: Work gets the same context ring as Code.
-              Passive gauge (no onCompact) until a Work compaction
-              entry is wired — clicking does nothing, no fake "✓ Sent". */}
-          <ContextRing used={props.contextUsed} total={props.contextWindow} />
+          {popoverOpen && <ModePopover current={props.codeMode} kind={isWork ? 'work' : 'code'} onKindChange={props.onTopModeChange} onSelect={props.onCodeModeChange} onClose={() => setPopoverOpen(false)} anchorRef={plusRef} />}
         </div>
-      ) : (
-        <div className="input-bar__actions">
-          <PermissionLevelPicker
-            level={props.permissionLevel}
-            source={props.permissionSource}
-            {...(props.permissionPendingNextTurn !== undefined
-              ? { pendingNextTurn: props.permissionPendingNextTurn }
-              : {})}
-            onChange={props.onPermissionLevelChange}
-          />
-          {props.learning ? <LearningStatusChip {...props.learning} /> : null}
-          {props.onLearningDirectiveChange ? (
-            <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />
-          ) : null}
-          <div className="input-bar__actions-spare" aria-hidden="true" />
-          {props.onSelectPool ? (
-            <ModelSelector
-              configuredModel={props.configuredModel ?? ''}
-              poolModel={props.poolModel ?? ''}
-              savedProfiles={props.savedProfiles}
-              activeProfileId={props.activeProfileId ?? ''}
-              onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
-              onSelectPool={props.onSelectPool}
-              onSelectProfile={props.onSelectProfile}
-            />
-          ) : null}
-          <ContextRing
-            used={props.contextUsed}
-            total={props.contextWindow}
-            onCompact={props.onCompact}
-          />
-        </div>
-      )}
+        {props.onSelectPool && <ModelSelector configuredModel={props.configuredModel ?? ''} poolModel={props.poolModel ?? ''}
+          savedProfiles={props.savedProfiles} activeProfileId={props.activeProfileId ?? ''} onSelectConfigured={props.onSelectConfigured ?? (() => undefined)}
+          onSelectPool={props.onSelectPool} onSelectProfile={props.onSelectProfile} />}
+        {isWork && props.onRunAsTask && <WorkTaskMenu onRunTask={props.onRunAsTask} />}
+        <div className="input-bar__actions-spare" />
+        {props.running && (props.queuedCount ?? 0) > 0 && <span className="input-bar__queued" role="status">
+          {props.queuedCount} 条已排队{props.onInterruptQueued && <button type="button" onClick={props.onInterruptQueued}>立即打断</button>}
+        </span>}
+        <button type="submit" className="input-bar__send" disabled={!canSend} title={props.running ? '发送（可排队或打断）' : '发送'} aria-label={props.running ? '发送（可排队或打断）' : '发送'}><ArrowUp size={18} strokeWidth={2.2} /></button>
+      </div>
+    </form>
+    <div className="input-bar__actions">
+      <PermissionLevelPicker level={props.permissionLevel} source={props.permissionSource} pendingNextTurn={props.permissionPendingNextTurn} onChange={props.onPermissionLevelChange} />
+      {workspaceName && <span className="input-bar__workspace" title={props.workspace}><Folder size={12} />{workspaceName}</span>}
+      {isWork && props.toolProfileId && <ToolProfileChip profileId={props.toolProfileId} onOpenSettings={props.onOpenToolSettings} />}
+      {(props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && <button type="button" className="input-bar__more" title="学习与协作选项" aria-label="学习与协作选项" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}><MoreHorizontal size={16} /></button>}
+      <div className="input-bar__actions-spare" />
+      <span className="input-bar__hint">Enter 发送</span>
+      {props.contextUsed > 0 && <ContextRing used={props.contextUsed} total={props.contextWindow} {...(!isWork ? { onCompact: props.onCompact } : {})} />}
     </div>
-  );
+    {detailsOpen && <div className="input-bar__details">
+      {props.learning && <LearningStatusChip {...props.learning} />}
+      {props.onLearningDirectiveChange && <LearningDirectiveMenu value={props.learningDirective} onChange={props.onLearningDirectiveChange} />}
+      {isWork && props.onOpenCognition && <button type="button" className="input-bar__cognition-entry" disabled={props.cognitionEnabled === false} onClick={props.onOpenCognition}>聊聊你怎么做报告</button>}
+    </div>}
+    {(props.running || props.error || (props.viewState !== undefined && props.viewState !== 'idle')) && <ProcessHeader messages={props.messages} running={props.running} error={props.error} workspace={props.workspace} viewState={props.viewState} onStop={props.onStop} />}
+  </div>;
 }

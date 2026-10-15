@@ -29,6 +29,29 @@ import {
   startTryloPrewarm,
   stopTryloProcess,
 } from '../host-adapter/trylo-runner';
+import {
+  startTryloV1,
+  stopTryloV1,
+  TryloV1UnsupportedError,
+} from '../host-adapter/trylo-v1-runner';
+import {
+  providerArgsFor,
+} from '../host-adapter/cli-auth-status';
+import { ensureV1Connection } from '../host-adapter/trylo-v1-connection';
+import { usesV1ApprovalTransport } from '../host-adapter/trylo-v1-control';
+import {
+  beginSessionCreate,
+  isSessionResumable,
+  probeCliSessions,
+  resolveUnknownBinding,
+  type CliSessionBinding,
+} from '../host-adapter/cli-session-binding';
+import {
+  capabilitiesFor,
+  supportsPrewarm,
+  supportsSteering,
+  type CliRuntimeProtocol,
+} from './cli-runtime-protocol';
 import { buildStopTaskRequest } from '../host-adapter/control-protocol';
 import type { ChatMessage } from '../components/chat/types';
 import type { CodeRunBindingState, CodeRunViewState, SettingsForCodeRun } from './runtime-types';
@@ -36,8 +59,17 @@ import type { RuntimeResultScope } from '../results/result-scope';
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from './code-run-lifecycle';
 import type { CodePermissionRegistry, CodePermissionRequest } from './code-permission-registry';
 import type { CodeDiagnosticsBuffer } from '../diagnostics/code-diagnostics-buffer';
+// Round-3 P0-5: `steer` must say WHY it did not inject, not just that it did
+// not. See ./steer-delivery.ts.
+import {
+  STEER_DELIVERED,
+  STEER_NOT_RUNNING,
+  STEER_UNSUPPORTED,
+  type SteerDelivery,
+} from './steer-delivery';
 import type { PermissionLevel } from '../permission/permission-policy';
 import type { ResolvedToolRuntime, ToolSurface } from '../tooling/types';
+import { verifyCliRuntime } from './cli-runtime-guard';
 import { fingerprintForRun } from '../tooling/runtime-fingerprint';
 import { spawnEnvForTeamAccess } from '../tooling/team-surface-env';
 import { observeToolProtocol, protocolDriftReasonCode } from '../tooling/tool-protocol-observer';
@@ -161,6 +193,9 @@ function runFingerprint(request: Pick<CodeRunRequest, 'settings' | 'permissionLe
     extraCliArgs: runtime ? [...runtime.cliArgs] : (request.extraCliArgs ?? []),
     toolRuntime: runtime,
     spawnEnv: effectiveSpawnEnv(request.surface, runtime, request.teamMode),
+    // P08 §4.1: the protocol is fixed at spawn, so it is part of the
+    // identity. A legacy process must never be reused for a v1 run.
+    cliRuntimeProtocol: request.settings.cliRuntimeProtocol ?? 'legacy-stream-json',
   });
 }
 
@@ -186,6 +221,8 @@ export class CodeRunController {
   private processId: string | null = null;
   private pid: number | null = null;
   private bindingState: CodeRunBindingState = 'idle';
+  /** One selected-profile notice until the selection or its configuration changes. */
+  private warnedV1Profile: string | null = null;
   private error = false;
   private runId: string | null = null;
   private startedAt = 0;
@@ -225,6 +262,18 @@ export class CodeRunController {
   private ownedFingerprint: string | null = null;
   /** The runtime identity a prewarmed process was spawned with. */
   private prewarmFingerprint: string | null = null;
+  /** P08 §4.1: the protocol of the process this controller currently
+   *  owns. Decides whether `stop` may reuse the legacy killer path or
+   *  must mark a one-shot run as cancelled (v1 has no other way to tell
+   *  "the user stopped it" from "it crashed"). */
+  private ownedProtocol: CliRuntimeProtocol = 'legacy-stream-json';
+  /**
+   * P08 §6.2: this conversation's CLI session binding for the v1 path.
+   * Lives on the controller (one per conversation) so a second turn
+   * resumes instead of starting over. Ephemeral on the legacy path —
+   * there the CLI is a resident process and owns its own context.
+   */
+  private cliSession: CliSessionBinding = { state: 'none' };
 
   constructor(options: CodeRunControllerOptions) {
     this.projectKey = options.projectKey;
@@ -330,6 +379,23 @@ export class CodeRunController {
     }
   }
 
+  private reportV1ProfileUnavailable(request: CodeRunRequest, onEvents: CodeRunRequest['onEvents'], now: number): void {
+    const runtime = request.toolRuntime;
+    if (!request.requestedProfileId?.trim() || !runtime
+        || runtime.spawnEnv.TRYLO_MCP_RUNTIME_REGISTRY
+      || !runtime.cliArgs.some(arg => /^--(?:mcp-config|settings|strict-mcp-config)(?:=|$)/.test(arg))) {
+      this.warnedV1Profile = null;
+      return;
+    }
+    const identity = JSON.stringify([runtime.profileId, runtime.profileRevision, runtime.mcpConfigHash, runtime.permissionSettingsHash]);
+    if (identity === this.warnedV1Profile) return;
+    this.warnedV1Profile = identity;
+    onEvents([{ type: 'runtime_warning', seq: 0, ts: now, id: `${this.runId ?? 'run'}:desktop-profile`,
+      code: 'desktop_profile_unavailable',
+      message: '所选 Desktop Tool Profile 尚未接通新 CLI；本次使用 CLI 自身的 MCP 配置。',
+    }]);
+  }
+
   /** Tracks whether we've already emitted the first-event transition
    *  for the current run — the spec only cares about the FIRST frame
    *  of each kind, not every subsequent one. */
@@ -358,6 +424,10 @@ export class CodeRunController {
   }
 
   async run(request: CodeRunRequest): Promise<void> {
+    const protocol: CliRuntimeProtocol = request.settings.cliRuntimeProtocol ?? 'legacy-stream-json';
+    // A one-shot run acquires ownership before asynchronous authentication.
+    // Stop or a newer send can invalidate it without a late probe reviving it.
+    const startupGeneration = protocol === 'trylo-v1' ? ++this.generation : this.generation;
     const now = Date.now();
     this.runId = `run-${this.conversationId}:${now.toString(36)}:${++runSeq}`;
     this.startedAt = now;
@@ -394,12 +464,105 @@ export class CodeRunController {
     };
     this.resultScope = scope;
     await this.captureBaseline(scope);
+    if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
+
+    // P08 §4.1: the protocol is snapshotted with everything else. A
+    // run must never be re-routed mid-flight by a settings change.
+    const caps = capabilitiesFor(protocol);
+
+    // P08 §6.2: recover a session left `unknown` by a crash. The ONLY
+    // authority on whether it exists is the CLI's own session probe —
+    // never "a file might be on disk".
+    if (protocol === 'trylo-v1' && this.cliSession.state === 'unknown') {
+      const probe = await probeCliSessions({
+        cliPath: request.settings.cliPath,
+        ...(request.settings.cliNodeProgram
+          ? { nodeProgram: request.settings.cliNodeProgram }
+          : {}),
+      });
+      if (startupGeneration !== this.generation) return;
+      this.cliSession = resolveUnknownBinding(
+        this.cliSession,
+        isSessionResumable(probe, this.cliSession.sessionId),
+      );
+    }
+    // Remember the binding we are about to use, not just the one the
+    // runner confirms: if `run_start` never arrives (a crash, a hung
+    // child) the next turn must still reuse this session id instead of
+    // minting a new one and orphaning the first attempt's journal.
+    if (protocol === 'trylo-v1' && this.cliSession.state === 'none') {
+      this.cliSession = beginSessionCreate(this.runId ?? `run-${this.conversationId}`);
+    }
+    const pendingBinding: CliSessionBinding | undefined =
+      protocol === 'trylo-v1' ? this.cliSession : undefined;
+
+    // Check the CLI's actual credential visibility before task spawn.
+    // A refusal clears the startup state; no prompt has been delivered.
+    //
+    // No provider configured (the M0 dev path) skips the probe entirely:
+    // the CLI's own default applies, and paying two extra process spawns
+    // per turn to learn "fixture needs no credential" would be waste.
+    let providerArgs: ReturnType<typeof providerArgsFor>;
+    let v1SpawnEnv: Readonly<Record<string, string>> | undefined;
+    try {
+      providerArgs = providerArgsFor({
+        providerId: request.settings.providerId,
+        apiHost: request.settings.apiHost,
+        apiModel: request.settings.apiModel,
+        apiFormat: request.settings.apiFormat,
+      });
+      if (protocol === 'trylo-v1') {
+        v1SpawnEnv = { ...effectiveSpawnEnv(request.surface, request.toolRuntime, request.teamMode),
+          ...await ensureV1Connection(request.settings, providerArgs) };
+        if (usesV1ApprovalTransport(request.permissionLevel) && !this.permissions) {
+          throw new TryloV1UnsupportedError('trylo-v1: Desktop approval registry is unavailable.');
+        }
+      }
+    } catch (error) {
+      if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
+      this.failStartup(scope, error);
+      throw error;
+    }
+    if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
+
+    // Round-3 P1-10: ask the binary what it is BEFORE handing it a prompt.
+    // A legacy protocol paired with the new CLI (or vice versa) used to die
+    // at spawn with `unknown command`, after the composer had already gone
+    // busy. A PROVEN mismatch (or a missing entry) fails here instead, with
+    // the reason on the notice; doubt (timeout/unrecognized) still proceeds
+    // — the spawn stays the final arbiter. Memoized per entry, so the steady
+    // state costs nothing.
+    try {
+      const guard = await verifyCliRuntime({
+        protocol,
+        entryScript: request.settings.cliPath,
+        ...(request.settings.cliNodeProgram
+          ? { nodeProgram: request.settings.cliNodeProgram }
+          : {}),
+      });
+      if (!guard.ok) throw new Error(guard.message);
+    } catch (error) {
+      if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
+      if (!this.busy) return;
+      this.failStartup(scope, error);
+      throw error;
+    }
+    // A stop (or a newer run) while the guard was in flight supersedes this
+    // run the same way it supersedes an in-flight spawn: generation moved,
+    // so return quietly without ever spawning (no orphan to stop later).
+    if (startupGeneration !== this.generation) return;
+
+    const fingerprint = runFingerprint(request);
 
     // Warm path: the same controller already owns a live idle CLI whose
     // ENTIRE runtime contract already matches this run (spec §9) — argv,
     // model, host, permission level, system prompt and Tool Profile.
-    const fingerprint = runFingerprint(request);
-    if (this.processId && this.ownedFingerprint === fingerprint) {
+    //
+    // P08 §3.3: trylo-v1 is one process per turn, so there is no warm
+    // path at all. Reusing a v1 process would send a second prompt to a
+    // process whose stdin is already closed — it would be ignored, and
+    // the run would look like "the model didn't answer".
+    if (caps.warmReuse && this.processId && this.ownedFingerprint === fingerprint) {
       this.bindingState = 'busy';
       this.notify();
       request.onRuntimeAcquired?.({ warm: true });
@@ -440,6 +603,7 @@ export class CodeRunController {
     // and fall through to a cold spawn that replays `priorMessages` via
     // `promptWithHistory` (trylo-runner.ts).
     if (
+      caps.prewarm &&
       request.priorMessages.length === 0 &&
       !this.processId &&
       this.prewarmProcessId &&
@@ -522,10 +686,84 @@ export class CodeRunController {
     // PR-2: the CLI reports its tool list once per process (system/init →
     // loop_start). Observed per closure so a warm reuse never re-reports.
     let toolProtocolChecked = false;
+    // Shared by both runner routes so the v1 path cannot drift from the
+    // legacy one on turn bookkeeping (P2-1 projection, busy clearing,
+    // terminal fan-out).
+    const onRunEvents = (events: readonly LoopEvent[]): void => {
+      if (spawnGeneration !== this.generation) return;
+      if (!toolProtocolChecked) {
+        const init = events.find((e) => e.type === 'loop_start');
+        if (init && init.type === 'loop_start') {
+          toolProtocolChecked = true;
+          this.reportToolProtocolDrift(init.tools, spawnToolRuntime);
+        }
+      }
+      const scope = this.resultScope;
+      if (scope && this.lifecycleObserver) {
+        try {
+          this.lifecycleObserver.onEvents(scope, events);
+        } catch {
+          /* non-fatal: never let projection poison the event fan-out */
+        }
+      }
+      this.maybeEmitFirstEvents(events);
+      if (protocol === 'legacy-stream-json' && this.finishLegacyAbort(events)) {
+        // An initialization failure can leave stdin alive without a result frame.
+      } else if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
+        this.busy = false;
+        this.bindingState = 'idle';
+        this.notify();
+        if (scope) this.fireTerminal(scope, outcomeFromEvents(events));
+      }
+      request.onEvents(events);
+    };
+    const onRunExit = (info: ProcessExitInfo): void => {
+      if (spawnGeneration !== this.generation) return;
+      this.onChildExit(info);
+    };
     this.bindingState = 'spawning';
     this.notify();
     try {
-      const { processId } = await startTrylo({
+      if (protocol === 'trylo-v1') this.reportV1ProfileUnavailable(request, onRunEvents, now);
+      const { processId } = protocol === 'trylo-v1'
+        ? await startTryloV1({
+            prompt: request.prompt,
+            cliPath: request.settings.cliPath,
+            ...(request.settings.cliNodeProgram
+              ? { nodeProgram: request.settings.cliNodeProgram }
+              : {}),
+            cwd: request.settings.cwd,
+            // P08 §6.2: first v1 turn creates a session, later turns
+            // resume it. Ephemeral until then.
+            binding: pendingBinding,
+            onBindingChange: (binding) => {
+              // `unknown` is resolved by a probe outside this controller;
+              // we only record what the runner learned.
+              if (spawnGeneration === this.generation) this.cliSession = binding;
+            },
+            // Replayed only while there is no CLI-owned session (§6.1).
+            priorMessages: request.priorMessages,
+            // Connection argv excludes credentials; an explicit builtin key
+            // travels only through the ephemeral child environment.
+            ...providerArgs,
+            spawnEnv: v1SpawnEnv,
+            systemPrompt: request.settings.systemPrompt,
+            permissionLevel: request.permissionLevel,
+            projectKey: this.projectKey,
+            conversationId: this.conversationId,
+            ...(this.runId ? { runId: this.runId } : {}),
+            guard,
+            onEvents: onRunEvents,
+            onControlFrame: (frame, processId) => {
+              if (spawnGeneration !== this.generation) return;
+              this.permissions?.handleControlFrame(frame, {
+                processId, projectKey: this.projectKey, conversationId: this.conversationId,
+                ...classifierScope,
+              });
+            },
+            onExit: onRunExit,
+          })
+        : await startTrylo({
         prompt: request.prompt,
         cliPath: request.settings.cliPath,
         cwd: request.settings.cwd,
@@ -554,32 +792,7 @@ export class CodeRunController {
         guard,
         projectKey: this.projectKey,
         conversationId: this.conversationId,
-        onEvents: (events) => {
-          if (spawnGeneration !== this.generation) return;
-          if (!toolProtocolChecked) {
-            const init = events.find((e) => e.type === 'loop_start');
-            if (init && init.type === 'loop_start') {
-              toolProtocolChecked = true;
-              this.reportToolProtocolDrift(init.tools, spawnToolRuntime);
-            }
-          }
-          const scope = this.resultScope;
-          if (scope && this.lifecycleObserver) {
-            try {
-              this.lifecycleObserver.onEvents(scope, events);
-            } catch {
-              /* non-fatal: never let projection poison the event fan-out */
-            }
-          }
-          this.maybeEmitFirstEvents(events);
-          if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
-            this.busy = false;
-            this.bindingState = 'idle';
-            this.notify();
-            if (scope) this.fireTerminal(scope, outcomeFromEvents(events));
-          }
-          request.onEvents(events);
-        },
+        onEvents: onRunEvents,
         onControlFrame: (frame) => {
           if (spawnGeneration !== this.generation) return;
           const processId = this.processId;
@@ -591,48 +804,61 @@ export class CodeRunController {
             ...classifierScope,
           });
         },
-        onExit: (info) => {
-          if (spawnGeneration !== this.generation) return;
-          this.onChildExit(info);
-        },
+        onExit: onRunExit,
       });
       if (spawnGeneration !== this.generation) {
         // Superseded while spawning — stop the orphan we created.
         await stopTryloProcess(processId).catch(() => { /* already gone */ });
         return;
       }
+      if (protocol === 'legacy-stream-json' && (this.bindingState as CodeRunBindingState) === 'exited') {
+        await stopTryloProcess(processId).catch(() => {});
+        return;
+      }
       this.processId = processId;
       this.ownedFingerprint = fingerprint;
+      // P08 §4.1: remember which contract this process speaks so `stop`
+      // can mark a one-shot run cancelled instead of just killing it.
+      this.ownedProtocol = protocol;
       this.bindingState = 'busy';
       this.notify();
       this.diag('cold.spawn');
     } catch (error) {
       if (spawnGeneration !== this.generation) return;
-      this.processId = null;
-      this.pid = null;
-      this.bindingState = 'exited';
-      this.error = true;
-      this.busy = false;
-      this.runId = null;
-      this.notify();
-      const reason = error instanceof Error ? error.message : 'unknown';
-      this.diag('terminal', { reasonCode: `cold_spawn_failed:${reason.slice(0, 64)}` });
-      this.fireTerminal(scope, 'failed');
+      this.failStartup(scope, error);
       throw error;
     }
+  }
+
+  private failStartup(scope: RuntimeResultScope, error: unknown): void {
+    this.processId = null;
+    this.pid = null;
+    this.bindingState = 'exited';
+    this.error = true;
+    this.busy = false;
+    const reason = error instanceof Error ? error.message : 'unknown';
+    this.diag('terminal', { reasonCode: `cold_spawn_failed:${reason.slice(0, 64)}` });
+    this.fireTerminal(scope, 'failed');
+    this.runId = null;
+    this.notify();
   }
 
   /** Send a correction into the current live turn without creating a second
    * controller run or resetting result attribution. The stream-json runtime
    * treats an additional user frame as steering at its next safe boundary. */
-  async steer(prompt: string): Promise<boolean> {
+  async steer(prompt: string): Promise<SteerDelivery> {
     const processId = this.processId;
-    if (!this.busy || !processId || this.bindingState !== 'busy') return false;
+    // P08 §3.3: trylo-v1 has no steering. Its stdin is closed right
+    // after the prompt, so an injected frame would be silently dropped
+    // — reporting `unsupported` is the honest answer: NOTHING was attempted,
+    // and no amount of retrying changes what this runtime can do.
+    if (!supportsSteering(this.ownedProtocol)) return STEER_UNSUPPORTED;
+    if (!this.busy || !processId || this.bindingState !== 'busy') return STEER_NOT_RUNNING;
     const sent = await sendPromptToProcess(processId, prompt);
     this.diag(sent ? 'prompt.write.accepted' : 'prompt.write.rejected', {
       reasonCode: 'steering',
     });
-    return sent;
+    return sent ? STEER_DELIVERED : { kind: 'write-failed' };
   }
 
   /**
@@ -640,6 +866,7 @@ export class CodeRunController {
    * `taskId` is the CLI task id or the Agent tool_use_id (seat.id).
    */
   async stopTask(taskId: string): Promise<boolean> {
+    if (this.ownedProtocol === 'trylo-v1') return false;
     const processId = this.processId;
     if (!processId || (this.bindingState !== 'busy' && this.bindingState !== 'ready')) {
       return false;
@@ -675,12 +902,19 @@ export class CodeRunController {
     } = {},
   ): Promise<void> {
     const onReady = options.onReady;
+    // P08 §3.3: prewarming means keeping an idle process alive and
+    // adopting it later. trylo-v1 is one process per turn with EOF
+    // semantics, so an idle v1 process could never be adopted. Skipping
+    // here is not an optimisation — spawning one would create an
+    // orphan the reaper has to clean up.
+    if (!supportsPrewarm(settings.cliRuntimeProtocol ?? 'legacy-stream-json')) return;
     if (this.processId || this.prewarmProcessId || this.prewarming) return;
     this.prewarming = true;
     this.prewarmReady = false;
     this.diag('prewarm.requested');
     const attempt = ++this.prewarmAttempt;
     let spawnedProcessId: string | null = null;
+    let failedBeforeAdoption = false;
     // The idle process is spawned with THIS contract; only a run with the
     // same fingerprint may adopt it (spec §9).
     const runtime = options.toolRuntime ?? null;
@@ -740,6 +974,9 @@ export class CodeRunController {
           this.notify();
         },
         onEvents: (events) => {
+          // Adoption keeps this callback alive; discarded prewarms must not
+          // clear a newer idle process or contribute its protocol events.
+          if (attempt !== this.prewarmAttempt && (!spawnedProcessId || this.processId !== spawnedProcessId)) return;
           // PR-2: observe the tool list the idle CLI reports at init, even
           // before a turn adopts this process — the init frame arrives once
           // per process and would otherwise be dropped here.
@@ -749,6 +986,15 @@ export class CodeRunController {
               toolProtocolChecked = true;
               this.reportToolProtocolDrift(init.tools, prewarmToolRuntime);
             }
+          }
+          if (events.some((event) => event.type === 'aborted') && (!spawnedProcessId || this.processId !== spawnedProcessId)) {
+            failedBeforeAdoption = true;
+            this.prewarmProcessId = null;
+            this.prewarmFingerprint = null;
+            this.prewarmReady = false;
+            if (spawnedProcessId) void stopTryloProcess(spawnedProcessId).catch(() => {});
+            this.notify();
+            return;
           }
           // Route output only once this process has been adopted as
           // the current owned process. Idle prewarm frames (ready
@@ -784,7 +1030,7 @@ export class CodeRunController {
       this.diag('prewarm.spawned');
       // A user run may have started while process_spawn was in flight. Never
       // publish that late prewarm beside the real runtime; stop the orphan.
-      if (attempt !== this.prewarmAttempt || this.busy || this.processId) {
+      if (failedBeforeAdoption || attempt !== this.prewarmAttempt || this.busy || this.processId) {
         this.diag('prewarm.late_discarded', { reasonCode: 'superseded' });
         await stopTryloProcess(processId).catch(() => { /* already gone */ });
         return;
@@ -821,7 +1067,9 @@ export class CodeRunController {
       }
     }
     this.maybeEmitFirstEvents(events);
-    if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
+    if (this.finishLegacyAbort(events)) {
+      // The adopted idle process must not remain busy after a fatal abort.
+    } else if (events.some((e) => e.type === 'loop_end' || e.type === 'session_end')) {
       this.busy = false;
       this.bindingState = 'idle';
       this.lastIdleAt = Date.now();
@@ -830,6 +1078,23 @@ export class CodeRunController {
     }
     const sink = this.turnSink;
     if (sink) sink(events);
+  }
+
+  private finishLegacyAbort(events: readonly LoopEvent[]): boolean {
+    const aborted = events.find((event) => event.type === 'aborted');
+    if (!aborted || aborted.type !== 'aborted') return false;
+    const processId = this.processId;
+    this.processId = null;
+    this.pid = null;
+    this.ownedFingerprint = null;
+    this.busy = false;
+    this.error = aborted.reason !== 'user';
+    this.bindingState = 'exited';
+    const scope = this.resultScope;
+    if (scope) this.fireTerminal(scope, this.error ? 'failed' : 'cancelled');
+    if (processId) void stopTryloProcess(processId).catch(() => {});
+    this.notify();
+    return true;
   }
 
   /** P2-1 (spec §7.2): fire the exactly-once terminal notification for the
@@ -885,6 +1150,10 @@ export class CodeRunController {
 
   /** Stop THIS conversation's run and terminate its CLI. */
   async stop(): Promise<void> {
+    // A forced one-shot stop cannot release or seal the CLI-owned journal.
+    // Continue later in a fresh CLI session, using the visible chat as context;
+    // never remove the CLI's lock or pretend its interrupted turn is resumable.
+    if (this.ownedProtocol === 'trylo-v1' && this.busy) this.cliSession = { state: 'none' };
     // P2-1: a user-driven cancel is a terminal event for result projection.
     this.fireTerminalForActive('cancelled');
     this.generation += 1; // detach any in-flight spawn / process
@@ -904,7 +1173,11 @@ export class CodeRunController {
     if (processId) this.permissions?.clearProcess(processId);
     this.notify();
     if (processId) {
-      await stopTryloProcess(processId).catch((err: unknown) => {
+      // P08 §3.3: a v1 run must be told it was cancelled — its synthesised
+      // terminal outcome distinguishes "the user stopped it" from "it
+      // crashed", and only the runner knows which happened.
+      const stop = this.ownedProtocol === 'trylo-v1' ? stopTryloV1 : stopTryloProcess;
+      await stop(processId).catch((err: unknown) => {
         // The Rust reaper still emits process.exited; a failed stop
         // command (already-dead child) is non-fatal.
         // eslint-disable-next-line no-console

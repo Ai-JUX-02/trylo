@@ -7,8 +7,12 @@
 // chronological position.
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Check, ChevronRight, Hand, Loader, Wrench } from 'lucide-react';
+import { AlertCircle, Ban, ChevronRight, Clock3, FileEdit, FileText, Globe, Hand, Keyboard, Loader, MousePointer2, ScanEye, Search, Terminal, Wrench, type LucideIcon } from 'lucide-react';
 import { ToolCard } from './ToolCard';
+import { FileChangeCard } from './FileChangeCard';
+import { EventReasoningNote } from './EventReasoningNote';
+import { toolEventVerb } from './tool-event-presentation';
+import { computeFileChange } from './file-change';
 import { targetResultFactsOf, type TargetResultFacts } from '../../tooling/classifiers/windows-mcp-classifier';
 import type { ThinkingMessage, ToolMessage } from './types';
 
@@ -19,12 +23,9 @@ export interface CodeReasoningTranscriptProps {
   readonly active: boolean;
   readonly turnId: string;
   readonly phaseId: string;
+  readonly workspacePath?: string;
+  readonly onOpenArtifact?: (path: string) => void;
 }
-
-const TOOL_VERBS: Readonly<Record<string, string>> = {
-  read: '读取', grep: '查找', glob: '查找', edit: '修改', write: '写入',
-  bash: '执行', task: '委派', webfetch: '读取网页', websearch: '搜索',
-};
 
 /** §11.3 用户接管 (WCC-P2-04): aggregate projection of the per-card takeover
  *  facts onto THIS run segment's header. The facts stay on the ToolCard
@@ -74,91 +75,132 @@ function takeoverBadgeLabel(entries: readonly CodeProcessEntry[]): string | null
   return worst !== null ? (TAKEOVER_BADGE_LABELS[worst] ?? worst) : null;
 }
 
+function compactPhaseLabel(text: string): string {
+  const line = text.trim().replace(/\s+/g, ' ');
+  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
+}
+
+const PHASE_TOOL_ICONS: Readonly<Record<string, LucideIcon>> = {
+  read: FileText, read_file: FileText, readfile: FileText,
+  grep: Search, glob: Search, search: Search, list: Search,
+  edit: FileEdit, multiedit: FileEdit, write: FileEdit, write_file: FileEdit,
+  notebookedit: FileEdit, notebook_edit: FileEdit,
+  bash: Terminal, shell: Terminal, exec: Terminal, execute: Terminal,
+  webfetch: Globe, websearch: Globe, fetch: Globe, navigate: Globe,
+  wait: Clock3, snapshot: ScanEye, screenshot: ScanEye,
+  click: MousePointer2, doubleclick: MousePointer2, drag: MousePointer2,
+  type: Keyboard, type_text: Keyboard, presskey: Keyboard,
+};
+
+function phaseToolIcon(tool: ToolMessage | undefined): LucideIcon {
+  const name = tool?.tool.split('__').at(-1)?.toLowerCase() ?? '';
+  return PHASE_TOOL_ICONS[name] ?? (tool?.tool.toLowerCase().includes('browser') ? Globe : Wrench);
+}
+
+function phaseToolLabel(tool: ToolMessage, running: boolean): string {
+  const description = tool.input?.['description'];
+  if (typeof description === 'string' && description.trim() && !/^\s*(?:\{|\[)/.test(description)) {
+    return `${running ? '正在' : '操作结束 · '}${compactPhaseLabel(description)}`;
+  }
+  const name = tool.tool.split('__').at(-1)?.toLowerCase() ?? '';
+  if (name === 'wait') return running ? '正在等待' : '等待结束';
+  if (name === 'snapshot') return running ? '正在查看窗口' : '窗口检查结束';
+  const verb = toolEventVerb(tool.tool);
+  // Files and URLs are useful targets. Raw commands, input JSON and tool
+  // output stay in the original tool row rather than becoming a phase title.
+  const legacyFileTarget = /^(read|edit|write|multiedit|notebookedit|notebook_edit)$/.test(name)
+    && !/^\s*(?:\{|\[)/.test(tool.summary) ? tool.summary : undefined;
+  const target = tool.input?.['file_path'] ?? tool.input?.['path'] ?? tool.input?.['url'] ?? legacyFileTarget;
+  const label = typeof target === 'string'
+    ? compactPhaseLabel(target.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? target)
+    : '';
+  return `${running ? `正在${verb}` : `${verb}完成`}${label ? ` · ${label}` : ''}`;
+}
+
 function phaseTitle(entries: readonly CodeProcessEntry[], active: boolean): string {
   const tools = entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
   const running = [...tools].reverse().find((entry) => (
     entry.status === 'running' || entry.status === 'pending'
   ));
-  if (running) {
-    const verb = TOOL_VERBS[running.tool.toLowerCase()] ?? '运行';
-    const target = running.summary.trim();
-    const shortTarget = target.length > 46 ? `${target.slice(0, 45)}…` : target;
-    return `正在${verb}${shortTarget ? ` · ${shortTarget}` : ''}`;
-  }
+  if (running) return phaseToolLabel(running, true);
   if (tools.some((entry) => entry.status === 'error')) return '操作需要处理';
-  if (tools.length > 0) {
-    if (active) return '正在推进任务';
-    const last = tools.at(-1);
-    if (last) {
-      const verb = TOOL_VERBS[last.tool.toLowerCase()] ?? '操作';
-      const target = last.summary.trim();
-      const shortTarget = target.length > 54 ? `${target.slice(0, 53)}…` : target;
-      return `${verb}完成${shortTarget ? ` · ${shortTarget}` : ''}`;
-    }
-  }
-  if (active) return '正在分析';
   const latestThinking = [...entries].reverse().find(
     (entry): entry is ThinkingMessage => entry.kind === 'thinking',
   );
-  const summary = latestThinking?.summary.trim() ?? '';
-  return summary || '分析完成';
+  // Only a note AFTER the last action can describe its latest finding. An
+  // earlier thought is an intention, not evidence that a later action worked.
+  const lastTool = tools.at(-1);
+  if (!active && latestThinking && lastTool && entries.indexOf(latestThinking) > entries.indexOf(lastTool)) {
+    const summary = compactPhaseLabel(latestThinking.summary.trim() || latestThinking.preview);
+    if (summary) return summary;
+  }
+  if (tools.length > 0) {
+    if (active) return '正在推进任务';
+    if (lastTool) return phaseToolLabel(lastTool, false);
+  }
+  return active ? '正在思考' : '思考';
 }
 
 function CodeReasoningTranscriptImpl(
   props: CodeReasoningTranscriptProps,
 ): ReactElement {
-  // A live run opens so the user can follow it. Historical runs start quiet,
-  // but the complete transcript is always one click away and is never moved to
-  // diagnostics or discarded.
-  const [expanded, setExpanded] = useState(props.active);
-  const [showCompletedTools, setShowCompletedTools] = useState(false);
+  // Tool groups retain their live/history disclosure behavior. Reasoning-only
+  // segments below always show their full text without an additional toggle.
+  const errorVisible = props.entries.some(entry => entry.kind === 'tool' && entry.status === 'error');
+  const [expanded, setExpanded] = useState(props.active || errorVisible);
   const wasActive = useRef(props.active);
+  const userExpanded = useRef<boolean | null>(null);
   useEffect(() => {
+    if (errorVisible) {
+      if (userExpanded.current === null) setExpanded(true);
+      return;
+    }
     if (props.active) {
       wasActive.current = true;
-      setExpanded(true);
+      if (userExpanded.current === null) setExpanded(true);
       return;
     }
     if (!wasActive.current) return;
     wasActive.current = false;
     // Let the completed state register briefly, then move the transcript out
     // of the way so the final answer and review result become the focal point.
-    const timer = window.setTimeout(() => setExpanded(false), 420);
+    const timer = window.setTimeout(() => {
+      if (userExpanded.current === null) setExpanded(false);
+    }, 420);
     return () => window.clearTimeout(timer);
-  }, [props.active]);
+  }, [props.active, errorVisible]);
 
-  const thinkingCount = props.entries.filter((entry) => entry.kind === 'thinking').length;
-  const toolCount = props.entries.length - thinkingCount;
+  const tools = props.entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
+  const toolCount = tools.length;
+  const PhaseIcon = phaseToolIcon([...tools].reverse().find(entry => entry.status === 'running' || entry.status === 'pending') ?? tools.at(-1));
+  const hasRunningTool = tools.some(entry => entry.status === 'running' || entry.status === 'pending');
+  const interrupted = !props.active && tools.some(entry => entry.status === 'interrupted');
+  const unfinished = !props.active && hasRunningTool;
   const title = useMemo(() => phaseTitle(props.entries, props.active), [props.active, props.entries]);
+  // A finished process is neutral; error/interruption remain explicit.
+  const hasError = errorVisible;
   const takeoverLabel = useMemo(() => takeoverBadgeLabel(props.entries), [props.entries]);
-  const completedTools = props.entries.filter((entry): entry is ToolMessage => (
-    entry.kind === 'tool' && (entry.status === 'done' || entry.status === 'interrupted')
-  ));
-  const visibleEntries = props.entries.filter((entry) => (
-    entry.kind !== 'tool' || (entry.status !== 'done' && entry.status !== 'interrupted')
-  ));
-
-  let reasoningIndex = 0;
   return (
     <section
-      className={`code-reasoning${props.active ? ' code-reasoning--active' : ''}${toolCount > 0 ? ' code-reasoning--tools' : ''}`}
+      className={`code-reasoning${props.active ? ' code-reasoning--active' : ''}${toolCount > 0 ? ' code-reasoning--tools' : ' code-reasoning--thinking'}${hasRunningTool ? ' code-reasoning--tool-running' : ''}${!props.active && !hasError && !interrupted && !unfinished ? ' code-reasoning--done' : ''}`}
       role="listitem"
-      aria-label="Trylo Code 思考与行动"
+      aria-label="执行过程"
       data-turn-id={props.turnId}
       data-phase-id={props.phaseId}
     >
-      <button
+      {toolCount > 0 && <button
         type="button"
         className="code-reasoning__head"
-        onClick={() => setExpanded((value) => !value)}
+        onClick={() => { userExpanded.current = !expanded; setExpanded(!expanded); }}
         aria-expanded={expanded}
       >
-        <span className="code-reasoning__state" aria-hidden="true">
-          {props.active
-            ? <Loader size={14} strokeWidth={2.2} />
-            : <Check size={14} strokeWidth={2.2} />}
-        </span>
-        <span className="code-reasoning__summary">{title}</span>
+        {(toolCount > 0 || props.active) && <span className="code-reasoning__state" aria-hidden="true">
+          {hasError
+            ? <AlertCircle size={15} strokeWidth={1.8} className="code-reasoning__state--error" />
+            : interrupted || unfinished ? <Ban size={15} strokeWidth={1.8} />
+              : props.active ? <Loader size={15} strokeWidth={1.8} className="code-reasoning__state--running" /> : <PhaseIcon size={15} strokeWidth={1.8} />}
+        </span>}
+        <span className="code-reasoning__summary">{interrupted ? '本次执行已中断' : unfinished ? '操作尚未完成' : title}</span>
         {takeoverLabel !== null && (
           <span
             className="code-reasoning__takeover-badge"
@@ -168,67 +210,32 @@ function CodeReasoningTranscriptImpl(
             {takeoverLabel}
           </span>
         )}
-        <span className="code-reasoning__meta">
-          {thinkingCount > 0 ? `${thinkingCount} 段思考` : ''}
-          {thinkingCount > 0 && toolCount > 0 ? ' · ' : ''}
-          {toolCount > 0 ? `${toolCount} 次操作` : ''}
-        </span>
+        {toolCount > 0 && <span className="code-reasoning__meta">{toolCount} 次操作</span>}
         <ChevronRight
-          size={15}
-          strokeWidth={2.2}
+          size={13}
+          strokeWidth={1.8}
           className={`disclosure-chevron${expanded ? ' disclosure-chevron--open' : ''}`}
           aria-hidden="true"
         />
-      </button>
+      </button>}
 
-      <div className={`disclosure${expanded ? ' disclosure--open' : ''}`}>
+      <div className={`disclosure${toolCount === 0 || expanded ? ' disclosure--open' : ''}`}>
         <div className="disclosure__inner">
-          <div className="code-reasoning__transcript" aria-label="完整思考过程">
-            {visibleEntries.map((entry) => {
+          <div className="code-reasoning__transcript" aria-label="按时间顺序的执行过程">
+            {props.entries.map((entry) => {
               if (entry.kind === 'tool') {
                 return (
                   <div key={entry.id} className="code-reasoning__tool">
-                    <ToolCard message={entry} />
+                    {computeFileChange(entry.tool, entry.input)
+                      ? <FileChangeCard variant="event" message={entry} workspacePath={props.workspacePath} onOpenFile={props.onOpenArtifact} />
+                      : <ToolCard variant="event" message={entry} />}
                   </div>
                 );
               }
-              reasoningIndex += 1;
-              const content = entry.preview.trim() || entry.summary.trim();
-              if (content.length === 0) return null;
-              return (
-                <article key={entry.id} className="code-reasoning__passage">
-                  <div className="code-reasoning__passage-label">
-                    {entry.partial ? '当前思考' : `思考 ${reasoningIndex}`}
-                  </div>
-                  <div className="code-reasoning__passage-text">{content}</div>
-                </article>
-              );
+              return <div className="code-reasoning__note" key={entry.id}>
+                <EventReasoningNote message={entry} />
+              </div>;
             })}
-            {completedTools.length > 0 && (
-              <div className="code-reasoning__tool-group">
-                <button
-                  type="button"
-                  className="code-reasoning__tool-summary"
-                  onClick={() => setShowCompletedTools((value) => !value)}
-                  aria-expanded={showCompletedTools}
-                >
-                  <Wrench size={13} strokeWidth={2} aria-hidden="true" />
-                  <span>已运行 {completedTools.length} 次操作</span>
-                  <ChevronRight
-                    size={13}
-                    className={`disclosure-chevron${showCompletedTools ? ' disclosure-chevron--open' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                <div className={`disclosure${showCompletedTools ? ' disclosure--open' : ''}`}>
-                  <div className="disclosure__inner">
-                    <div className="code-reasoning__tool-list">
-                      {completedTools.map((entry) => <ToolCard key={entry.id} message={entry} />)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -247,6 +254,7 @@ export const CodeReasoningTranscript = memo(
   // unchanged, but the projection appends in message order and messages are
   // append-only, so reorder cannot occur.
   function areTranscriptPropsEqual(a: CodeReasoningTranscriptProps, b: CodeReasoningTranscriptProps): boolean {
+    if (a.workspacePath !== b.workspacePath || a.onOpenArtifact !== b.onOpenArtifact) return false;
     if (a.active !== b.active || a.turnId !== b.turnId || a.phaseId !== b.phaseId) {
       return false;
     }

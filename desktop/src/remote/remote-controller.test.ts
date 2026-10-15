@@ -123,6 +123,7 @@ function createHarness(options: { chatHandle?: boolean } = {}) {
     list: vi.fn(() => [{ id: 's1', title: 'Session 1' }]),
     activeSessionId: vi.fn(() => 's1'),
     select: vi.fn(async () => ({ switching: true })),
+    create: vi.fn(async (_surface: 'code' | 'work') => 'new-session'),
   };
   const sendTask = vi.fn(async () => ({}));
   const cancelTask = vi.fn(async () => {});
@@ -288,6 +289,28 @@ describe('RemoteController handler routing', () => {
     expect(call.ok).toBe(true);
     expect(call.result).toEqual({ accepted: true, switching: true });
     await waitFor(() => projectionMock.buildFullSnapshot.mock.calls.length >= 2, 'snapshot after session select');
+  });
+
+  it('creates a conversation through the Desktop authority and re-projects it', async () => {
+    const h = createHarness();
+    await h.controller.setEnabled(true);
+    h.fireRequest({ requestId: 'new-work', name: 'session', payload: { create: true, surface: 'work' } });
+    await waitFor(() => h.responded.some((r) => r.requestId === 'new-work'), 'create response');
+    expect(h.sessions.create).toHaveBeenCalledWith('work');
+    expect(h.sessions.select).not.toHaveBeenCalled();
+    expect(h.responded.find((r) => r.requestId === 'new-work')?.result).toEqual({ accepted: true, sessionId: 'new-session', switching: false });
+    await waitFor(() => projectionMock.buildFullSnapshot.mock.calls.length >= 2, 'snapshot after creation');
+  });
+
+  it('reports a failed creation without claiming a conversation was created', async () => {
+    const h = createHarness();
+    await h.controller.setEnabled(true);
+    h.sessions.create.mockRejectedValue(new Error('History unavailable'));
+    h.fireRequest({ requestId: 'new-failed', name: 'session', payload: { create: true, surface: 'code' } });
+    await waitFor(() => h.responded.some((r) => r.requestId === 'new-failed'), 'failed create response');
+    expect(h.responded.find((r) => r.requestId === 'new-failed')?.ok).toBe(false);
+    expect(h.responded.find((r) => r.requestId === 'new-failed')?.error?.message).toBe("remote handler 'session' failed");
+    expect(h.responded.find((r) => r.requestId === 'new-failed')?.result).toBeUndefined();
   });
 
   it('routes task → sendTask with explicit scope + accepted', async () => {
@@ -463,6 +486,7 @@ describe('RemoteController projection taps', () => {
     const scope = { projectKey: 'p1', projectRoot: '/w', conversationId: 'c1', mode: 'code' as const, runId: 'r', turnId: 't', startedAt: 0 };
     projectionMock.projectLoopEvents.mockReturnValue([{ type: 'trace', id: 'x', title: 'read', kind: 'tool' }]);
     h.controller.lifecycle.onRunStarted(scope);
+    expect(projectionMock.buildFullSnapshot.mock.calls.length).toBeGreaterThanOrEqual(2);
     h.controller.lifecycle.onEvents(scope, [{ seq: 1, ts: 0, type: 'tool_use', turn: 1, id: 'x', tool: 'Bash', input: {} }]);
     h.controller.lifecycle.onRunTerminal(scope, 'completed');
     await waitFor(() => h.published.some((e) => e.type === 'trace'), 'loop event publish');

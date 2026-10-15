@@ -175,13 +175,20 @@ test('publish forwards projection events to the gateway; fails when not running'
 test('pairingInfo returns pairing + QR data URL; fails when not running', async () => {
   const { adapter } = adapterHarness();
   await assert.rejects(() => adapter.pairingInfo(), /not running/);
-  await adapter.enable({ tunnelMode: 'off' });
+  await adapter.enable({ tunnelMode: 'quick' });
   const info = await adapter.pairingInfo();
   assert.equal(info.pairing.protocol, 1);
   assert.equal(info.pairing.service, 'trylo-remote');
   assert.equal(info.pairing.token, 'identity-token-32-bytes-xxxxxxxxxxxxx');
-  assert.equal(info.pairing.baseUrl, 'http://127.0.0.1:49380');
+  assert.equal(info.pairing.baseUrl, 'https://quick-49380.trycloudflare.com');
   assert.equal(info.qrDataUrl, 'data:image/png;base64,AAA');
+});
+
+test('pairing refuses a loopback fallback instead of giving the phone an unusable QR', async () => {
+  const { adapter } = adapterHarness();
+  await adapter.enable({ tunnelMode: 'off' });
+  await assert.rejects(() => adapter.pairingInfo(), error => error.code === 'REMOTE_PUBLIC_URL_REQUIRED' && error.statusCode === 409);
+  await adapter.disable();
 });
 
 test('enable with a tunnel starts the tunnel and exposes its public URL', async () => {

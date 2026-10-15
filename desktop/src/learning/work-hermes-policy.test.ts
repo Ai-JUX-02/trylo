@@ -65,6 +65,7 @@ function settings(overrides: Partial<TryloSettings> = {}): TryloSettings {
     hermesWorkLearning: true,
     cliPath: '',
     workspace: 'd:/repo',
+    cliRuntimeProtocol: 'legacy-stream-json',
     userLearning: {
       enabled: true,
       defaultMode: 'shadow',

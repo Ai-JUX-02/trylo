@@ -90,10 +90,25 @@ try {
 }
 
 Push-Location $androidRoot
+$previousJavaToolOptions = $env:JAVA_TOOL_OPTIONS
 try {
+  # Java NIO uses Unix-domain sockets for its Windows selector pipe. The
+  # default TEMP 8.3 alias can fail with "Invalid argument: connect".
+  # Use a real workspace path for this build, preserving an explicit override.
+  if ($env:JAVA_TOOL_OPTIONS -notmatch 'jdk\.net\.unixdomain\.tmpdir=') {
+    $buildSocketDirectory = Join-Path $workspaceRoot '.trylo\android-build-sockets'
+    New-Item -ItemType Directory -Path $buildSocketDirectory -Force | Out-Null
+    $socketOption = '-Djdk.net.unixdomain.tmpdir="{0}"' -f $buildSocketDirectory
+    $env:JAVA_TOOL_OPTIONS = "$previousJavaToolOptions $socketOption".Trim()
+  }
   & .\gradlew.bat lintRelease assembleRelease
   Assert-LastExitCode 'Android release build'
 } finally {
+  if ($null -eq $previousJavaToolOptions) {
+    Remove-Item Env:\JAVA_TOOL_OPTIONS -ErrorAction SilentlyContinue
+  } else {
+    $env:JAVA_TOOL_OPTIONS = $previousJavaToolOptions
+  }
   Pop-Location
 }
 
@@ -124,7 +139,14 @@ try {
   Remove-Item -LiteralPath $alignedApk -Force -ErrorAction SilentlyContinue
 }
 
-$checksum = (Get-FileHash -Algorithm SHA256 -LiteralPath $signedApk).Hash.ToLowerInvariant()
+$checksumAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+$apkStream = [System.IO.File]::OpenRead($signedApk)
+try {
+  $checksum = [BitConverter]::ToString($checksumAlgorithm.ComputeHash($apkStream)).Replace('-', '').ToLowerInvariant()
+} finally {
+  $apkStream.Dispose()
+  $checksumAlgorithm.Dispose()
+}
 [System.IO.File]::WriteAllText($checksumPath, "$checksum  $apkName`n", [System.Text.UTF8Encoding]::new($false))
 Write-Host "Release APK: $signedApk"
 Write-Host "SHA-256: $checksum"

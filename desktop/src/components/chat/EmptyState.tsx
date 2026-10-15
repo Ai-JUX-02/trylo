@@ -1,37 +1,22 @@
-// Trylo Desktop — Landing configs for Code and Work.
-//
-// Both modes render the SAME skeleton (`LandingSurface`).
-// Code and Work differ only in copy + suggestion set — the
-// 80/20 split the 2026-08-29 refactor calls for. No extra UI
-// modules are added to distinguish them.
-//
-// The Work mode is no longer an Office document generator and
-// no longer shows a four-card onboarding grid. Its capability
-// starters are downgraded to light suggestion pills.
-
 import type { ReactElement } from 'react';
 import { defaultStarters } from '@trylo/work';
 import type { CodeMode } from '../../host-adapter/types';
-import { LandingSurface, type LandingSuggestion } from '../landing/LandingSurface';
+import { LandingSurface, LandingSuggestions, type LandingSuggestion } from '../landing/LandingSurface';
 
 /* ── Code ──────────────────────────────────────────────────── */
 
 const CODE_LANDING: Record<
   CodeMode,
-  { headline: string; subtitle: string; suggestions: LandingSuggestion[] }
+  { suggestions: LandingSuggestion[] }
 > = {
   chat: {
-    headline: 'What are you building?',
-    subtitle: 'Start from the current workspace, or describe the task directly.',
     suggestions: [
-      { label: 'Understand this repo', value: 'Help me understand this repository.' },
-      { label: 'Find a bug', value: 'Find a bug in this codebase.' },
-      { label: 'Implement a change', value: 'Implement a change in this project.' },
+      { label: '了解项目', value: 'Help me understand this repository.' },
+      { label: '定位问题', value: 'Find a bug in this codebase.' },
+      { label: '实现功能', value: 'Implement a change in this project.' },
     ],
   },
   plan: {
-    headline: 'What do you want to design first?',
-    subtitle: 'Plan from this workspace, or sketch the change.',
     suggestions: [
       { label: 'Design the data model', value: 'Design the data model for this feature.' },
       { label: 'Outline a refactor', value: 'Outline a refactor of this module.' },
@@ -39,17 +24,13 @@ const CODE_LANDING: Record<
     ],
   },
   agent: {
-    headline: 'Tell the agent what to do.',
-    subtitle: 'Start from the current workspace, or describe the task directly.',
     suggestions: [
-      { label: 'Scaffold project', value: 'Scaffold a new project here.' },
-      { label: 'Automate build', value: 'Automate the build and test pipeline.' },
-      { label: 'Run migration', value: 'Run the database migration.' },
+      { label: '理解项目', value: '先帮我理解这个项目的结构和主要调用链。' },
+      { label: '修复问题', value: '帮我定位并修复当前项目中的一个问题。' },
+      { label: '先做规划', value: '先梳理需求并规划实现步骤，暂时不要修改文件。' },
     ],
   },
   cognition: {
-    headline: 'How should Trylo work with you?',
-    subtitle: 'This is a conversation, not a questionnaire. Nothing is written to your project.',
     suggestions: [
       { label: 'Plan vs execute', value: '普通功能直接做，核心架构先计划并保留最终验证。' },
       { label: 'Work deliverables', value: '做 PPT 先出一版再改；对外方案必须先给我看结构。' },
@@ -60,20 +41,14 @@ const CODE_LANDING: Record<
 
 export interface EmptyStateProps {
   readonly codeMode: CodeMode;
-  /** Sends a suggestion straight to the agent (skips the composer). */
-  readonly onSuggestion?: (text: string) => void;
 }
 
 export function EmptyState(props: EmptyStateProps): ReactElement {
-  const cfg = CODE_LANDING[props.codeMode];
-  return (
-    <LandingSurface
-      headline={cfg.headline}
-      subtitle={cfg.subtitle}
-      suggestions={cfg.suggestions}
-      onSuggestion={(s) => props.onSuggestion?.(s.value)}
-    />
-  );
+  return <LandingSurface headline={props.codeMode === 'cognition' ? 'Trylo 怎样与你合作？' : '今天，想推进什么？'} subtitle={props.codeMode === 'plan' ? '先梳理方案，再开始实现。' : '从一个想法开始，也可以接着上次的任务。'} />;
+}
+
+export function CodeStarters(props: EmptyStateProps & { readonly onSuggestion: (text: string) => void }): ReactElement {
+  return <LandingSuggestions suggestions={CODE_LANDING[props.codeMode].suggestions} onSuggestion={(item) => props.onSuggestion(item.value)} />;
 }
 
 /* ── Work ──────────────────────────────────────────────────── */
@@ -87,10 +62,10 @@ const WORK_PILL_IDS = [
 ] as const;
 
 const WORK_PILL_LABELS: Record<string, string> = {
-  research_sources: 'Research',
-  data_analysis: 'Analyze',
-  file_organization: 'Organize',
-  deliverable: 'Create',
+  research_sources: '研究资料',
+  data_analysis: '分析数据',
+  file_organization: '整理文件',
+  deliverable: '创建成果',
 };
 
 export interface WorkLandingProps {
@@ -100,27 +75,16 @@ export interface WorkLandingProps {
   readonly onPickStarter: (seed: string, starterId: string) => void;
 }
 
-export function WorkLanding(props: WorkLandingProps): ReactElement {
-  // Banner (above the timeline) handles the missing-API-key case,
-  // so suppress the landing surface to avoid double messaging.
-  if (props.hasApiKey === false) {
-    return <div className="work-landing--quiet" aria-hidden="true" />;
-  }
+export function WorkLanding(): ReactElement {
+  return <LandingSurface headline="今天，想完成什么？" subtitle="研究、整理资料，或生成可以交付的成果。" />;
+}
+
+export function WorkStarters(props: WorkLandingProps): ReactElement | null {
+  if (props.hasApiKey === false) return null;
   const starters = defaultStarters();
-  const suggestions: LandingSuggestion[] = WORK_PILL_IDS.map((id) => {
-    const starter = starters.find((s) => s.id === id);
-    return {
-      label: WORK_PILL_LABELS[id] ?? starter?.title ?? id,
-      value: starter?.starterSeed ?? '',
-      id,
-    };
-  }).filter((s) => s.value.length > 0);
-  return (
-    <LandingSurface
-      headline="What are we working on?"
-      subtitle="Describe the outcome you want from this workspace."
-      suggestions={suggestions}
-      onSuggestion={(s) => props.onPickStarter(s.value, s.id ?? '')}
-    />
-  );
+  const suggestions = WORK_PILL_IDS.flatMap((id) => {
+    const starter = starters.find((item) => item.id === id);
+    return starter?.starterSeed ? [{ label: WORK_PILL_LABELS[id] ?? starter.title, value: starter.starterSeed, id }] : [];
+  });
+  return <LandingSuggestions suggestions={suggestions} onSuggestion={(item) => props.onPickStarter(item.value, item.id ?? '')} />;
 }

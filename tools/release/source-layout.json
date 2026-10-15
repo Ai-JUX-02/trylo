@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "status": "preview",
+  "strategy": "allowlist-working-files",
+  "outputPolicy": "local-preview-only",
+  "roots": [
+    {
+      "id": "cli",
+      "source": "new trylo cli",
+      "target": "trylo-cli",
+      "excludePrefixes": [
+        "docs",
+        "open",
+        "_backup",
+        "参考",
+        ".agents"
+      ],
+      "excludeFiles": [
+        "AGENTS.md"
+      ],
+      "reason": "Only the new CLI product source; research, history and internal agent instructions are excluded."
+    },
+    {
+      "id": "desktop",
+      "source": "desktop",
+      "target": "desktop",
+      "excludePrefixes": [
+        "spike-results",
+        "src-tauri/resources"
+      ],
+      "excludeFiles": [
+        "CLAUDE.md"
+      ],
+      "reason": "Desktop source, tests and build configuration."
+    },
+    {
+      "id": "services",
+      "source": "desktop-services",
+      "target": "desktop-services",
+      "excludePrefixes": [],
+      "excludeFiles": [],
+      "reason": "Service host and existing isolated service adapters; provenance is retained."
+    },
+    {
+      "id": "work",
+      "source": "work",
+      "target": "work",
+      "excludePrefixes": [
+        "vendor",
+        "tests/fixtures/work-recordings"
+      ],
+      "excludeFiles": [
+        "HANDOFF.md",
+        "WORK-REPAIR-MIGRATION-UI-ARCHITECTURE.md"
+      ],
+      "reason": "Work product source; vendor closure and recording-dependent tests remain release blockers."
+    },
+    {
+      "id": "mobile",
+      "source": "mobile-app",
+      "target": "mobile-app",
+      "excludePrefixes": [
+        "preview",
+        "android/.gradle",
+        "android/app/src/main/assets/public"
+      ],
+      "excludeFiles": [
+        "android/local.properties"
+      ],
+      "reason": "Mobile and Android source without local signing state or generated web assets."
+    },
+    {
+      "id": "website",
+      "source": "trylocode-site",
+      "target": "website",
+      "excludePrefixes": [
+        "app/releases"
+      ],
+      "excludeFiles": [
+        "REDESIGN-PLAN.md"
+      ],
+      "reason": "Website source is explicitly included; release binaries are separate."
+    },
+    {
+      "id": "fixture",
+      "source": "docs/fixtures",
+      "target": "docs/fixtures",
+      "excludePrefixes": [
+        "tool-extension/matrix"
+      ],
+      "excludeFiles": [],
+      "reason": "Existing synthetic fixture candidates; privacy and test reachability review still required."
+    }
+  ],
+  "extraFiles": [
+    {
+      "source": "new trylo cli/vendor-bin/pty/Cargo.toml",
+      "target": "native/pty/Cargo.toml",
+      "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
+    },
+    {
+      "source": "new trylo cli/vendor-bin/pty/Cargo.lock",
+      "target": "native/pty/Cargo.lock",
+      "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
+    },
+    {
+      "source": "new trylo cli/vendor-bin/pty/PROVENANCE.json",
+      "target": "native/pty/PROVENANCE.json",
+      "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
+    },
+    {
+      "source": "new trylo cli/vendor-bin/pty/src/main.rs",
+      "target": "native/pty/src/main.rs",
+      "reason": "Existing Trylo PTY source and provenance, explicitly selected from ignored build inputs."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/Interop.cs",
+      "target": "native/wgc/Interop.cs",
+      "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/Program.cs",
+      "target": "native/wgc/Program.cs",
+      "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
+    },
+    {
+      "source": "new_tool/computer-control/Windows-MCP/native/wgc-helper/TryloWgcHelper.csproj",
+      "target": "native/wgc/TryloWgcHelper.csproj",
+      "reason": "Existing WGC helper source, explicitly selected from ignored build inputs; provenance review remains required."
+    },
+    {
+      "source": "docs/architecture/README.md",
+      "target": "docs/architecture/README.md",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "docs/development/repository-layout.md",
+      "target": "docs/development/repository-layout.md",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "docs/release/source-submission.md",
+      "target": "docs/release/source-submission.md",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "third_party/README.md",
+      "target": "third_party/README.md",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "tools/release/source-layout.json",
+      "target": "tools/release/source-layout.json",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "scripts/release/source-tree.mjs",
+      "target": "scripts/release/source-tree.mjs",
+      "reason": "First-batch architecture and release organization."
+    },
+    {
+      "source": "desktop/src/settings/development-cli-runtime.test.ts",
+      "target": "desktop/src/settings/development-cli-runtime.test.ts",
+      "reason": "Preserve the untracked test accompanying existing development runtime settings changes."
+    },
+    {
+      "source": ".gitignore",
+      "target": ".gitignore",
+      "reason": "Existing repository ignore rules; final target-path rules must be reviewed during migration."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/linux-sandbox-utils.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/linux-sandbox-utils.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/mitm-ca.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/mitm-ca.js",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/request-filter.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/request-filter.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-config.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-config.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-schemas.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/sandbox-utils.js",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.d.ts",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.d.ts",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/debug.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/debug.js",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
+      "target": "trylo-cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/dist/utils/platform.js",
+      "reason": "Published sandbox runtime/type static closure; preserve the adjacent upstream license and provenance."
+    }
+  ],
+  "excludedRoots": [
+    {
+      "path": "trylo cli",
+      "reason": "Legacy CLI, not the selected public engine."
+    },
+    {
+      "path": "runtime",
+      "reason": "Contains the official proprietary CLI distribution; never export."
+    },
+    {
+      "path": "核心技术文档",
+      "reason": "Raw internal design/history; public architecture is curated separately."
+    },
+    {
+      "path": "_ppt_build",
+      "reason": "Internal presentation production workspace."
+    },
+    {
+      "path": ".git",
+      "reason": "Private development history must not enter the public snapshot."
+    },
+    {
+      "path": "WORKCOPY_INFO.json",
+      "reason": "Private workcopy metadata."
+    },
+    {
+      "path": "WORKCOPY_MANIFEST.json",
+      "reason": "Private workcopy inventory."
+    }
+  ],
+  "blockers": [
+    {
+      "id": "R01",
+      "owner": "desktop/services",
+      "summary": "Remove reachable legacy CLI routes/defaults and migrate shadow runner; validate new CLI production behavior."
+    },
+    {
+      "id": "R02",
+      "owner": "build",
+      "summary": "Wire trylo-cli/website/native target paths into launch, stage and build scripts."
+    },
+    {
+      "id": "R03",
+      "owner": "cli/native",
+      "summary": "Provide fixed, reviewable sandbox JS and native helper build/acquisition closure; local ignored files are insufficient."
+    },
+    {
+      "id": "R04",
+      "owner": "work",
+      "summary": "Resolve ignored full CoWork vendor source and patch/build closure without hiding missing runtime capabilities."
+    },
+    {
+      "id": "R05",
+      "owner": "tests/docs",
+      "summary": "Audit tests and quality scripts that read excluded historical docs/recordings; migrate to distributable synthetic fixtures."
+    },
+    {
+      "id": "R06",
+      "owner": "release",
+      "summary": "Supply LICENSE/NOTICE/current public README/agent guidance and verify final third-party closure."
+    },
+    {
+      "id": "R07",
+      "owner": "desktop",
+      "summary": "Resolve the previously observed five browser-profile contract failures; not rerun in this documentation/export batch."
+    },
+    {
+      "id": "R08",
+      "owner": "release",
+      "summary": "Run clean-clone builds, offline CLI installation, packaged Desktop and required remote/device acceptance on the final frozen tree."
+    }
+  ],
+  "reviewedCredentialFixtures": [
+    {
+      "source": "desktop-services/tests/legacy/smoke-learning-l0.js",
+      "line": 397,
+      "lineSha256": "5a3daa3d3899e1341b3dcde370178cb6ff73143ec63c46a7c35e285d22471d68",
+      "reason": "Fixed synthetic capsule input for redaction, paired with a negative disclosure assertion."
+    },
+    {
+      "source": "desktop-services/tests/legacy/smoke-learning-l0.js",
+      "line": 402,
+      "lineSha256": "e0ae00bdb454ff74de3c3d930512c053e290cca6cdf5614a9f2a41236006033f",
+      "reason": "Negative assertion against the same synthetic redaction input."
+    },
+    {
+      "source": "desktop/src/diagnostics/redact.test.ts",
+      "line": 40,
+      "lineSha256": "48a7eb005603abfdb961e4c27b8813e592a4a59e4f196f09edfcda0fc3a8e0af",
+      "reason": "Nonfunctional PEM-shaped placeholder, containing an ellipsis, used to test redaction."
+    },
+    {
+      "source": "new trylo cli/src/internal/adapters/credentials/keyring-win32.platform.test.ts",
+      "line": 26,
+      "lineSha256": "4838794869d5504e98b8bb9b1a3b83020f96eb88f93d1efe2fa54bd9e85f1f33",
+      "reason": "Fixed credential-store test sentinel, with isolated trylo:test credential targets."
+    },
+    {
+      "source": "new trylo cli/src/internal/credentials/contract.test.ts",
+      "line": 103,
+      "lineSha256": "a91ff9394ddff09909de616c3b2374c786102ebb74bff197686c444cddf5981a",
+      "reason": "Fixed synthetic secret used to assert status/list/exportPublic do not disclose secrets."
+    },
+    {
+      "source": "new trylo cli/src/internal/e2e/regression-harness.test.ts",
+      "line": 236,
+      "lineSha256": "92d17a0f647a9d8548e476dd390fa1c66c8d0c352fb7236440c906ce8f2ec8ed",
+      "reason": "Fixed synthetic test environment secret with endpoint set to loopback port 1."
+    },
+    {
+      "source": "new trylo cli/src/internal/surface/cli/keyring-optin.platform.test.ts",
+      "line": 22,
+      "lineSha256": "140f556bdc171fe8e29df2c8ec7d60d298d923e94b4eee15e1f84d18fa9f1fa6",
+      "reason": "Fixed keyring integration-test sentinel, not a production credential."
+    },
+    {
+      "source": "new trylo cli/src/internal/surface/cli/keyring-optin.platform.test.ts",
+      "line": 23,
+      "lineSha256": "7d4ff6d1867df0d107b397cbc4b3d9ba131b1479f7a3e346f850ae9e0b86d78a",
+      "reason": "Second fixed keyring integration-test sentinel for replacement/selection assertions."
+    },
+    {
+      "source": "new trylo cli/src/internal/surface/cli/keyring-optin.test.ts",
+      "line": 28,
+      "lineSha256": "140f556bdc171fe8e29df2c8ec7d60d298d923e94b4eee15e1f84d18fa9f1fa6",
+      "reason": "Fixed sentinel in isolated temporary-root keyring opt-in tests."
+    }
+  ]
+}

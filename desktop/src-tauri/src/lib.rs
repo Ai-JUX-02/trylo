@@ -12,6 +12,21 @@ mod commands;
 
 use tauri::Manager;
 
+fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    if window.label() != "main" || !matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+        return;
+    }
+    if let Some(preview) = window.app_handle().get_webview_window("computer-preview") {
+        let _ = preview.close();
+    }
+    commands::native_browser::close_owned_popups(window.app_handle());
+    let report = commands::shutdown::shutdown_all(window.app_handle());
+    if !report.was_clean() {
+        eprintln!("[trylo] window-close teardown: processes={} ptys={} lsps={} workd={}",
+            report.processes, report.ptys, report.lsps, report.workd);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 // `run` deliberately panics if the Tauri app fails to bootstrap.
 #[allow(clippy::missing_panics_doc)]
@@ -28,6 +43,8 @@ pub fn run() {
         //                                              when the crate is
         //                                              available locally.
         .setup(|app| {
+            app.manage(commands::computer_preview::PreviewState::default());
+            app.manage(commands::native_browser::NativeBrowserState::default());
             // Day 4: register the watcher state so the watch command
             // can stash live `RecommendedWatcher`s and keep them alive
             // for the lifetime of the app. The map is keyed by the
@@ -57,22 +74,19 @@ pub fn run() {
             app.manage(commands::servicehost_state::ServiceHostState::default());
             Ok(())
         })
-        .on_window_event(|window, event| {
-            // Audit §3.2 SH-P1-2: on window close, run the ONE global
-            // teardown. It covers every sidecar the shell owns — the
-            // previous inline loop only reached `ProcessState` and the
-            // service host, leaking PTYs, LSP servers and workd.
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let report = commands::shutdown::shutdown_all(window.app_handle());
-                if !report.was_clean() {
-                    eprintln!(
-                        "[trylo] window-close teardown: processes={} ptys={} lsps={} workd={}",
-                        report.processes, report.ptys, report.lsps, report.workd
-                    );
-                }
+        .on_window_event(on_window_event)
+        .invoke_handler(|invoke| {
+            // Remote browser contents also lack application-defined commands,
+            // including after they navigate to a locally trusted URL.
+            if !commands::native_browser::allows_application_ipc(invoke.message.webview_ref().label()) {
+                invoke.resolver.reject("浏览器网页无权调用应用接口");
+                return true;
             }
-        })
-        .invoke_handler(tauri::generate_handler![
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            commands::native_browser::native_browser_command,
+            commands::computer_preview::computer_preview_open,
+            commands::computer_preview::computer_preview_publish,
+            commands::computer_preview::computer_preview_subscribe,
             commands::read_file::read_file,
             commands::conversation_history::conversation_history_load,
             commands::conversation_history::conversation_history_save,
@@ -98,8 +112,14 @@ pub fn run() {
             commands::lsp_list::lsp_list,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            // P08 §WP6: CLI/Node resolved from the resource dir, never
+            // a developer absolute path.
+            commands::cli_runtime::resolve_cli_runtime,
             commands::process_spawn::process_spawn,
             commands::process_send::process_send,
+            // P08 §4.2: close stdin without killing the process — the new
+            // CLI's `run` only starts after EOF.
+            commands::process_close_input::process_close_input,
             commands::process_stop::process_stop,
             commands::process_list::process_list,
             commands::test_connection::test_connection,
@@ -134,7 +154,9 @@ pub fn run() {
             commands::servicehost::servicehost_status,
             commands::servicehost::servicehost_paths,
             commands::servicehost::servicehost_diagnostics,
-        ])
+            ];
+            handler(invoke)
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         // Audit §3.2 SH-P1-2 — the exit path. `CloseRequested` only fires

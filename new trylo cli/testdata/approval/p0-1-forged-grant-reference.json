@@ -1,0 +1,14 @@
+{
+  "id": "approval/p0-1-forged-grant-reference",
+  "attack": "调用者手工构造授权凭据（旧合同可自报全部授权事实）；新合同中引用必须在 Permission store 中可解析",
+  "kind": "forged-grant-reference",
+  "input": {
+    "grantId": "grant:attacker-made",
+    "action": "acquire",
+    "candidateId": "cand-x",
+    "packageVersionId": "pkg:x:1.0.0",
+    "scope": "docs",
+    "now": "2026-09-12T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "unknown_grant" }
+}

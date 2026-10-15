@@ -1,0 +1,10 @@
+{
+  "trigger": {
+    "tool": "read_file",
+    "code": "file_missing",
+    "repeats": 2
+  },
+  "constraint": "workspace_paths_only",
+  "hint": "Keep every path inside the workspace root.",
+  "until": "end_of_this_turn"
+}

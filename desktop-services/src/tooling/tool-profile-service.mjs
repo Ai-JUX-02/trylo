@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { browserRuntimeEnv } from './browser-runtime-env.mjs';
 
 import { resolvePinnedWgcHelper } from './tool-package-manager.mjs';
 
@@ -199,6 +200,8 @@ export function createToolProfileService(options = {}) {
   const hermes = options.hermes ?? null; // { mcpArgs({profile}) } — Hermes Adapter
   const storageRoot = options.storageRoot ?? '';
   const now = options.now ?? (() => Date.now());
+  const browserObserver = options.browserObserver;
+  const nativeBrowser = options.nativeBrowser;
 
   const profilesRoot = options.profilesRoot
     ?? (storageRoot ? path.join(storageRoot, 'tool-profiles') : '');
@@ -365,8 +368,20 @@ export function createToolProfileService(options = {}) {
       if (Array.isArray(manifest.mcp.blockedOrigins) && manifest.mcp.blockedOrigins.length > 0) {
         originArgs.push('--blocked-origins', manifest.mcp.blockedOrigins.join(';'));
       }
-      const { expanded, dirs } = expandArgs([...manifest.mcp.args], runtimeDir, installed.installDir);
+      const nativePackage = nativeBrowser && ['playwright', 'chrome-devtools'].includes(id);
+      const { expanded, dirs } = expandArgs([...manifest.mcp.args].filter(arg => !nativePackage || arg !== '--isolated'), runtimeDir, installed.installDir);
       runtimeDirs.push(...dirs);
+      let nativeConnection;
+      if (nativePackage) {
+        try { nativeConnection = await nativeBrowser.configure({ packageId: id, projectRoot, conversationId }); expanded.push(...nativeConnection.args); }
+        catch (error) {
+          unavailableCapabilities.push({ id, type: 'package', reasonCode: 'native_browser_unavailable',
+            userMessage: `原生浏览器连接失败：${String(error?.message ?? error)}` });
+          continue;
+        }
+      } else if (browserObserver && ['playwright', 'chrome-devtools'].includes(id)) {
+        expanded.push(...await browserObserver.configure({ packageId: id, projectRoot, conversationId }));
+      }
 
       // WCC-P2-05 wiring (spec §19.8): a manifest may pin a native helper the
       // sidecar needs at runtime (windows-mcp's .NET WGC capture helper). The
@@ -379,16 +394,21 @@ export function createToolProfileService(options = {}) {
       // to the honest legacy status (§13.1); we never point the child at
       // unverified native code.
       let helperEnv = null;
+      if (id === WINDOWS_MCP_PACKAGE_ID) {
+        helperEnv = { WINDOWS_MCP_SCREENSHOT_NATIVE: '1', WINDOWS_MCP_PREVIEW_CACHE: path.join(path.dirname(storageRoot), 'tool-cache') };
+      }
       if (manifest.helper) {
         try {
           const helper = await resolvePinnedWgcHelper(manifest);
           if (helper.ok && helper.path) {
-            helperEnv = { WINDOWS_MCP_WGC_HELPER: helper.path };
+            helperEnv = { ...helperEnv, WINDOWS_MCP_WGC_HELPER: helper.path };
           }
         } catch {
-          helperEnv = null;
+          // Keep preview quality even if the optional native helper is unavailable.
         }
       }
+
+      const browserEnv = id === 'playwright' ? browserRuntimeEnv(runtimeDir) : {};
 
       // Never let two manifests claim one server name — the catalog
       // guarantees uniqueness, but a late collision must not silently
@@ -409,8 +429,10 @@ export function createToolProfileService(options = {}) {
       if (manifest.artifact.runner === 'node') {
         mcpServers[manifest.mcp.serverName] = {
           command: process.execPath,
-          args: [installed.executable, ...expanded, ...originArgs],
-          env: { ...manifest.mcp.env, ...helperEnv },
+          args: nativeConnection
+            ? [options.hostEntrypoint ?? process.argv[1], '--native-browser-mcp', nativeConnection.gate, installed.executable, ...expanded, ...originArgs]
+            : [installed.executable, ...expanded, ...originArgs],
+          env: { ...manifest.mcp.env, ...helperEnv, ...browserEnv },
         };
       } else {
         mcpServers[manifest.mcp.serverName] = {
@@ -439,6 +461,7 @@ export function createToolProfileService(options = {}) {
     let mcpConfigHash = '';
     let permissionSettingsPath = null;
     let permissionSettingsHash = '';
+    let nativeRegistryPath = null;
 
     try {
       for (const dir of runtimeDirs) {
@@ -446,6 +469,16 @@ export function createToolProfileService(options = {}) {
       }
       const writtenMcp = await writeContentAddressed(profilesRoot, 'mcp.json', mcpContents);
       const writtenSettings = await writeContentAddressed(profilesRoot, 'settings.json', settingsContents);
+      const servers = Object.entries(mcpServers).map(([name, server]) => {
+        const transport = server.type ?? (server.url ? 'http' : 'stdio');
+        if (!['stdio', 'http', 'sse'].includes(transport)) throw new Error(`unsupported MCP transport for ${name}`);
+        return transport === 'stdio' ? { name, transport, command: server.command, args: server.args ?? [], env: server.env ?? {}, enabled: true }
+          : { name, transport, url: server.url,
+            ...(Object.keys(server.headers ?? {}).length ? { headers: server.headers } : {}), enabled: true };
+      });
+      const checksum = crypto.createHash('sha256').update(stableStringify(servers)).digest('hex');
+      const registry = await writeContentAddressed(profilesRoot, 'mcp-registry.json', `${stableStringify({ formatVersion: 1, checksum, servers })}\n`);
+      nativeRegistryPath = registry.path;
       mcpConfigPath = writtenMcp.path;
       mcpConfigHash = writtenMcp.hash;
       permissionSettingsPath = writtenSettings.path;
@@ -491,7 +524,8 @@ export function createToolProfileService(options = {}) {
       permissionSettingsPath,
       permissionSettingsHash,
       cliArgs,
-      spawnEnv: Object.freeze({ TRYLO_TEAM_SURFACE: surface }),
+      spawnEnv: Object.freeze({ TRYLO_TEAM_SURFACE: surface, TRYLO_MCP_RUNTIME_REGISTRY: nativeRegistryPath,
+        TRYLO_MCP_RUNTIME_MODE: profile.strictMcpConfig ? 'exclusive' : 'overlay' }),
       serverNames: Object.keys(mcpServers),
       packageHealth,
       unavailableCapabilities,

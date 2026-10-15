@@ -92,6 +92,12 @@ describe('GitDiffView — degraded states', () => {
 });
 
 describe('GitDiffView — close + focus return', () => {
+  it('shows an approval notice without hiding the proposed diff', () => {
+    const { container } = render(<GitDiffView path="src/a.ts" notice="等待批准，查看不会自动批准"
+      diff={{ original: 'before', modified: 'after', binary: false, truncated: false }} onClose={vi.fn()} />);
+    expect(screen.getByRole('status').textContent).toContain('等待批准');
+    expect(container.querySelector('.git-diff-view__monaco')).not.toBeNull();
+  });
   it('Escape triggers onClose', () => {
     const onClose = vi.fn();
     render(

@@ -70,7 +70,7 @@ internal static class WindowActivator
 
             var title = new StringBuilder(512);
             GetWindowText(handle, title, title.Capacity);
-            if (title.Length > 0) windows.Add((handle, title.ToString()));
+            if (title.Length > 0 && title.ToString() != "Trylo · 电脑控制") windows.Add((handle, title.ToString()));
             return true;
         }, IntPtr.Zero);
         return windows;

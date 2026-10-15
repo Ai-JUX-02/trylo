@@ -132,6 +132,17 @@ pub async fn process_spawn(
     conversation_id: Option<String>,
     run_id: Option<String>,
     on_output: Channel<String>,
+    // P08 §4.2: a SECOND, always-present channel for stderr.
+    //
+    // It cannot be `Option<Channel<_>>` — Tauri's `Channel` does not
+    // implement `Deserialize`, so an optional one won't compile. Instead
+    // the channel is always passed and `capture_stderr` decides whether
+    // the child's stderr is piped into it at all. That keeps the legacy
+    // CC CLI's debug flood from ever crossing IPC: with
+    // `capture_stderr: false` the child gets `Stdio::null()` and the
+    // channel simply never fires.
+    on_stderr: Channel<String>,
+    capture_stderr: Option<bool>,
     state: State<'_, ProcessState>,
 ) -> Result<ProcessHandleDto, CommandError> {
     eprintln!(
@@ -151,13 +162,26 @@ pub async fn process_spawn(
             cmd.env(key, value);
         }
     }
-    // Pipe stderr? No — the CLI also floods its debug logging to
-    // stderr (dozens of lines/sec during a stream); stdout carries
-    // the data we need. stderr stays null; real errors surface via
-    // the exit control frame below.
+    // Stderr: NULL unless the caller asked for it.
+    //
+    // P08 §4.2 requires a channel that is SEPARATE from the JSONL
+    // stdout — a pre-run failure (bad session id, missing credential)
+    // exits with a code and writes only to stderr, so without this the
+    // UI would hang in `busy` waiting for a `run_result` that can never
+    // arrive (golden trace 04-prerun-config-failure: exit 52, stdout
+    // empty).
+    //
+    // It stays opt-in on purpose: the legacy CC CLI floods stderr with
+    // debug logging, and a piped-but-unread pipe would eventually block
+    // the child. Legacy callers pass no channel and keep `Stdio::null()`.
+    let want_stderr = capture_stderr.unwrap_or(false);
     cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::null());
+    if want_stderr {
+        cmd.stderr(Stdio::piped());
+    } else {
+        cmd.stderr(Stdio::null());
+    }
 
     let mut child = match cmd.spawn() {
         Ok(c) => {
@@ -211,6 +235,35 @@ pub async fn process_spawn(
         eprintln!("[rust]   stdout reader thread exiting");
     });
 
+    // P08 §4.2: stderr gets its OWN channel and is never merged into the
+    // stdout JSONL stream — a `warning: ...` line from the runtime is not
+    // an event, and feeding it to the translator would either drop it or
+    // corrupt the line framing.
+    if want_stderr {
+        let Some(stderr) = child.stderr.take() else {
+            // Defensive: we only ask for a pipe when capture was requested,
+            // so this cannot happen. Kill the child rather than leak it.
+            let _ = child.kill();
+            return Err(io_error(
+                &format!("(process) {command}"),
+                std::io::Error::other("no stderr from process"),
+            ));
+        };
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) => {
+                        if on_stderr.send(text).is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+
     // MutexWriter is the same pattern as lsp_spawn: the writer
     // trait-object can't be &mut ChildStdin directly, so we wrap
     // it in a Mutex<W> where W: Write + Send.
@@ -248,9 +301,10 @@ pub async fn process_spawn(
         .insert(
             id.clone(),
             ProcessEntry {
-                writer: Box::new(MutexWriter {
+                // P08 §4.2: takeable ownership slot. `Some` ⇒ stdin open.
+                writer: Some(Box::new(MutexWriter {
                     inner: Mutex::new(stdin),
-                }),
+                }) as Box<dyn Write + Send>),
                 killer: Box::new(move || {
                     let _ = terminate_tree(killer_pid);
                 }),

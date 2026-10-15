@@ -1,0 +1,13 @@
+# Line endings are LF, on disk as well as in the index. `core.autocrlf=true`
+# on a Windows host makes git blind to CRLF drift in the working tree — the
+# index stays LF, `git status` stays clean, and only scripts/quality/
+# format-check.mjs can see it — so the rule is enforced here, where a checkout
+# rewrites CRLF back to LF instead of reintroducing it.
+* text=auto eol=lf
+
+# None are tracked today; the marks exist so that a future binary asset
+# cannot inherit text conversion by accident.
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary

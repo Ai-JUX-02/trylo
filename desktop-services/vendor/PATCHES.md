@@ -1,5 +1,11 @@
 # vendor/legacy 补丁清单（PATCHES）
 
+## 补丁 2026-10-11 — 手机会话 UI 与执行事件
+
+`remote-gateway/index.js` 的增量补丁：保留 Desktop 发布的工具调用 id、输入、输出、耗时和失败状态，按调用 id 更新同一条记录；终态将未结束调用标为中断，并冻结耗时。`sessionState` 可携带 Desktop 的完整会话投影，恢复历史不再丢失思考和工具记录；切换会话清除旧任务状态。新增受原有鉴权保护的 `POST /v1/sessions`，转发 `session { create: true, surface }` 给 Desktop 创建会话。Gateway 仅保存有界投影，不执行任务、不改变权限。
+
+主要 diff：`addTimelineEvent` 增加稳定 id 的 upsert；`trace` 同步有界工具会话条目，并按 turnId + toolCallId 合并恢复的历史调用；`turnEvent` 与同时间的思考 delta 去重；`buildSnapshot` 使用记录的终态耗时，后续 idle 绑定事件保留终态；`sessionState` 接收 conversation；HTTP sessions 路由复用现有 handler。验证见 `tests/services/remote-gateway-events.test.mjs`。
+
 > 规则（migration spec §0.3 / §4）：`vendor/legacy/` 下文件默认逐字节保留。
 > **唯一允许修改的是本文件记录的补丁**。每处补丁必须写明原因与 diff。
 > 新增补丁必须先在此登记，不得静默修改。

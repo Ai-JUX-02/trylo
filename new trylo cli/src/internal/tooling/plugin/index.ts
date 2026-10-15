@@ -1,0 +1,37 @@
+export {
+  aggregateContributions,
+  findCommandInSnapshot,
+  findSkillInSnapshot,
+  pluginAgentName,
+  pluginSkillToolName,
+  pluginStyleName,
+  snapshotCoversGeneration,
+  type PluginContributionFailure,
+  type ContributionSnapshot,
+  type PluginContribution,
+} from "./contributions.js";
+export {
+  isBuiltinPluginId,
+  isInstallableScope,
+  parsePluginId,
+  validatePluginManifest,
+  INSTALLABLE_SCOPES,
+  type PluginInstallScope,
+  type PluginManifest,
+  type PluginManifestFailure,
+  type PluginOrigin,
+} from "./manifest.js";
+export {
+  EMPTY_PLUGIN_REGISTRY,
+  installPlugin,
+  listEnabledPlugins,
+  resolvePlugin,
+  setPluginEnabled,
+  uninstallPlugin,
+  updatePlugin,
+  type PluginMutationRequest,
+  type PluginRecord,
+  type PluginRegistryFailure,
+  type PluginRegistryState,
+  type ReclaimedResources,
+} from "./registry.js";

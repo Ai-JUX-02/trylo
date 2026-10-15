@@ -21,6 +21,16 @@ const MANIFEST = Object.freeze({
   expectedTools: ['officecli'],
 });
 
+test('Node MCP startup gets a bounded six-second probe without relaxing version checks', async () => {
+  const calls = [];
+  const packages = { resolve: async () => ({ state: 'installed', executable: '/browser/cli.js', autoUpdate: false }) };
+  const health = createToolHealthService({ packages, probe: async (...args) => { calls.push(args); return 'Version 9.9.9'; } });
+  const record = await health.check({ ...MANIFEST, artifact: { runner: 'node' } }, { deep: true });
+  assert.deepEqual(calls, [['/browser/cli.js', 6000, 'node']]);
+  assert.equal(record.state, 'version-mismatch');
+  assert.equal(record.available, false);
+});
+
 function checkWith({ state, reported }) {
   const packages = {
     resolve: async () => ({

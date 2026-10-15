@@ -14,13 +14,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "unstable"] }
 tauri-plugin-shell = "2"
 tauri-plugin-clipboard-manager = "2"
 # tauri-plugin-dialog = "2"  # Phase 3 housekeeping — install
                               # once the network can fetch the crate.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 thiserror = "1"
 anyhow = "1"
 tokio = { version = "1", features = ["full"] }
@@ -33,9 +34,14 @@ tauri-plugin-dialog = "2.0.0-rc.8"
                   # both the browser dev and the Tauri webview
                   # (Tauri 2 has dialogs: true by default).
 
+[target.'cfg(windows)'.dependencies]
+# Same WebView2 binding already used by Tauri/Wry; native zoom + Escape events.
+webview2-com = "=0.38.2"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+preview-ipc-tests = ["tauri/test"]
 
 [profile.release]
 opt-level = 3

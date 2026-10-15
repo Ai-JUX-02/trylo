@@ -1,0 +1,24 @@
+node_modules/
+dist/
+dist-wp19/
+coverage/
+.trylo/
+# settings 五层加载的 project 层夹具需要一个真实的 `.trylo/` 工程目录；上面的
+# 运行时状态规则会连它一起吞掉，导致已提交的 settings-fs.test.ts 在干净树上必红
+# （CLI-01A F2-6）。只放行这一个夹具目录，运行时的 `.trylo/` 仍然被忽略。
+!testdata/settings/fs/workspace/.trylo/
+tmp/
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# The PTY sidecar's cargo build directory (WP06). 439 files and ~95 MB of
+# compiler output that `cargo build --release --offline` regenerates from
+# vendor-bin/pty/src/main.rs. It was previously untracked only because nothing had
+# run `git add` on it — a comment in PROVENANCE.json saying "not committed" is a
+# claim, not a mechanism, and `git add vendor-bin` would have taken all of it.
+# The staged artifact lives in vendor-bin/pty/<platform>-<arch>/ and is committed
+# on purpose, with its sha256 in PROVENANCE.json; this rule excludes only the
+# build tree above it.
+vendor-bin/pty/target/

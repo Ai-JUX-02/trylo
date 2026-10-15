@@ -93,6 +93,42 @@ export function deriveConversationRunViewState(
   return 'idle';
 }
 
+/**
+ * Round-3 P2 (状态栏三个口径混着用): the ONE wording for a view state.
+ *
+ * ProcessHeader said 思考中… while the footer said 正在思考 for the same
+ * `thinking`, and `waiting_first_output` read as 正在执行… up top but
+ * 正在准备 down below. Every surface renders this map and nothing else —
+ * a new state must fail to compile here (exhaustive switch) rather than
+ * invent a fourth wording somewhere. `waiting_first_output` is 正在准备…:
+ * the run has produced nothing yet, so 正在执行… overclaims.
+ */
+export function viewStateLabel(state: ConversationRunViewState): string {
+  switch (state) {
+    case 'idle':
+      return '已就绪';
+    case 'preparing':
+    case 'waiting_first_output':
+      return '正在准备…';
+    case 'thinking':
+      return '思考中…';
+    case 'tool_running':
+      return '正在执行…';
+    case 'finalizing':
+      return '正在收尾…';
+    case 'awaiting_input':
+      return '等待你的回复';
+    case 'reconnecting':
+      return '正在重新连接…';
+    case 'completed':
+      return '已完成';
+    case 'failed':
+      return '失败';
+    case 'cancelled':
+      return '已停止';
+  }
+}
+
 /** Header dot / status tone for a state: ready (green),
  *  running (amber pulse), error (red). */
 export type ViewStateTone = 'ready' | 'running' | 'error';

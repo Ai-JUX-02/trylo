@@ -1,55 +1,46 @@
-import type { ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Check, ChevronDown, UserRound, UsersRound } from 'lucide-react';
 import type { CollaborationSurface } from './types';
 
 export interface CollaborationSwitchProps {
   readonly value: CollaborationSurface;
   readonly onChange: (value: CollaborationSurface) => void;
-  /** Pass through to disable the switch in App-level loading / error
-   *  states. Default false. */
   readonly disabled?: boolean;
+  readonly onCompose?: () => void;
 }
 
-/**
- * The right-side switch in TopBar. Spec §1.2: it is its own tablist
- * (separate from the Code/Work tablist). Visual weight must stay below
- * the Code/Work tablist so it does not read as a third product mode.
- *
- * Implementation: a self-sized pill, two text-only options. No icons
- * (icons push the weight up). Active option uses brand-soft fill +
- * brand edge, same family as the Code/Work tabs but smaller.
- */
 export function CollaborationSwitch(props: CollaborationSwitchProps): ReactElement {
-  const { value, onChange, disabled = false } = props;
-  return (
-    <div
-      className="collaboration-switch"
-      role="tablist"
-      aria-label="协作表面"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === 'person'}
-        aria-current={value === 'person' ? 'page' : undefined}
-        className={`collaboration-switch__option${value === 'person' ? ' collaboration-switch__option--active' : ''}`}
-        onClick={() => onChange('person')}
-        disabled={disabled}
-        title="对话：和 Trylo 说话"
-      >
-        对话
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === 'team'}
-        aria-current={value === 'team' ? 'page' : undefined}
-        className={`collaboration-switch__option${value === 'team' ? ' collaboration-switch__option--active' : ''}`}
-        onClick={() => onChange('team')}
-        disabled={disabled}
-        title="团队：看谁在做、点开过程"
-      >
-        团队
-      </button>
-    </div>
-  );
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: MouseEvent): void => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', outside);
+    return () => document.removeEventListener('mousedown', outside);
+  }, [open]);
+  const pick = (value: CollaborationSurface): void => {
+    props.onChange(value); setOpen(false); anchor.current?.focus();
+  };
+  const Icon = props.value === 'person' ? UserRound : UsersRound;
+  return <div ref={root} className="collaboration-switch" onKeyDown={(event) => {
+    if (event.key === 'Escape') { setOpen(false); anchor.current?.focus(); }
+  }}>
+    <button ref={anchor} type="button" className="collaboration-switch__trigger" disabled={props.disabled}
+      aria-label="协作方式" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Icon size={16} aria-hidden="true" /><span>{props.value === 'person' ? '个人' : '团队'}</span><ChevronDown size={12} aria-hidden="true" />
+    </button>
+    {open && <div className="collaboration-switch__menu" role="menu" aria-label="协作方式">
+      {(['person', 'team'] as const).map((value) => <button key={value} type="button" role="menuitemradio"
+        aria-checked={props.value === value} onClick={() => pick(value)}>
+        {value === 'person' ? <UserRound size={15} /> : <UsersRound size={15} />}
+        <span>{value === 'person' ? '个人对话' : '团队协作'}</span>{props.value === value && <Check size={14} />}
+      </button>)}
+      {props.onCompose && <button type="button" role="menuitem" onClick={() => { props.onCompose?.(); setOpen(false); }}>
+        <UsersRound size={15} /><span>用团队做这件事</span>
+      </button>}
+    </div>}
+  </div>;
 }

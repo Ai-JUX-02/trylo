@@ -12,6 +12,8 @@ import type { StoredConversationResults } from '../results/conversation-result-t
 import { normalizeConversationResults } from '../results/conversation-result-normalizer';
 import { normalizePersistedToolResultContent } from '../tooling/tool-result-content';
 import { isTauri } from './tauri-detect';
+import { normalizeMessageIds } from '../components/chat/message-identity';
+import { dedupeCapabilityNotices } from '../components/chat/capability-notice';
 
 export type ConversationKind = TopLevelMode;
 
@@ -230,7 +232,7 @@ function normalizeSession(value: unknown, fallbackId: string): ConversationSessi
     id,
     title: typeof raw.title === 'string' && raw.title.trim()
       ? raw.title.trim()
-      : `New ${kind} chat`,
+      : '新任务',
     mode: kind === 'work' ? 'office' : (codeMode ?? 'agent'),
     kind,
     ...(codeMode ? { codeMode } : {}),
@@ -276,14 +278,14 @@ function normalizeSession(value: unknown, fallbackId: string): ConversationSessi
  * mirrors applyCompact's live identical-redelivery guard so a re-opened session
  * never shows the flood again.
  *
- * Safe for genuine history: a real second compaction always reports grown
- * numbers (its `before` starts where the last `after` left off), so an
- * exact-tuple hit is always a duplicate, never a distinct compaction.
+ * Scope receipts to a user turn: a later real turn can repeat the same token
+ * tuple, especially when the CLI did not report counts.
  */
 function dedupeCompactions(messages: readonly ChatMessage[]): readonly ChatMessage[] {
   const seen = new Set<string>();
   const out: ChatMessage[] = [];
   for (const m of messages) {
+    if (m.kind === 'text' && m.role === 'user') seen.clear();
     if (m.kind === 'compaction') {
       const key = `${m.tokensBefore}|${m.tokensAfter}|${m.reason}`;
       if (seen.has(key)) continue;
@@ -312,7 +314,7 @@ export function normalizeWorkspaceHistory(value: unknown): WorkspaceConversation
       const managedChildren = deserializeManagedChildBindings(record.managedChildren);
       conversations[session.id] = {
         session,
-        messages: dedupeCompactions(migrateToolMessages(safeMessages(record.messages))),
+        messages: normalizeMessageIds(dedupeCapabilityNotices(dedupeCompactions(migrateToolMessages(safeMessages(record.messages))))),
         draft: typeof record.draft === 'string' ? record.draft : '',
         // P2-1: legacy top-level `history.artifacts` is ignored — it has no
         // conversation / run attribution and is not migrated (spec §2.5).
@@ -360,13 +362,20 @@ function sessionTitle(kind: ConversationKind, messages: readonly ChatMessage[]):
   const firstUser = messages.find(
     (message) => message.kind === 'text' && message.role === 'user' && message.text.trim(),
   );
-  if (!firstUser || firstUser.kind !== 'text') return `New ${kind} chat`;
+  if (!firstUser || firstUser.kind !== 'text') return kind === 'code' ? '新任务' : '新工作任务';
   const title = firstUser.text.replace(/\s+/g, ' ').trim();
   return title.length > 56 ? `${title.slice(0, 55)}…` : title;
 }
 
 function turnCount(messages: readonly ChatMessage[]): number {
-  return messages.filter((message) => message.kind === 'text' && message.role === 'user').length;
+  // Round-3 (P0-5): a mid-run guidance is an intervention inside the running
+  // turn, not a user turn of its own. Counting it made `session.turnCount` say
+  // 2 for a single real turn — and for a REJECTED guidance it left the
+  // transcript looking like the guidance had simply been accepted.
+  return messages.filter(
+    (message) =>
+      message.kind === 'text' && message.role === 'user' && message.steerState === undefined,
+  ).length;
 }
 
 export function createConversation(
@@ -378,7 +387,7 @@ export function createConversation(
   const id = `${input.kind}-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const session: ConversationSession = {
     id,
-    title: `New ${input.kind} chat`,
+    title: input.kind === 'code' ? '新任务' : '新工作任务',
     mode: input.kind === 'work' ? 'office' : codeMode!,
     kind: input.kind,
     ...(codeMode ? { codeMode } : {}),
@@ -550,7 +559,7 @@ export function updateConversationMessages(
   if (!id) return history;
   const record = history.conversations[id];
   if (!record) return history;
-  const messages = typeof updater === 'function' ? updater(record.messages) : updater;
+  const messages = normalizeMessageIds(dedupeCapabilityNotices(typeof updater === 'function' ? updater(record.messages) : updater));
   const session: ConversationSession = {
     ...record.session,
     title: sessionTitle(record.session.kind, messages),

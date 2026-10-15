@@ -64,6 +64,7 @@ public partial class PetWindow : Window
     private PetMessage? _activeClient;
     private System.Windows.Point _mouseDown;
     private bool _dragging;
+    private readonly PreviewWindowPerch _previewPerch = new();
     private DateTime _lastClientUtc = DateTime.UtcNow;
     private DateTime _frameDeadlineUtc = DateTime.MinValue;
     private string _animationState = "";
@@ -911,6 +912,11 @@ public partial class PetWindow : Window
 
     private void CheckClientLifetime()
     {
+        if (_previewPerch.IsDocked && !_previewPerch.Follow(this))
+        {
+            Top = SystemParameters.WorkArea.Bottom - ActualHeight - 28;
+            ClampIntoScreen();
+        }
         ExpireTransientBubble();
         var current = _server?.GetActiveClient();
         if (current is not null)
@@ -937,6 +943,7 @@ public partial class PetWindow : Window
 
         var windowState = WindowActivator.GetWorkspaceWindowState(_activeClient.WorkspaceName);
         var shouldShow = _activePermission is not null ||
+            _previewPerch.IsDocked ||
             !_settings.ShowOnlyWhenMinimized ||
             windowState != WorkspaceWindowState.Visible;
         if (shouldShow && !IsVisible) Show();
@@ -957,8 +964,10 @@ public partial class PetWindow : Window
         if (!_dragging && (Math.Abs(point.X - _mouseDown.X) > 5 || Math.Abs(point.Y - _mouseDown.Y) > 5))
         {
             _dragging = true;
+            _previewPerch.Detach();
             ReleaseMouseCapture();
             try { DragMove(); } catch { }
+            _previewPerch.TryDock(this);
         }
     }
 

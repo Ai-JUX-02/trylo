@@ -56,7 +56,7 @@ export interface RemoteControllerOptions {
   readonly isTauri: () => boolean;
   /** Handler authorities — Desktop owns every gateway handler (arch §7.2). */
   readonly workspaces: { list(): readonly RemoteProjectSummary[]; activeProjectId(): string; select(projectId: string): Promise<void> };
-  readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }> };
+  readonly sessions: { list(): readonly RemoteSessionSummary[]; activeSessionId(): string; select(sessionId: string): Promise<{ switching: boolean }>; create?(surface: RemoteTaskSurface): Promise<string> };
   readonly sendTask: (req: { projectKey: string; conversationId: string; mode: string; surface: RemoteTaskSurface; text: string; requestId: string; attachments?: readonly import('./remote-routing').RemoteChatAttachment[] }) => Promise<unknown>;
   readonly cancelTask: (projectKey: string, conversationId: string) => Promise<void>;
   readonly approvals: ApprovalService;
@@ -117,7 +117,8 @@ export class RemoteController {
   }
 
   readonly lifecycle: CodeRunLifecycleObserver = {
-    onRunStarted: () => {
+    onRunStarted: (scope) => {
+      if (scope.projectKey === this.options.projectKey() && scope.conversationId === this.options.conversationId()) this.publishSnapshot();
       this.publishAgentState('running', 'Starting the run');
       return Promise.resolve();
     },

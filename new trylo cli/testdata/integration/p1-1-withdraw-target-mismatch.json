@@ -1,0 +1,19 @@
+{
+  "id": "integration/p1-1-withdraw-target-mismatch",
+  "attack": "撤回 admission 的 payloadId 与被撤回 draft 不同源，用它 tombstone 无关实体（targetResolution 合法，缺的是同源绑定）。",
+  "kind": "withdraw-target-mismatch",
+  "admission": {
+    "commandId": "cmd-w",
+    "issuedAt": "2026-09-13T00:00:00.000Z",
+    "entityId": "prop-unrelated",
+    "entityType": "proposal",
+    "reason": "越权撤回",
+    "payloadId": "something-else",
+    "assetKind": "user_rule",
+    "targetResolution": "user_explicit_entity"
+  },
+  "expect": {
+    "ok": false,
+    "reason": "invalid_admission"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "trigger": {
+    "tool": "write_file",
+    "code": "path_outside_workspace",
+    "repeats": 2
+  },
+  "constraint": "workspace_paths_only",
+  "hint": "Stay inside the workspace.",
+  "until": "forever"
+}

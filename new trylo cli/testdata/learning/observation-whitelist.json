@@ -1,0 +1,17 @@
+{
+  "observationId": "obs:e1",
+  "scope": "user",
+  "taskFamily": "edit",
+  "snapshotRef": "snap-1",
+  "assetRefs": { "user_rule": "v1" },
+  "outcome": "completed",
+  "verdict": "pass",
+  "tokenCost": 3,
+  "latencyMs": 10,
+  "causalRefs": ["e1"],
+  "privacyClass": "summary",
+  "occurredAt": "2026-09-12T00:00:00.000Z",
+  "boardSequence": 1,
+  "reason": "exit 0",
+  "inputRef": "e1"
+}

@@ -11,6 +11,7 @@ import '@ionic/react/css/flex-utils.css';
 
 import App from './App';
 import './theme.css';
+import './refresh.css';
 
 setupIonicReact({ mode: 'md' });
 

@@ -1,0 +1,437 @@
+[
+  {
+    "kind": "session_start",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-session-start",
+      "sequence": 0,
+      "timestamp": "2026-09-14T10:00:00.000Z",
+      "sessionId": "ses-p07",
+      "kind": "session_start",
+      "payload": { "sessionId": "ses-p07", "createdAt": "2026-09-14T10:00:00.000Z" },
+      "producerId": "cli",
+      "producerSequence": 0
+    }
+  },
+  {
+    "kind": "session_end",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-session-end",
+      "sequence": 1,
+      "timestamp": "2026-09-14T10:09:00.000Z",
+      "sessionId": "ses-p07",
+      "kind": "session_end",
+      "payload": { "reason": "completed" },
+      "producerId": "cli",
+      "producerSequence": 1
+    }
+  },
+  {
+    "kind": "loop_start",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-loop-start",
+      "sequence": 2,
+      "timestamp": "2026-09-14T10:00:01.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "loop_start",
+      "payload": { "iteration": 0 },
+      "producerId": "cli",
+      "producerSequence": 2
+    }
+  },
+  {
+    "kind": "loop_end",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-loop-end",
+      "sequence": 3,
+      "timestamp": "2026-09-14T10:08:59.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "loop_end",
+      "payload": { "reason": "completed" },
+      "producerId": "cli",
+      "producerSequence": 3
+    }
+  },
+  {
+    "kind": "turn_start",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-turn-start",
+      "sequence": 4,
+      "timestamp": "2026-09-14T10:00:02.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "correlationId": "cor-p07",
+      "kind": "turn_start",
+      "payload": { "turnId": "trn-p07", "text": "summarise the failing test" },
+      "producerId": "cli",
+      "producerSequence": 4
+    }
+  },
+  {
+    "kind": "turn_end",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-turn-end",
+      "sequence": 5,
+      "timestamp": "2026-09-14T10:08:58.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "turn_end",
+      "payload": { "reason": "completed" },
+      "producerId": "cli",
+      "producerSequence": 5
+    }
+  },
+  {
+    "kind": "api_call",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-api-call",
+      "sequence": 6,
+      "timestamp": "2026-09-14T10:00:03.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-1",
+      "kind": "api_call",
+      "payload": { "attemptId": "att-p07-1" },
+      "producerId": "cli",
+      "producerSequence": 6
+    }
+  },
+  {
+    "kind": "api_retry",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-api-retry",
+      "sequence": 7,
+      "timestamp": "2026-09-14T10:01:03.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "api_retry",
+      "payload": {
+        "attemptId": "att-p07-2",
+        "correlationId": "cor-p07",
+        "previous": "att-p07-1"
+      },
+      "producerId": "cli",
+      "producerSequence": 7
+    }
+  },
+  {
+    "kind": "model_fallback",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-model-fallback",
+      "sequence": 8,
+      "timestamp": "2026-09-14T10:01:04.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "model_fallback",
+      "payload": {
+        "model": "deepseek-v4.1-flash",
+        "previousModel": "deepseek-v4",
+        "reason": "capacity"
+      },
+      "producerId": "cli",
+      "producerSequence": 8
+    }
+  },
+  {
+    "kind": "text",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-text",
+      "sequence": 9,
+      "timestamp": "2026-09-14T10:01:05.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "text",
+      "payload": { "text": "the failing test is protocol.test.ts", "role": "assistant" },
+      "producerId": "cli",
+      "producerSequence": 9
+    }
+  },
+  {
+    "kind": "thinking",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-thinking",
+      "sequence": 10,
+      "timestamp": "2026-09-14T10:01:06.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "thinking",
+      "payload": { "text": "check the assertion before the fixture", "redacted": false },
+      "producerId": "cli",
+      "producerSequence": 10
+    }
+  },
+  {
+    "kind": "usage",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-usage",
+      "sequence": 11,
+      "timestamp": "2026-09-14T10:01:07.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "usage",
+      "payload": {
+        "inputTokens": 120,
+        "outputTokens": 34,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "reasoningTokens": 7,
+        "totalTokens": 154
+      },
+      "producerId": "cli",
+      "producerSequence": 11
+    }
+  },
+  {
+    "kind": "tool_use",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-tool-use",
+      "sequence": 12,
+      "timestamp": "2026-09-14T10:01:08.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "tool_use",
+      "payload": { "toolCallId": "call-p07-1", "name": "read_file" },
+      "producerId": "cli",
+      "producerSequence": 12
+    }
+  },
+  {
+    "kind": "approval_requested",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-approval-requested",
+      "sequence": 13,
+      "timestamp": "2026-09-14T10:01:08.500Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "approval_requested",
+      "payload": { "ticketId": "tkt-p07-1", "toolCallId": "call-p07-1" },
+      "producerId": "cli",
+      "producerSequence": 13
+    }
+  },
+  {
+    "kind": "permission_denied",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-permission-denied",
+      "sequence": 14,
+      "timestamp": "2026-09-14T10:01:09.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "permission_denied",
+      "payload": { "toolCallId": "call-p07-1", "resolution": "denied" },
+      "producerId": "cli",
+      "producerSequence": 14
+    }
+  },
+  {
+    "kind": "tool_result",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-tool-result",
+      "sequence": 15,
+      "timestamp": "2026-09-14T10:01:10.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "tool_result",
+      "payload": { "toolCallId": "call-p07-1", "status": "succeeded", "value": { "bytes": 12 } },
+      "producerId": "cli",
+      "producerSequence": 15
+    }
+  },
+  {
+    "kind": "subagent_spawn",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-subagent-spawn",
+      "sequence": 16,
+      "timestamp": "2026-09-14T10:02:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "subagent_spawn",
+      "payload": { "subagentId": "sub-p07-1", "name": "scout", "toolCallId": "call-p07-2" },
+      "producerId": "cli",
+      "producerSequence": 16
+    }
+  },
+  {
+    "kind": "subagent_end",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-subagent-end",
+      "sequence": 17,
+      "timestamp": "2026-09-14T10:03:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "subagent_end",
+      "payload": { "subagentId": "sub-p07-1", "status": "completed", "toolCallId": "call-p07-2" },
+      "producerId": "cli",
+      "producerSequence": 17
+    }
+  },
+  {
+    "kind": "compact",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-compact",
+      "sequence": 18,
+      "timestamp": "2026-09-14T10:04:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "compact",
+      "payload": { "compactId": "cmp-p07-1", "droppedEvents": 18 },
+      "producerId": "cli",
+      "producerSequence": 18
+    }
+  },
+  {
+    "kind": "file_write",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-file-write",
+      "sequence": 19,
+      "timestamp": "2026-09-14T10:05:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "file_write",
+      "payload": { "toolCallId": "call-p07-3", "status": "succeeded", "path": "notes/p07.md" },
+      "producerId": "cli",
+      "producerSequence": 19
+    }
+  },
+  {
+    "kind": "check_result",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-check-result",
+      "sequence": 20,
+      "timestamp": "2026-09-14T10:06:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "check_result",
+      "payload": { "checkId": "chk-p07-1", "verdict": "passed", "terminalReason": "" },
+      "producerId": "cli",
+      "producerSequence": 20
+    }
+  },
+  {
+    "kind": "user_correction",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-user-correction",
+      "sequence": 21,
+      "timestamp": "2026-09-14T10:06:30.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "user_correction",
+      "payload": { "text": "no, the other file" },
+      "producerId": "cli",
+      "producerSequence": 21
+    }
+  },
+  {
+    "kind": "user_reject",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-user-reject",
+      "sequence": 22,
+      "timestamp": "2026-09-14T10:06:31.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "kind": "user_reject",
+      "payload": { "toolCallId": "call-p07-1", "ticketId": "tkt-p07-1" },
+      "producerId": "cli",
+      "producerSequence": 22
+    }
+  },
+  {
+    "kind": "user_cancel",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-user-cancel",
+      "sequence": 23,
+      "timestamp": "2026-09-14T10:07:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "user_cancel",
+      "payload": { "phase": "streaming" },
+      "producerId": "cli",
+      "producerSequence": 23
+    }
+  },
+  {
+    "kind": "observation",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-observation",
+      "sequence": 24,
+      "timestamp": "2026-09-14T10:07:10.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "observation",
+      "payload": { "component": "provider", "raw_unknown": "{\"delta\":true}" },
+      "producerId": "cli",
+      "producerSequence": 24
+    }
+  },
+  {
+    "kind": "error",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-error",
+      "sequence": 25,
+      "timestamp": "2026-09-14T10:07:20.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "error",
+      "payload": { "message": "provider returned 503", "code": "upstream_unavailable" },
+      "producerId": "cli",
+      "producerSequence": 25
+    }
+  },
+  {
+    "kind": "terminal",
+    "envelope": {
+      "protocolVersion": "0.0",
+      "eventId": "evt-p-terminal",
+      "sequence": 26,
+      "timestamp": "2026-09-14T10:08:00.000Z",
+      "sessionId": "ses-p07",
+      "turnId": "trn-p07",
+      "attemptId": "att-p07-2",
+      "kind": "terminal",
+      "payload": { "reason": "completed", "finishReason": "stop", "requiresFollowUp": false },
+      "producerId": "cli",
+      "producerSequence": 26
+    }
+  }
+]

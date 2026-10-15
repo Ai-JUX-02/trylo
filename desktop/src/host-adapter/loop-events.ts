@@ -50,6 +50,11 @@ export type LoopEventType =
   | 'plan_mode_transition'
   // User-initiated termination (1)
   | 'aborted'
+  // P08 §5: a CLI `warning` frame. NOT an assistant message — it is
+  // host-visible diagnostic evidence that must never be rendered as if
+  // the model said it, and never silently dropped (a denied tool call
+  // reaches the UI as a warning and nothing else).
+  | 'runtime_warning'
   // User-side loopRunner events (3)
   | 'loop_started'
   | 'budget_breached'
@@ -105,7 +110,14 @@ export interface TurnStartEvent extends BaseEvent {
 export interface TurnEndEvent extends BaseEvent {
   readonly type: 'turn_end';
   readonly turn: number;
-  readonly stopReason: 'end_turn' | 'tool_use' | 'max_tokens';
+  /**
+   * Round-3 (P1-11). `failed` was added because the v1 adapter used to encode
+   * EVERY non-completed outcome as `tool_use` — indistinguishable from a turn
+   * that really did call a tool. A 0-token provider failure therefore landed as
+   * `status: "done"`, which is a lie the UI cannot detect. `failed` is the
+   * honest encoding; `tool_use` now means what it says.
+   */
+  readonly stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'failed';
   // Mirrors the CLI wire shape (utils/loopEvents.ts): usage fields are
   // optional — the CLI omits input_tokens when a response carries no
   // usage. Consumers must treat a missing/non-positive input_tokens
@@ -162,6 +174,7 @@ export interface ModelFallbackEvent extends BaseEvent {
 }
 
 export interface ThinkingEvent extends BaseEvent {
+  readonly blockId?: string;
   readonly type: 'thinking';
   readonly turn: number;
   readonly preview: string;
@@ -174,6 +187,7 @@ export interface ThinkingEvent extends BaseEvent {
 }
 
 export interface TextEvent extends BaseEvent {
+  readonly blockId?: string;
   readonly type: 'text';
   readonly turn: number;
   readonly preview: string;
@@ -210,6 +224,10 @@ export interface ToolResultEvent extends BaseEvent {
   readonly content?: readonly AnyToolResultContent[];
   readonly error?: string;
   readonly durationMs: number;
+  /** P08 §5: the CLI stream reports whether its output was truncated.
+   *  Absent for legacy emitters that never say — undefined and `false`
+   *  are different claims, so it stays optional. */
+  readonly truncated?: boolean;
   /** Nested (sub-agent) result: the parent Agent/Task tool_use id. */
   readonly parentId?: string;
 }
@@ -260,6 +278,22 @@ export interface AbortedEvent extends BaseEvent {
   readonly reason: 'user' | 'timeout' | 'error';
 }
 
+/**
+ * P08 §5: a runtime warning surfaced by the CLI stream.
+ *
+ * `code` is the stable, machine-readable part; `message` may be EMPTY —
+ * the frozen golden traces carry `{"code":"denied","message":""}`, so no
+ * consumer may treat an empty message as "nothing to show". The code
+ * alone is the notice.
+ */
+export interface RuntimeWarningEvent extends BaseEvent {
+  readonly type: 'runtime_warning';
+  /** Stable warning identity scoped to the canonical CLI session and turn. */
+  readonly id?: string;
+  readonly code: string;
+  readonly message: string;
+}
+
 export interface TodoUpdatedEvent extends BaseEvent {
   readonly type: 'todo_updated';
   readonly todos: readonly { content: string; status: string; activeForm: string }[];
@@ -293,7 +327,8 @@ type StrictLoopEvent =
   | CompactEvent
   | AbortedEvent
   | TodoUpdatedEvent
-  | PlanModeTransitionEvent;
+  | PlanModeTransitionEvent
+  | RuntimeWarningEvent;
 
 export type LoopEvent = StrictLoopEvent | OtherLoopEvent;
 

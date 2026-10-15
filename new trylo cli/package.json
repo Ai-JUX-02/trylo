@@ -1,0 +1,45 @@
+{
+  "name": "@trylo/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "trylo": "dist/cmd/trylo/main.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "!dist/tests*.tap",
+    "!dist/quality-report.json",
+    "!dist/wp27-*.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs",
+    "clean": "node scripts/quality/clean-dist.mjs",
+    "prepack": "npm run build",
+    "format:check": "node scripts/quality/format-check.mjs",
+    "test": "node scripts/quality/run-tests.mjs --layer=hermetic",
+    "test:hermetic": "node scripts/quality/run-tests.mjs --layer=hermetic",
+    "test:platform": "node scripts/quality/run-tests.mjs --layer=platform",
+    "test:real": "node scripts/quality/run-tests.mjs --layer=real",
+    "test:all": "node scripts/quality/run-tests.mjs --layer=all",
+    "verify": "node scripts/quality/verify.mjs",
+    "quality:new-cli": "node scripts/quality/verify.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "@pondwader/socks5-server": "1.0.10",
+    "ignore": "7.0.5",
+    "vscode-jsonrpc": "9.0.3",
+    "vscode-languageserver-protocol": "3.18.4",
+    "vscode-languageserver-types": "3.18.4",
+    "zod": "4.4.3"
+  }
+}

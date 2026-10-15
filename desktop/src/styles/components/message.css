@@ -146,15 +146,63 @@
 /* Final answers are the turn's visual conclusion, so they use the normal body
    size rather than the compact process-text size. */
 .message--assistant .message__text {
-  font-size: var(--text-base);
-  line-height: 1.52;
+  font-size: 16px;
+  line-height: 1.8;
 }
 
+/* Markdown supplies paragraphs and lists; source separator newlines must not
+   become extra rendered rows. Fenced code keeps its own pre-wrap rule below. */
+.message__text--markdown { white-space: normal; }
 .message__text--markdown > :first-child { margin-top: 0; }
 .message__text--markdown > :last-child { margin-bottom: 0; }
 .message__text--markdown p { margin: 0.34em 0; }
 .message__text--markdown ul,
 .message__text--markdown ol { margin: 0.34em 0; padding-left: 1.4em; }
+
+/* Round-3 P1-7: the conversation timeline scrolls VERTICALLY only.
+ *
+ * `<pre>` ships with the UA default `white-space: pre`, so a single long
+ * line inside a fenced code block is a hard no-wrap box: it pushes its
+ * column wider than the timeline and the scroller grows a horizontal
+ * scrollbar, which then clips prose and inline code pills at the right
+ * edge (`words.txt` / `verified wo…txt` in the report). Nothing was ever
+ * overridden here — base.css only set the mono font for `code, pre`.
+ *
+ * Chat wraps: code blocks keep their shape (pre-wrap preserves leading
+ * indentation and line breaks) but fold long lines instead of widening the
+ * column. `overflow-wrap: anywhere` is what actually lets an unbroken
+ * token (a minified line, a base64 blob, a 200-char path) break anywhere.
+ */
+.message__text--markdown pre {
+  max-width: 100%;
+  margin: 0.4em 0;
+  padding: 8px 10px;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.88em;
+  line-height: 1.45;
+}
+
+/* Inline code inherits the bubble's wrapping intent, but a run-long token
+ * still needs permission to break mid-token. */
+.message__text--markdown code,
+.message__text code,
+.message__bubble code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* A fenced block inside a <pre> must not double-wrap into another box. */
+.message__text--markdown pre code {
+  background: transparent;
+  padding: 0;
+  white-space: inherit;
+}
 
 .message__artifact-link {
   display: inline-flex;
@@ -259,6 +307,15 @@
   color: var(--text-primary, rgba(255, 255, 255, 0.92));
 }
 
+.message__steer-flag--failed {
+  color: #d96666;
+  border-color: rgba(217, 102, 102, 0.42);
+}
+
+.message__user-content .message__steer-flag {
+  align-self: flex-end;
+}
+
 .message__role {
   display: inline-block;
   font-family: var(--font-mono);
@@ -280,6 +337,25 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--ink-fog);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Round-3 (P1-11): the one turn row that is allowed to render. A turn that
+ * delivered nothing must say so out loud — `--danger` because the two causes
+ * (provider refusal, budget/limit cut) are both failures the user has to see,
+ * not a neutral "skipped" state. */
+.message--turn-incomplete {
+  justify-content: center;
+}
+
+.message__turn-incomplete {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  color: var(--danger);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
@@ -318,3 +394,12 @@
   opacity: 0.75;
   flex: 0 0 auto;
 }
+
+.message { margin-block: 12px; }
+.message--assistant .message__col { max-width: 100%; width: 100%; }
+.message--user .message__bubble { border-radius: 15px; padding: 10px 14px; }
+.message__text--markdown a, .message__artifact-link { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.message__text--markdown a:hover, .message__artifact-link:hover { background: var(--link-soft); }
+
+.message--user .message__col { max-width:90%; }
+.message--user .message__bubble { border-radius:16px; padding:13px 16px; background:var(--bg-panel); line-height:1.65; }

@@ -1,0 +1,27 @@
+{
+  "id": "integration/p1-3-mixed-anchors",
+  "attack": "C 侧 draft 自报独立锚点（含 selfGenerated:false）与 externalPass。WP-F 之后 draft 的自报锚点不再被读取；用户证据只能来自 user_explicit 域收据，伪造引用在 registry 中不存在即拒绝。",
+  "kind": "mixed-anchors",
+  "draftOverrides": {
+    "externalAnchors": [
+      {
+        "kind": "test",
+        "result": "pass",
+        "ref": "run-1",
+        "selfGenerated": false
+      },
+      {
+        "kind": "exit_code",
+        "result": "fail",
+        "ref": "run-2",
+        "selfGenerated": false
+      }
+    ],
+    "externalPass": true
+  },
+  "receiptRef": "receipt:attacker-made-up",
+  "expect": {
+    "ok": false,
+    "reason": "verification_receipt_unavailable"
+  }
+}

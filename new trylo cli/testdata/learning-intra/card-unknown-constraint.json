@@ -1,0 +1,10 @@
+{
+  "trigger": {
+    "tool": "write_file",
+    "code": "path_outside_workspace",
+    "repeats": 2
+  },
+  "constraint": "retry_with_backoff",
+  "hint": "Retry with backoff.",
+  "until": "end_of_this_turn"
+}

@@ -52,7 +52,7 @@ work/vendor/cowork-os/src/*
 !work/vendor/cowork-os/src/daemon/
 work/vendor/cowork-os/src/daemon/*
 !work/vendor/cowork-os/src/daemon/control-plane-methods.ts
-# P0-B 闭环：daemon 入口�?control-plane 测试也是修复面的一部分（审�?§4.2/§6.1�?
+# P0-B 闭环：daemon 入口�?control-plane 测试也是修复面的一部分（审�?§4.2/§6.1�?
 !work/vendor/cowork-os/src/daemon/main.ts
 !work/vendor/cowork-os/src/daemon/global-any.d.ts
 !work/vendor/cowork-os/src/daemon/__tests__/
@@ -72,8 +72,8 @@ work/vendor/cowork-os/src/electron/*
 !work/vendor/cowork-os/src/electron/managed/
 work/vendor/cowork-os/src/electron/managed/*
 !work/vendor/cowork-os/src/electron/managed/ManagedSessionService.ts
-# P0-B/P1（�?.1）：ManagedSessionService helpers 与共�?repositories 也是
-# 闭环修复与完整回归门的涉及面�?
+# P0-B/P1（�?.1）：ManagedSessionService helpers 与共�?repositories 也是
+# 闭环修复与完整回归门的涉及面�?
 !work/vendor/cowork-os/src/electron/managed/repositories.ts
 !work/vendor/cowork-os/src/electron/managed/agent-templates.ts
 !work/vendor/cowork-os/src/electron/managed/AgentBuilderService.ts
@@ -140,7 +140,7 @@ desktop-services/dist/
 desktop/src-tauri/resources/
 
 # ── P0-C git 可复现性收口（审计 §5.3）─────────────────────────────
-# 临时截图/输出/一次性产物不入库（审计明确列出的文件名）�?
+# 临时截图/输出/一次性产物不入库（审计明确列出的文件名）�?
 /--full-page
 /--filename=trylo-after.png
 smoke-shot.png
@@ -154,22 +154,22 @@ officecli-version.txt
 desktop/vitest-*.txt
 scripts/__pycache__/
 
-# Android 构建产物（no-external-paths 门禁误扫来源，审�?§6.2�?
+# Android 构建产物（no-external-paths 门禁误扫来源，审�?§6.2�?
 mobile-app/android/**/build/
 
-# 手机发行包（>100MB 二进制，不入 Git�?
+# 手机发行包（>100MB 二进制，不入 Git�?
 mobile-app/releases/
 
-# Python 字节�?
+# Python 字节�?
 __pycache__/
 *.pyc
 
-# 工具链浅克隆（supply-chain 审计缓存，不入库；manifest 内含 pin �?hash�?
-# 安装�?pinned release 传输进行 �?审计 §5.3「关键源文件纳入 Git；构建产�?
+# 工具链浅克隆（supply-chain 审计缓存，不入库；manifest 内含 pin �?hash�?
+# 安装�?pinned release 传输进行 �?审计 §5.3「关键源文件纳入 Git；构建产�?
 # 只有确有发行需要时才纳入」）
 new_tool/
 
-# ── 2026-09-06：本地构建产�?/ agent 痕迹（组长确认不入库）───────────
+# ── 2026-09-06：本地构建产�?/ agent 痕迹（组长确认不入库）───────────
 .trae/
 .vite/
 .wrangler/
@@ -178,3 +178,39 @@ work/cad-plans/
 work/*.png
 work/new-timeline.html
 
+# ── 2026-10-12：工作区收口（一次性产物与就地编译输出不入库）──────────
+# tsconfig outDir=dist，src 下只跟踪 .ts 源；同名 .js 是 tsc 就地产物
+# （实测 1232 个未跟踪 .js 全部有 .ts 兄弟，0 例外）
+new trylo cli/src/**/*.js
+# 隔离复验/影响面构建输出（tsc 变体产物，非源）
+new trylo cli/dist-*/
+new trylo cli/.wp07iso/
+# 供应商二进制与 cargo 构建树（rlib/pdb/exe 共 ~60MB）：入库即永久占历史，
+# 需随发行分发时再用 git add -f 显式点名（沿用上面对 vendor 源的同一条策略）
+new trylo cli/vendor-bin/
+# 一次性排查/审计输出与探针
+/wp20-audit-fullsuite.txt
+/testfiles.txt
+/review-rerun-verify.txt
+/review-rerun-hermetic.txt
+/new-native-build-message-reliability.txt
+/a.txt
+/b.txt
+/c.txt
+/new
+/comtypes-gen-*.lock
+new trylo cli/trylo-audit-*
+# 本机运行时缓存与并行 worktree（嵌进仓库会污染历史，绝不入库）
+/Temp/
+/AppData/
+/worktrees/
+/.trylo-artifacts/
+/.workbuddy/
+/_tmp-frontier/
+/_tmp-frontier-wf/
+/_archive/
+
+
+# Local release preparation and independent-workcopy metadata
+/.local-release/
+/WORKCOPY_*.json

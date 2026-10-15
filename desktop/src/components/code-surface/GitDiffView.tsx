@@ -11,6 +11,7 @@
 
 import { useEffect, useRef, type ReactElement } from 'react';
 import { captureFocus, restoreFocus } from '../../a11y/focus-return';
+import { useAppearance } from '../../settings/appearance-store';
 
 export interface GitFileDiffData {
   readonly original: string;
@@ -26,12 +27,15 @@ export interface GitDiffViewProps {
   /** Human-readable load-failure message (kept local to the diff, never
    *  crashing the dock). */
   readonly error?: string;
+  /** Context such as a pending approval; does not replace the actual diff. */
+  readonly notice?: string;
   readonly onClose: () => void;
 }
 
 export function GitDiffView(props: GitDiffViewProps): ReactElement {
   const { diff, error, path, onClose } = props;
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useAppearance();
 
   useEffect(() => {
     // Snapshot the focus owner at mount; the close path restores it.
@@ -51,6 +55,7 @@ export function GitDiffView(props: GitDiffViewProps): ReactElement {
       originalModel = monacoNs.editor.createModel(diff.original, 'plaintext');
       modifiedModel = monacoNs.editor.createModel(diff.modified, 'plaintext');
       diffEditor = monacoNs.editor.createDiffEditor(container, {
+        theme: theme === 'dark' ? 'vs-dark' : 'vs',
         renderSideBySide: true,
         automaticLayout: true,
         readOnly: true,
@@ -75,7 +80,7 @@ export function GitDiffView(props: GitDiffViewProps): ReactElement {
       if (originalModel) originalModel.dispose();
       if (modifiedModel) modifiedModel.dispose();
     };
-  }, [diff, onClose]);
+  }, [diff, onClose, theme]);
 
   const handleClose = (): void => {
     restoreFocus();
@@ -102,9 +107,10 @@ export function GitDiffView(props: GitDiffViewProps): ReactElement {
         </button>
       </div>
       <div className="git-diff-view__body">
+        {props.notice && <p className="git-diff-view__notice" role="status">{props.notice}</p>}
         {error !== undefined && (
           <p className="git-diff-view__degraded" role="status">
-            Could not load the Git diff for this change.
+            Could not load the Git diff for this change. {error}
           </p>
         )}
         {diff?.binary && (

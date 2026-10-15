@@ -40,6 +40,14 @@
   scrollbar-width: thin;
   scrollbar-color: var(--ink-hover) transparent;
   scrollbar-gutter: stable;
+  /* Round-3 P1-7: the conversation timeline scrolls VERTICALLY, full stop.
+   * A single unbreakable line deep inside a row used to widen the whole
+   * column and hand the user a horizontal scrollbar (see the wrapping
+   * contract in message.css). This is the structural guard: even if some
+   * future child misbehaves, the timeline itself never scrolls sideways.
+   * Rows that genuinely own a horizontal scroller (tool output, file diffs)
+   * keep theirs — it is their own box, not this one. */
+  overflow-x: hidden;
 }
 
 .message-list [data-virtuoso-scroller]::-webkit-scrollbar {
@@ -52,7 +60,7 @@
 }
 
 .message-list__inner {
-  max-width: 880px;
+  max-width: var(--conversation-width);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -92,11 +100,14 @@
  * for an affordance that's only there until the user clicks it. */
 .message-list__scroll-btn {
   position: absolute;
-  /* Sit just above the streaming footer so it never overlaps the
-     composer / waiting indicator. */
+  /* Round-3 P1-7: parked over the RIGHT GUTTER instead of dead centre.
+   * Centred (`left: 50%`) put the button right on top of the text column —
+   * file pills and the tail of a wrapped line were being pressed by it.
+   * The timeline's own padding plus the reserved scrollbar gutter give an
+   * empty lane at the right edge, so the button floats there and never
+   * covers prose. */
   bottom: 84px;
-  left: 50%;
-  transform: translate(-50%, 6px);
+  right: calc(var(--space-5) + 10px);
   display: none;
   align-items: center;
   justify-content: center;
@@ -111,6 +122,9 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 5;
   opacity: 0;
+  /* Round-3 P1-7: no centring translate any more — the button is anchored
+   * by `right`, so the only motion left is the 6px entry offset. */
+  transform: translateY(6px);
   transition:
     opacity var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out),
@@ -123,11 +137,15 @@
   background: var(--brand-soft);
   color: var(--brand);
   border-color: var(--brand);
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
 
 .message-list__scroll-btn--show {
   display: inline-flex;
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
+
+/* Keep every virtualized row in the same column as the composer. */
+.conversation-row, .message-list__footer-stack { width:100%; max-width:calc(var(--conversation-width) + 30px); margin-inline:auto; }
+.message-list { padding:22px 32px 0; }

@@ -52,12 +52,9 @@ fn count_lines(bytes: &[u8]) -> u64 {
     if bytes.is_empty() {
         return 0;
     }
-    let newlines = bytes.iter().filter(|b| **b == b'\n').count() as u64;
-    if bytes.last() == Some(&b'\n') {
-        newlines
-    } else {
-        newlines + 1
-    }
+    // Splitting includes an empty tail for a newline-terminated file.
+    let segments = bytes.split(|b| *b == b'\n').count() as u64;
+    segments - u64::from(bytes.last() == Some(&b'\n'))
 }
 
 /// Parse `git diff --numstat -z` output into `path -> (add, del, binary)`.

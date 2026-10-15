@@ -1,0 +1,18 @@
+{
+  "id": "spdx-with",
+  "name": "with-exception-sample",
+  "version": "1.0.0",
+  "spdx": "Apache-2.0 WITH LLVM-exception",
+  "tier": "C",
+  "role": "compiler",
+  "entersArtifact": false,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "pass",
+  "parse": {
+    "operator": "WITH",
+    "base": "Apache-2.0",
+    "exception": "LLVM-exception"
+  }
+}

@@ -165,6 +165,10 @@ export function projectLoopEvents(
           detail: JSON.stringify(event.input).slice(0, DETAIL_CAP),
           phase: 'running',
           at,
+          id: `${turnId}:tool:${event.id}`,
+          turnId,
+          toolCallId: event.id,
+          input: JSON.stringify(event.input).slice(0, TEXT_CAP),
         };
         out.push(trace);
         break;
@@ -176,8 +180,13 @@ export function projectLoopEvents(
           kind: 'tool',
           title: event.tool.trim().slice(0, TITLE_CAP),
           detail: detail.trim().slice(0, DETAIL_CAP),
-          phase: 'completed',
+          phase: event.ok ? 'completed' : 'failed',
           at,
+          id: `${turnId}:tool:${event.id}`,
+          turnId,
+          toolCallId: event.id,
+          output: (event.ok ? event.output : event.error ?? event.output).slice(0, TEXT_CAP),
+          durationMs: event.durationMs,
         };
         out.push(trace);
         break;
@@ -245,6 +254,7 @@ export function projectSessionState(opts: {
         id: record.session.id,
         title: title.slice(0, TITLE_CAP),
         preview: lastUserAssistantText(record.messages).slice(0, PREVIEW_CAP),
+        surface: record.session.kind,
         updatedAt,
         workspace: { id: record.session.id, name: title.slice(0, TITLE_CAP), path: '' },
       };
@@ -252,7 +262,24 @@ export function projectSessionState(opts: {
     .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
     .slice(0, SESSION_LIMIT);
   const activeSessionId = opts.history.activeByKind[opts.kind] ?? '';
-  return { type: 'sessionState', activeSessionId, sessions, at: now };
+  const activeMessages = opts.history.conversations[activeSessionId]?.messages ?? [];
+  const conversation: import('../services-host/methods').RemoteConversationItem[] = [];
+  for (const message of activeMessages.slice(-120)) {
+    const base = { id: message.id, at: message.createdAt, turnId: message.turnId };
+    if (message.kind === 'text' && (message.role === 'user' || message.role === 'assistant')) {
+      conversation.push({ ...base, role: message.role, text: message.text.slice(0, TEXT_CAP), status: message.partial ? 'streaming' : 'done' });
+    } else if (message.kind === 'thinking') {
+      conversation.push({ ...base, role: 'thinking', title: message.summary, text: message.preview.slice(0, TEXT_CAP), status: message.partial ? 'streaming' : 'done' });
+    } else if (message.kind === 'tool') {
+      conversation.push({ ...base, role: 'tool', title: message.tool, text: message.summary, toolCallId: message.toolCallId,
+        status: message.status === 'running' || message.status === 'pending' ? 'streaming' : message.status,
+        input: message.input ? JSON.stringify(message.input).slice(0, TEXT_CAP) : undefined,
+        output: (message.outputError ?? message.outputText ?? '').slice(0, TEXT_CAP), durationMs: message.durationMs });
+    } else if (message.kind === 'error') {
+      conversation.push({ ...base, role: 'assistant', text: message.userMessage, status: 'error' });
+    }
+  }
+  return { type: 'sessionState', activeSessionId, sessions, conversation, at: now };
 }
 
 /** Project the workspace index into the gateway's projectsState payload. */

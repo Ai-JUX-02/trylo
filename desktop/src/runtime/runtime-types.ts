@@ -9,6 +9,7 @@
 // per-conversation ViewState.
 
 import type { FilePath, ProcessId } from '../host-adapter/types';
+import type { CliRuntimeProtocol } from './cli-runtime-protocol';
 
 /**
  * The resolved settings a CodeRunController needs to spawn or to
@@ -27,6 +28,24 @@ export interface SettingsForCodeRun {
   readonly apiKeyPrefix?: string;
   readonly extraHeadersText?: string;
   readonly systemPrompt?: string;
+  /**
+   * P08 §3.4: which new-CLI provider this run selects. Empty ⇒ the CLI's
+   * own default (fixture in the dev path). Never a credential — the new
+   * CLI reads its own ledger.
+   */
+  readonly providerId?: string;
+  /**
+   * P08 §4.1: which CLI runtime contract this run speaks. Part of the
+   * snapshot because it is fixed at spawn time — a mid-run settings
+   * change must not retarget a live process.
+   */
+  readonly cliRuntimeProtocol?: CliRuntimeProtocol;
+  /**
+   * P08 §WP6: the Node interpreter that runs `cliPath`, resolved in the
+   * same step as the path itself. Kept together deliberately — a pinned
+   * Node that never reaches the spawn is the same as no pinned Node.
+   */
+  readonly cliNodeProgram?: string;
 }
 
 /** Spec §4.2: CodeRunBinding.state. */

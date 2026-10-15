@@ -54,6 +54,7 @@ class TauriProcessService implements ProcessService {
     env?: Readonly<Record<string, string>>;
     metadata?: Readonly<{ projectKey?: string; conversationId?: string; runId?: string }>;
     onOutput: (line: string) => void;
+    onStderr?: (line: string) => void;
     onExit?: (info: ProcessExitInfo) => void;
   }): Promise<ProcessHandle> {
     // v1.15.7: the Rust side uses Channel<String> (see
@@ -76,6 +77,18 @@ class TauriProcessService implements ProcessService {
       }
       opts.onOutput(msg);
     };
+    // P08 §4.2: the stderr channel is ALWAYS created — Tauri's `Channel`
+    // does not implement `Deserialize`, so it cannot be optional on the
+    // Rust side. `captureStderr` is what actually decides: with `false`
+    // the child's stderr stays `Stdio::null()` and this channel never
+    // fires, so the legacy CLI's debug flood never crosses IPC.
+    const stderrChannel = new Channel<string>();
+    const stderrSink = opts.onStderr ?? null;
+    stderrChannel.onmessage = (msg) => {
+      // The `##TRYLO_PROC_EXIT##` control frame is a stdout artefact;
+      // stderr never carries one. Anything arriving here is a real line.
+      stderrSink?.(msg);
+    };
     const dto = await invoke<ProcessHandleDto>('process_spawn', {
       command: opts.command,
       args: [...opts.args],
@@ -86,6 +99,10 @@ class TauriProcessService implements ProcessService {
       conversationId: opts.metadata?.conversationId ?? null,
       runId: opts.metadata?.runId ?? null,
       onOutput: channel,
+      onStderr: stderrChannel,
+      // false ⇒ the Rust side keeps Stdio::null(); the channel above is
+      // inert. Legacy callers are therefore byte-identical to before.
+      captureStderr: stderrSink !== null,
     });
     return {
       id: dto.id,
@@ -97,6 +114,12 @@ class TauriProcessService implements ProcessService {
 
   async send(id: ProcessId, message: string): Promise<void> {
     await invoke('process_send', { id, message });
+  }
+
+  /** P08 §4.2: stdin EOF without killing the child. Idempotent on the
+   *  Rust side, so a retry is always safe. */
+  async closeInput(id: ProcessId): Promise<void> {
+    await invoke('process_close_input', { id });
   }
 
   async stop(id: ProcessId): Promise<void> {

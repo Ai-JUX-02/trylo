@@ -11,6 +11,16 @@ import { applyEvents } from './events';
 import { fixture, fixtureSummary } from './__fixtures__/trylo-complex';
 
 describe('events reducer (trylo-complex fixture)', () => {
+  it('preserves the matching result timestamp and duration for parallel tool replay', () => {
+    const out = applyEvents([], [
+      { type: 'tool_use', seq: 1, ts: 100, turn: 1, id: 'a', tool: 'mcp__trylo-browser__browser_click', input: {} },
+      { type: 'tool_use', seq: 2, ts: 120, turn: 1, id: 'b', tool: 'Read', input: {} },
+      { type: 'tool_result', seq: 3, ts: 150, turn: 1, id: 'b', tool: 'Read', output: '', ok: true, durationMs: 30 },
+      { type: 'tool_result', seq: 4, ts: 240, turn: 1, id: 'a', tool: '', output: '', ok: false, error: 'timeout', durationMs: 140 },
+    ])
+    expect(out.find(message => message.kind === 'tool' && message.toolCallId === 'a')).toMatchObject({ completedAt: 240, durationMs: 140, status: 'error' })
+    expect(out.find(message => message.kind === 'tool' && message.toolCallId === 'b')).toMatchObject({ completedAt: 150, durationMs: 30 })
+  })
   it('summary stats match the fixture shape', () => {
     expect(fixtureSummary.totalEvents).toBe(42);
     expect(fixtureSummary.turnCount).toBe(6);
@@ -131,12 +141,13 @@ describe('events reducer (trylo-complex fixture)', () => {
     expect(acc.length).toBe(full.length);
   });
 
-  it('does not flash an unreadable first-token thinking fragment', () => {
+  it('shows the first thinking fragment and grows the same message with later deltas', () => {
     const tiny = applyEvents([], [{
       type: 'thinking', seq: 1, ts: 1, turn: 1,
       summary: '先看', preview: '先看', fullLength: 2, partial: true,
     }]);
-    expect(tiny).toEqual([]);
+    expect(tiny).toHaveLength(1);
+    expect(tiny[0]).toMatchObject({kind: 'thinking', preview: '先看', partial: true});
 
     const readable = applyEvents(tiny, [{
       type: 'thinking', seq: 2, ts: 2, turn: 1,
@@ -145,7 +156,9 @@ describe('events reducer (trylo-complex fixture)', () => {
       fullLength: 24,
       partial: true,
     }]);
-    expect(readable.some((message) => message.kind === 'thinking')).toBe(true);
+    expect(readable).toHaveLength(1);
+    expect(readable[0]?.id).toBe(tiny[0]?.id);
+    expect(readable[0]).toMatchObject({preview: '先看看当前工作区有哪些文件，再决定下一步怎么修改。'});
   });
 
   it('§8.1: managed-work subagent events are NOT projected by the generic reducer', () => {

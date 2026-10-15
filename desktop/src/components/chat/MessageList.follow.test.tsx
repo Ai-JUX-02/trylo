@@ -117,3 +117,79 @@ describe('MessageList follow mode (real Virtuoso)', () => {
     expect(renderCount).toBeLessThan(baseline + 400);
   });
 });
+
+// ── Round-3 (P1-6 → P0): the run-end pin and the live-only pill ────────────
+//
+// jsdom has no layout, but it DOES persist `scrollTop` and lets a test pin
+// `scrollHeight`/`clientHeight`, so the geometry the pin reads can be faked
+// and the resulting write observed. That is what these cases do — they drive
+// the REAL component (real Virtuoso, real scroll listener), not a mock.
+//
+// The window defect they lock down: a turn had already produced a complete
+// summary on disk, yet the view sat where it was two screenshots earlier and
+// the only cue was the ↓ pill. A successful delivery must not be able to look
+// like a silent failure.
+
+/** Fake the scroller geometry jsdom refuses to compute, and return the el. */
+function fakeLayout(scroller: HTMLElement, scrollHeight: number, clientHeight: number): void {
+  Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: scrollHeight });
+  Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: clientHeight });
+}
+
+/** Move the view and fire the scroll event the component listens to. */
+function userScroll(scroller: HTMLElement, scrollTop: number): void {
+  scroller.scrollTop = scrollTop;
+  act(() => {
+    scroller.dispatchEvent(new Event('scroll'));
+  });
+}
+
+function LiveHarness(): ReactElement {
+  const [running, setRunning] = useState(true);
+  (globalThis as unknown as { __stop: () => void }).__stop = () => setRunning(false);
+  return (
+    <div style={{ height: 400 }}>
+      <MessageList
+        messages={[user('u1', '做一个总结', 100), assistant('a1', '这是完整的总结', 200)]}
+        running={running}
+        surface="code"
+      />
+    </div>
+  );
+}
+
+describe('MessageList run-end pin (Round-3 P1-6, P0)', () => {
+  it('forces the view to the bottom on the running → finished edge', () => {
+    const { container } = render(<LiveHarness />);
+    const scroller = container.querySelector('[data-virtuoso-scroller]') as HTMLElement;
+    fakeLayout(scroller, 3000, 600);
+    // Seed the geometry (the first observation can only establish a baseline),
+    // then the reader scrolls up mid-run: follow disarms, the view sits 2500px
+    // above the ending and the live-run pill appears.
+    userScroll(scroller, 2900);
+    userScroll(scroller, 400);
+    expect(container.querySelector('.message-list__scroll-btn--show')).not.toBeNull();
+
+    const stop = (globalThis as unknown as { __stop: () => void }).__stop;
+    act(() => stop());
+
+    // The turn ended. Whatever the reader did, the ending is now on screen.
+    expect(scroller.scrollTop).toBe(3000);
+    // And a finished conversation never shows the pill: if it did, the state
+    // itself would be wrong.
+    expect(container.querySelector('.message-list__scroll-btn--show')).toBeNull();
+  });
+
+  it('keeps the pill away in a finished conversation even after scrolling up', () => {
+    const { container } = render(<LiveHarness />);
+    const scroller = container.querySelector('[data-virtuoso-scroller]') as HTMLElement;
+    fakeLayout(scroller, 3000, 600);
+    const stop2 = (globalThis as unknown as { __stop: () => void }).__stop;
+    act(() => stop2());
+    // Reader scrolls up AFTER the run ended — no live tail to catch up to, so
+    // the pill is not an affordance here; a visible one would be a bug report
+    // about our own state.
+    userScroll(scroller, 200);
+    expect(container.querySelector('.message-list__scroll-btn--show')).toBeNull();
+  });
+});

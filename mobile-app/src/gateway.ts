@@ -1,4 +1,5 @@
 import { secureGet, secureRemove, secureSet } from './secureStorage';
+import { connectRemoteGateway } from './remoteConnection';
 import type { DirectAttachment } from './directChat';
 
 export type AgentStatus = 'idle' | 'thinking' | 'running' | 'waiting' | 'done' | 'failed';
@@ -20,9 +21,14 @@ export interface TimelineEvent {
   id: string;
   title: string;
   detail: string;
-  state: 'done' | 'active' | 'queued';
+  state: 'done' | 'active' | 'queued' | 'error' | 'interrupted';
   at: string;
   kind?: TimelineKind;
+  turnId?: string;
+  toolCallId?: string;
+  input?: string;
+  output?: string;
+  durationMs?: number;
 }
 
 export interface RemoteSnapshot {
@@ -40,6 +46,8 @@ export interface RemoteSnapshot {
     detail: string;
     progress: number;
     elapsed: string;
+    elapsedMs?: number | null;
+    turnId?: string;
     mode: AgentMode;
     phase: string;
     finalResponse: { text: string; at: number } | null;
@@ -59,6 +67,7 @@ export interface RemoteSnapshot {
     id: string;
     title: string;
     preview: string;
+    surface?: RemoteSurface;
     updatedAt: string | number;
     active?: boolean;
     workspace?: {
@@ -147,13 +156,17 @@ export interface FunChatEvent {
 
 export interface RemoteChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'thinking';
+  role: 'user' | 'assistant' | 'thinking' | 'tool';
   title?: string;
   text: string;
   at: string | number;
-  status?: 'streaming' | 'done';
+  status?: 'streaming' | 'done' | 'error' | 'interrupted';
   mode?: AgentMode;
   turnId?: string;
+  toolCallId?: string;
+  input?: string;
+  output?: string;
+  durationMs?: number;
   /** Files (images / text) the user attached on the phone; not persisted
    *  in history and only meaningful for the local echo of an outgoing turn. */
   attachments?: DirectAttachment[];
@@ -206,6 +219,7 @@ const demoSnapshot: RemoteSnapshot = {
     detail: '正在验证移动端界面与 Gateway 协议',
     progress: 68,
     elapsed: '02:41',
+    elapsedMs: 161000,
     mode: 'agent',
     phase: 'running',
     finalResponse: null,
@@ -254,6 +268,7 @@ const demoSnapshot: RemoteSnapshot = {
   ],
 };
 
+const demoInitialConversation = structuredClone(demoSnapshot.conversation);
 const demoFunCharacters: FunCharacter[] = [
   { id: 'gentle-sister', name: '温柔邻家姐姐', avatar: '👩‍🦰', accent: '#f1a7bd', intro: '从小陪你长大的温柔姐姐，总是耐心听你说话', opening: '今天过得怎么样？慢慢说，我在听。' },
   { id: 'cool-classmate', name: '高冷学霸同桌', avatar: '📚', accent: '#8aa8ff', intro: '嘴上嫌你笨，其实一直在偷偷帮你', opening: '又卡在哪里了？把问题发来，别浪费时间。' },
@@ -391,9 +406,15 @@ export class RemoteGatewayClient {
   }
 
   async configureFromPairing(pairing: PairingData) {
+    // Verify reachability and identity before replacing the saved computer.
+    const candidate = new RemoteGatewayClient({ ...pairing, demo: false });
+    const snapshot = await candidate.getSnapshot();
+    if (pairing.deviceId && snapshot.device.id !== pairing.deviceId) {
+      throw new Error('电脑身份与配对数据不一致，请在 Desktop 重新生成配对码。');
+    }
     const metadata: GatewayMetadata = {
       baseUrl: pairing.baseUrl,
-      deviceId: pairing.deviceId,
+      deviceId: pairing.deviceId || snapshot.device.id,
       deviceName: pairing.deviceName,
     };
     await secureSet(SECURE_STORAGE_PREFIX, SECRET_KEY, pairing.token);
@@ -411,11 +432,12 @@ export class RemoteGatewayClient {
     this.initialized = true;
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, init: RequestInit = {}, timeoutMs = 45_000): Promise<T> {
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
+    if (init.signal?.aborted) controller.abort();
     init.signal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`${normalizeBaseUrl(this.config.baseUrl)}${path}`, {
         ...init,
@@ -435,13 +457,13 @@ export class RemoteGatewayClient {
     }
   }
 
-  async getSnapshot(): Promise<RemoteSnapshot> {
+  async getSnapshot(signal?: AbortSignal): Promise<RemoteSnapshot> {
     if (this.isDemo) {
       await new Promise(resolve => window.setTimeout(resolve, 180));
       return structuredClone(demoSnapshot);
     }
     const startedAt = performance.now();
-    const snapshot = await this.request<RemoteSnapshot>('/v1/snapshot');
+    const snapshot = await this.request<RemoteSnapshot>('/v1/snapshot', { signal }, 12_000);
     this.lastLatencyMs = Math.max(1, Math.round(performance.now() - startedAt));
     snapshot.device.latencyMs = this.lastLatencyMs;
     return snapshot;
@@ -490,10 +512,27 @@ export class RemoteGatewayClient {
   }
 
   async selectSession(sessionId: string) {
-    if (this.isDemo) return { accepted: true, sessionId, switching: false };
+    if (this.isDemo) {
+      demoSnapshot.activeSessionId = sessionId;
+      demoSnapshot.conversation = sessionId === 's1' ? structuredClone(demoInitialConversation) : [];
+      demoSnapshot.agent = { ...demoSnapshot.agent, status: 'idle', phase: 'ready', timeline: [], finalResponse: null, elapsedMs: null };
+      return { accepted: true, sessionId, switching: false };
+    }
     return this.request<{ accepted: boolean; sessionId: string; switching?: boolean }>(`/v1/sessions/${encodeURIComponent(sessionId)}/select`, {
       method: 'POST',
     });
+  }
+
+  async createSession(surface: RemoteSurface) {
+    if (this.isDemo) {
+      const sessionId = `demo-${Date.now()}`;
+      demoSnapshot.sessions.unshift({ id: sessionId, title: '新对话', preview: '', updatedAt: Date.now(), surface });
+      demoSnapshot.activeSessionId = sessionId;
+      demoSnapshot.conversation = [];
+      demoSnapshot.agent = { ...demoSnapshot.agent, status: 'idle', phase: 'ready', timeline: [], finalResponse: null, elapsedMs: null };
+      return { accepted: true, sessionId };
+    }
+    return this.request<{ accepted: boolean; sessionId: string }>('/v1/sessions', { method: 'POST', body: JSON.stringify({ surface }) });
   }
 
   async getChatHistory(): Promise<RemoteChatMessage[]> {
@@ -503,16 +542,20 @@ export class RemoteGatewayClient {
     );
     const history = result.conversation || [];
     return history
-      .filter(message => message.role === 'user' || message.role === 'assistant' || message.role === 'thinking')
+      .filter(message => message.role === 'user' || message.role === 'assistant' || message.role === 'thinking' || message.role === 'tool')
       .map((message, index) => ({
         id: String(message.id || `history-${index}-${String(message.at || '')}`),
-        role: message.role as 'user' | 'assistant' | 'thinking',
+        role: message.role as RemoteChatMessage['role'],
         title: message.title ? String(message.title) : undefined,
         text: String(message.text || ''),
         at: message.at || Date.now(),
-        status: message.status === 'streaming' ? 'streaming' : 'done',
-        mode: message.mode,
+        status: (['streaming', 'done', 'error', 'interrupted'].includes(message.status || '') ? message.status : 'done') as RemoteChatMessage['status'],
         turnId: message.turnId,
+        toolCallId: message.toolCallId,
+        input: message.input,
+        output: message.output,
+        durationMs: message.durationMs,
+        mode: message.mode,
       }));
   }
 
@@ -634,83 +677,30 @@ export class RemoteGatewayClient {
     });
   }
 
-  async subscribe(
+  subscribe(
     onSnapshot: (snapshot: RemoteSnapshot) => void,
     onConnectionState: (state: GatewayConnectionState) => void,
     onChatEvent?: (event: RemoteChatEvent) => void,
     onFunEvent?: (event: FunChatEvent) => void,
-  ): Promise<() => void> {
+  ): () => void {
     if (this.isDemo) {
       onConnectionState('connected');
       return () => {};
     }
-
-    let closed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: number | null = null;
-    let reconnectAttempt = 0;
-
-    const connect = async () => {
-      if (closed) return;
-      onConnectionState(reconnectAttempt ? 'reconnecting' : 'connecting');
-      try {
-        const ticketStartedAt = performance.now();
-        const { ticket } = await this.request<{ ticket: string }>('/v1/socket-ticket', { method: 'POST' });
-        this.lastLatencyMs = Math.max(1, Math.round(performance.now() - ticketStartedAt));
-        if (closed) return;
-        const socketUrl = new URL(`${normalizeBaseUrl(this.config.baseUrl)}/v1/events`);
-        socketUrl.protocol = socketUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-        socketUrl.searchParams.set('ticket', ticket);
-        socket = new WebSocket(socketUrl.toString());
-        socket.addEventListener('open', () => {
-          reconnectAttempt = 0;
-          onConnectionState('connected');
-        });
-        socket.addEventListener('message', event => {
-          try {
-            const message = JSON.parse(String(event.data || '{}')) as {
-              snapshot?: RemoteSnapshot;
-              type?: string;
-              action?: string;
-              payload?: RemoteChatEvent;
-            };
-            if (message.snapshot) {
-              message.snapshot.device.latencyMs = this.lastLatencyMs;
-              onSnapshot(message.snapshot);
-            }
-            if (message.type === 'action_event' && message.action === 'chat' && message.payload) {
-              onChatEvent?.(message.payload);
-            }
-            if (message.type === 'action_event' && message.action === 'fun' && message.payload) {
-              onFunEvent?.(message.payload as FunChatEvent);
-            }
-          } catch {}
-        });
-        socket.addEventListener('close', () => {
-          socket = null;
-          if (closed) return;
-          onConnectionState('reconnecting');
-          reconnectAttempt += 1;
-          const delay = Math.min(15000, 800 * 2 ** Math.min(reconnectAttempt, 5));
-          reconnectTimer = window.setTimeout(() => void connect(), delay);
-        });
-        socket.addEventListener('error', () => socket?.close());
-      } catch {
-        if (closed) return;
-        onConnectionState('offline');
-        reconnectAttempt += 1;
-        const delay = Math.min(15000, 800 * 2 ** Math.min(reconnectAttempt, 5));
-        reconnectTimer = window.setTimeout(() => void connect(), delay);
-      }
-    };
-
-    void connect();
-    return () => {
-      closed = true;
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-      socket?.close(1000, 'App closed subscription');
-    };
+    return connectRemoteGateway({
+      baseUrl: this.config.baseUrl,
+      ticket: signal => this.request<{ ticket: string }>('/v1/socket-ticket', { method: 'POST', signal }, 12_000),
+      snapshot: signal => this.getSnapshot(signal),
+      onSnapshot: snapshot => {
+        snapshot.device.latencyMs = this.lastLatencyMs;
+        onSnapshot(snapshot);
+      },
+      onState: onConnectionState,
+      onChatEvent,
+      onFunEvent,
+    });
   }
+
 }
 
 export const gatewayClient = new RemoteGatewayClient();

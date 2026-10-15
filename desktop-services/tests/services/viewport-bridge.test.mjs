@@ -14,6 +14,7 @@ import {
   createViewportBridge,
   mapNormalizedPoint,
   normalizeNavigateUrl,
+  viewportMetrics,
   pickPageTarget,
 } from '../../src/tooling/viewport-bridge.mjs';
 
@@ -115,5 +116,41 @@ describe('start failure contracts', () => {
     const stopped = await bridge.stop();
     assert.equal(stopped.ok, true);
     assert.equal(bridge.state, 'stopped');
+  });
+});
+
+describe('viewportMetrics (the panel box drives the page emulation)', () => {
+  it('turns the panel size into a setDeviceMetricsOverride payload', () => {
+    const metrics = viewportMetrics(480, 640);
+    assert.equal(metrics.width, 480);
+    assert.equal(metrics.height, 640);
+    assert.equal(metrics.mobile, false);
+  });
+
+  it('is what makes the frame fill the panel: panel aspect == page aspect', () => {
+    const panel = { width: 480, height: 640 };
+    const metrics = viewportMetrics(panel.width, panel.height);
+    // A frame captured at exactly the panel size needs no letterboxing at all.
+    assert.equal(metrics.width / metrics.height, panel.width / panel.height);
+  });
+
+  it('rounds fractional layout sizes', () => {
+    const metrics = viewportMetrics(480.4, 639.6);
+    assert.equal(metrics.width, 480);
+    assert.equal(metrics.height, 640);
+  });
+
+  it('rejects sizes that would reflow the page to nothing', () => {
+    assert.equal(viewportMetrics(0, 640), null);
+    assert.equal(viewportMetrics(480, 0), null);
+    assert.equal(viewportMetrics(-5, 640), null);
+    assert.equal(viewportMetrics(undefined, undefined), null);
+    assert.equal(viewportMetrics(Number.NaN, 640), null);
+  });
+
+  it('clamps to the size CDP accepts instead of failing the call', () => {
+    const metrics = viewportMetrics(99999, 99999);
+    assert.equal(metrics.width, 16384);
+    assert.equal(metrics.height, 16384);
   });
 });

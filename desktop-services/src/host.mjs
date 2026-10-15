@@ -24,6 +24,7 @@ import { createPetChat } from './pet-chat/index.mjs';
 import { createLearningServices } from './learning/index.mjs';
 import { createRemoteServices } from './remote/index.mjs';
 import { createToolingServices } from './tooling/index.mjs';
+import { runNativeBrowserMcp } from './tooling/native-browser-mcp.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -55,6 +56,11 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
 
   const emit = {
     emit(topic, payload) {
+      if (topic === 'tooling.computerPreviewFrame' || topic === 'tooling.viewportFrame') {
+        return new Promise((resolve, reject) => {
+          stdout.write(`${encode(eventFrame(topic, payload))}\n`, error => error ? reject(error) : resolve());
+        });
+      }
       try {
         stdout.write(encode(eventFrame(topic, payload)));
         stdout.write('\n');
@@ -183,6 +189,12 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
   // tool package removes a capability, not the conversation (§4.4).
   registry
     .register('tooling', 'resolveProfile', (params) => tooling.resolveProfile(params))
+    .register('tooling', 'nativeBrowserOpen', params => tooling.nativeBrowserOpen(params))
+    .register('tooling', 'nativeBrowserState', params => tooling.nativeBrowserState(params))
+    .register('tooling', 'nativeBrowserControl', params => tooling.nativeBrowserControl(params))
+    .register('tooling', 'nativeBrowserSelect', params => tooling.nativeBrowserSelect(params))
+    .register('tooling', 'nativeBrowserCreate', params => tooling.nativeBrowserCreate(params))
+    .register('tooling', 'nativeBrowserCommandResult', params => tooling.nativeBrowserCommandResult(params))
     .register('tooling', 'health', (params) => tooling.health(params))
     .register('tooling', 'listProfiles', () => tooling.listProfiles())
     .register('tooling', 'install', (params) => tooling.install(params))
@@ -199,7 +211,10 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'viewportStart', (params) => tooling.viewportStart(params))
     .register('tooling', 'viewportNavigate', (params) => tooling.viewportNavigate(params))
     .register('tooling', 'viewportInput', (params) => tooling.viewportInput(params))
-    .register('tooling', 'viewportStop', () => tooling.viewportStop());
+    .register('tooling', 'viewportStop', () => tooling.viewportStop())
+    .register('tooling', 'computerPreviewStart', params => tooling.computerPreviewStart(params))
+    .register('tooling', 'computerPreviewAck', params => tooling.computerPreviewAck(params))
+    .register('tooling', 'computerPreviewStop', params => tooling.computerPreviewStop(params));
   function handleRequest(frame) {
     const { id, method, params } = frame;
     registry.dispatch(method, params, ctx).then((outcome) => {
@@ -297,5 +312,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
 // `file://${argv[1]}` string never matches import.meta.url on win32.
 import { pathToFileURL } from 'node:url';
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  createHost().start();
+  if (process.argv[2] === '--native-browser-mcp') {
+    await runNativeBrowserMcp({ gate: process.argv[3], entry: process.argv[4], args: process.argv.slice(5) });
+  } else { createHost().start(); }
 }

@@ -4281,6 +4281,7 @@ dependencies = [
  "portable-pty",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -4288,6 +4289,7 @@ dependencies = [
  "tauri-plugin-shell",
  "thiserror 1.0.69",
  "tokio",
+ "webview2-com",
 ]
 
 [[package]]

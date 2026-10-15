@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizePersistedToolResultContent,
   parseMcpMetaStructured,
+  parseMcpPreview,
   parseToolResultBlock,
   summarizeToolResultContent,
   toPersistedToolResultContent,
@@ -24,6 +25,16 @@ const REF: BinaryRef = {
   size: 1024,
   sha256: 'a'.repeat(64),
 };
+
+describe('native preview metadata', () => {
+  it('keeps the original BinaryRef and rejects inline or oversized payloads', () => {
+    expect(parseMcpPreview({ _meta: { 'trylo/preview': REF } })).toEqual({ type: 'image', ref: REF, alt: '原始电脑画面' });
+    expect(parseToolResultBlock({ type: 'text', text: 'TRYLO_PREVIEW_REF_V1 ' + JSON.stringify(REF) })).toEqual({ type: 'image', ref: REF, alt: '原始电脑画面' });
+    expect(normalizePersistedToolResultContent([{ type: 'text', text: 'TRYLO_PREVIEW_REF_V1 ' + JSON.stringify(REF) }])).toEqual([{ type: 'image', ref: REF, alt: '原始电脑画面' }]);
+    expect(parseMcpPreview({ _meta: { 'trylo/preview': { ...REF, data: SAMPLE_BASE64, path: '../foreign.png' } } })).toBeNull();
+    expect(parseMcpPreview({ _meta: { 'trylo/preview': { ...REF, size: 21 * 1024 * 1024 } } })).toBeNull();
+  });
+});
 
 describe('parseToolResultBlock — text', () => {
   it('parses a text block and rejects non-string text', () => {

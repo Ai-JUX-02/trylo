@@ -30,6 +30,13 @@ export interface ControlCancelFrame {
 
 export type ControlFrame = ControlPermissionFrame | ControlCancelFrame;
 
+/** Shared text-only user frame for both CLI transports. */
+export function buildUserPrompt(prompt: string): string {
+  return `${JSON.stringify({ type: 'user', session_id: '', message: {
+    role: 'user', content: [{ type: 'text', text: prompt }],
+  }, parent_tool_use_id: null })}\n`;
+}
+
 /** Classify one already-JSON-parsed stdout line. Returns null for anything
  *  that is not an answerable control frame (other control subtypes —
  *  set_model, interrupt, … — belong to the CLI's own loop, not ours). */

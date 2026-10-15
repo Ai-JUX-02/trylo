@@ -1,0 +1,22 @@
+{
+  "id": "approval/p0-1-cross-binding-facts",
+  "attack": "持有真实 grant 引用却自报不同的 action/candidate/version/scope；事实必须与 store 中一致",
+  "kind": "cross-binding-facts",
+  "issuance": {
+    "action": "acquire",
+    "candidateId": "cand-mit",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "scope": "docs",
+    "issuedAt": "2026-09-01T00:00:00Z",
+    "expiry": "2027-01-01T00:00:00Z"
+  },
+  "input": {
+    "tokenGrantId": "issued",
+    "action": "contribute",
+    "candidateId": "cand-mit",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "scope": "docs",
+    "now": "2026-09-12T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "action_mismatch" }
+}

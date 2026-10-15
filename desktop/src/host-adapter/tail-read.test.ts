@@ -32,6 +32,14 @@ function makeDeps(initial: string): {
 }
 
 describe('tailRead', () => {
+  it('resets a truncated Unicode file even when its byte size exceeds the old character cursor', async () => {
+    const line = JSON.stringify({ note: '检查点完成检查点完成检查点完成', n: 1 }) + '\n';
+    const deps: TailReadDeps = { readFile: async () => line,
+      stat: async () => ({ size: Buffer.byteLength(line, 'utf8') }) };
+    const result = await tailRead('x', line.length + 1, '{"stale":', deps);
+    expect(result.events).toEqual([{ note: '检查点完成检查点完成检查点完成', n: 1 }]);
+    expect(result.leftover).toBe('');
+  });
   it('returns no events on an empty file', async () => {
     const { deps } = makeDeps('');
     const r = await tailRead('x', 0, '', deps);

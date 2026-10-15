@@ -1,0 +1,4 @@
+{
+  "terminal": "cancelled",
+  "requiredKinds": ["user_cancel", "terminal"]
+}

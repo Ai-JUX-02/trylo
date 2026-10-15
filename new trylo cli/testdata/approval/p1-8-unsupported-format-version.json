@@ -1,0 +1,18 @@
+{
+  "id": "approval/p1-8-unsupported-format-version",
+  "attack": "未来格式版本的记录不能被旧读取器猜着迁移",
+  "kind": "corrupt-ledger-line",
+  "payload": {
+    "formatVersion": 99,
+    "kind": "grant_issued",
+    "sequence": 1,
+    "grantId": "grant:x",
+    "action": "acquire",
+    "candidateId": "cand",
+    "packageVersionId": "pkg",
+    "scope": "docs",
+    "issuedAt": "2026-09-01T00:00:00Z",
+    "expiry": "2026-12-01T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "ledger_corrupt" }
+}

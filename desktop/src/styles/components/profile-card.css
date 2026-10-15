@@ -1,0 +1,361 @@
+/* Trylo Desktop — user profile feature: the rail profile row + the
+   ProfileCard popover. Part of the user-profile feature (see
+   src/user-profile/), read alongside it. Imported by index.css
+   after left-rail.css so the row overrides below win.
+
+   v4 design (owner-approved, minimalist): pure white surface, one
+   hairline to separate it from the content area, left-aligned,
+   colour used exactly once (the Confirm button). No band, no
+   subtitle, no format hint — "remove one accessory". */
+
+.profile-card {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid #e6e5e0;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px #00000012;
+  font-family: var(--font-body);
+  color: var(--fg);
+  text-align: left;
+}
+
+.profile-card__body {
+  padding: 14px 16px;
+}
+
+.profile-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-card__head-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-card__avatar-btn {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #e6e5e0;
+  border-radius: 50%;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.profile-card__avatar-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border: 1.5px solid var(--bg);
+  border-radius: 50%;
+  background: var(--bg);
+  color: #6f6f69;
+}
+
+.profile-avatar-img {
+  display: block;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-avatar-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.profile-card__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-card__edit:hover {
+  background: #f2f1ec;
+}
+
+.profile-card__pen {
+  flex-shrink: 0;
+  color: #b4b3ac;
+  opacity: 0;
+}
+
+.profile-card__edit:hover .profile-card__pen {
+  opacity: 1;
+}
+
+.profile-card__edit-empty {
+  color: #a8a79f;
+}
+
+.profile-card__input {
+  border: 1px solid #e2e1dc;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+}
+
+.profile-card__name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.profile-card__name.profile-card__input {
+  width: 130px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.profile-card__bio-row {
+  margin-top: 10px;
+}
+
+.profile-card__bio {
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.profile-card__bio.profile-card__input {
+  width: 100%;
+  font-size: 13px;
+}
+
+.profile-card__divider {
+  margin: 12px -16px 6px;
+  border-top: 1px solid #efeeea;
+}
+
+.profile-card__menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: #3a3a36;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-card__menu-row:hover {
+  background: #f2f1ec;
+}
+
+.profile-card__menu-row svg {
+  color: #9a9a94;
+}
+
+.profile-card__notice {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.profile-card__step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.profile-card__back {
+  display: flex;
+  padding: 5px 6px;
+  border: 1px solid #e6e5e0;
+  border-radius: 6px;
+  background: var(--bg);
+  color: #9a9a94;
+  cursor: pointer;
+}
+
+.profile-card__step-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.profile-card__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-card__stage-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid #e6e5e0;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.profile-card__presets-label {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  color: #a8a79f;
+}
+
+.profile-card__presets {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.profile-card__preset {
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid #e6e5e0;
+  border-radius: 50%;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-card__preset--on {
+  border: 2px solid var(--fg);
+}
+
+.profile-card__ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #e2e1dc;
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-card__ghost:hover {
+  background: #f5f4f0;
+}
+
+/* The single point of colour in the card — Confirm. */
+.profile-card__primary {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.profile-card__primary:hover {
+  background: #41413d;
+}
+
+.profile-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* Confirm must read as THE action at a glance — the field bug was
+   two equal-weight small buttons side by side; people picked 取消
+   (or missed it entirely) and the avatar silently never saved. The
+   confirm is now wider, filled, and the only large target in the
+   step. */
+.profile-card__actions .profile-card__primary {
+  flex: 1;
+  padding: 11px 16px;
+  font-size: 14px;
+}
+
+.profile-card__actions .profile-card__ghost {
+  flex: 0 0 auto;
+  padding: 11px 18px;
+}
+
+/* Rail profile row — the toggle button + the gear that keeps
+   opening settings directly (old muscle memory preserved).
+   Overrides the single-button .left-rail__profile from
+   left-rail.css. */
+
+.left-rail__profile-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+}
+
+.left-rail__profile {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  padding: 9px 4px 3px 6px;
+  border-top: 0;
+  border-radius: 7px;
+}
+
+.left-rail__profile--open,
+.left-rail__profile--open:hover {
+  background: var(--ink-hover);
+}
+
+.left-rail__profile-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.left-rail__profile-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.left-rail__profile-gear:hover {
+  background: var(--ink-hover);
+  color: var(--fg);
+}

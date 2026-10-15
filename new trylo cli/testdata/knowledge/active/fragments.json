@@ -1,0 +1,12 @@
+[
+  {
+    "id": "active-1",
+    "type": "feedback",
+    "origin": "user-stated",
+    "scope": "user",
+    "version": 1,
+    "state": "active",
+    "body": "run the designated check before editing this repo",
+    "why": "user correction"
+  }
+]

@@ -1,0 +1,108 @@
+/* Event rows follow the approved dialogue design; only expanded output has a surface. */
+.tool--event, .fchange--event {
+  margin: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 12px;
+  overflow: visible;
+}
+.tool--event .tool__head, .fchange--event .fchange__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--fg);
+  border-radius: 4px;
+}
+.tool--event .tool__head:hover, .fchange--event .fchange__head:hover { background: var(--bg-elevated); }
+.tool--event .tool__chevron, .fchange--event .fchange__chevron { order: 10; margin-left: 0; color: var(--ink-mute); }
+.tool--event .tool__icon, .fchange--event .fchange__icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  flex: 0 0 14px;
+}
+.tool--event .tool__name, .fchange--event .fchange__verb { color: var(--fg); font-size: 12px; font-weight: 400; flex-shrink: 0; }
+.tool--event .tool__summary, .fchange--event .fchange__path {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-family: var(--font-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fchange--event .fchange__project { display: none; }
+.fchange--event .fchange__dir, .fchange--event .fchange__file { color: var(--ink-mute); font-size: 11px; font-weight: 400; }
+.tool--event .tool__time, .fchange--event .fchange__time { color: var(--ink-mute); font-size: 11px; padding: 0; background: transparent; white-space: nowrap; }
+.tool--event .tool__status, .fchange--event .fchange__status {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 0;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--ink-mute);
+}
+.tool--event.tool--error .tool__status, .fchange--event.fchange--error .fchange__status { color: var(--danger); }
+.tool--event.tool--done .tool__status > svg, .fchange--event.fchange--done .fchange__status > svg { color: var(--success); }
+.tool--event .tool__body, .fchange--event .fchange__body {
+  margin: 3px 0 11px 22px;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+  border: 0;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.75;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool--event .tool__field, .tool--event .tool__row { border: 0; }
+.tool--event .tool__row-block { display: block; font-size: 11px; }
+.tool--event .tool__row-key { padding: 0 0 6px; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.tool--event .tool__code { margin: 0; padding: 0; border: 0; background: transparent; border-radius: 0; }
+.tool--event pre { font: 11px/1.8 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; }
+.fchange--event .fchange__stats { font-size: 11px; font-weight: 400; gap: 7px; }
+.fchange--event .fchange__diff-header { display: flex; justify-content: space-between; gap: 7px; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); font: 11px/1.65 var(--font-mono); overflow-wrap: anywhere; }
+.fchange--event .fchange__diff-caption { padding-bottom: 8px; color: var(--ink-mute); font-size: 11px; }
+.fchange--event .fchange__diff { padding: 0; border: 0; border-radius: 0; font-size: 11px; background: transparent; overflow-x: visible; }
+.fchange--event .fchange__diff-line {
+  display: grid;
+  grid-template-columns: 24px 24px 15px minmax(0, 1fr);
+  gap: 5px;
+  padding: 3px 9px;
+  font: 11px/1.8 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fchange--event .fchange__line-number { text-align: right; opacity: .65; font-variant-numeric: tabular-nums; user-select: none; }
+.fchange--event .fchange__diff-gutter { width: auto; opacity: 1; }
+.fchange--event .fchange__diff-line--add { background: var(--diff-add-bg); color: var(--success); }
+.fchange--event .fchange__diff-line--del { background: var(--diff-del-bg); color: var(--danger); }
+.fchange--event .fchange__open, .fchange--event .fchange__diff-more { padding: 8px 0 0; }
+
+/* Approved process presentation: keep tool rows and their expanded bodies.
+   The short rail belongs to the header, so it never runs alongside output. */
+.code-reasoning .tool--event, .code-reasoning .fchange--event { margin: 0; }
+.code-reasoning .tool__head, .code-reasoning .fchange__head { position: relative; }
+.code-reasoning .tool__head::before, .code-reasoning .fchange__head::before { content: ''; position: absolute; left: -16px; top: 3px; bottom: 3px; width: 3px; border-radius: 2px; background: var(--process-rail); }
+.code-reasoning .tool__name, .code-reasoning .fchange__verb { color: var(--process-title); font-weight: 500; }
+.code-reasoning .tool__icon, .code-reasoning .fchange__icon, .code-reasoning .tool__summary, .code-reasoning .tool__time, .code-reasoning .tool__status, .code-reasoning .tool__chevron, .code-reasoning .fchange__time, .code-reasoning .fchange__status, .code-reasoning .fchange__path, .code-reasoning .fchange__dir, .code-reasoning .fchange__file { color: var(--process-meta); }
+.code-reasoning .tool--error .tool__status, .code-reasoning .fchange--error .fchange__status { color: var(--danger); }
+.code-reasoning .tool--done .tool__status > svg, .code-reasoning .fchange--done .fchange__status > svg { display: none; }
+.code-reasoning .tool__head:hover, .code-reasoning .fchange__head:hover { background: var(--process-hover); }
+@media (max-width: 600px) {
+  .code-reasoning .tool__head::before, .code-reasoning .fchange__head::before { left: -13px; }
+  .tool--event .tool__head, .fchange--event .fchange__head { flex-wrap: wrap; }
+  .tool--event .tool__summary, .fchange--event .fchange__path { flex-basis: 45%; }
+  .tool--event .tool__body, .fchange--event .fchange__body { margin-left: 0; padding: 10px; }
+  .tool--event .tool__time, .fchange--event .fchange__time { display: none; }
+}

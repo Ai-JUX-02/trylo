@@ -44,6 +44,7 @@
 import { memo, useEffect, useState, type ReactElement } from 'react';
 import { Rocket } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { AnswerLink } from './AnswerLink';
 import type { ChatMessage } from './types';
 import { ToolCard } from './ToolCard';
 import { FileChangeCard } from './FileChangeCard';
@@ -164,11 +165,13 @@ function formatSentBytes(n: number): string {
 const AssistantAnswer = memo(function AssistantAnswer(props: {
   readonly text: string;
   readonly onOpenArtifact?: (path: string) => void;
+  readonly artifactHost?: import('@trylo/work').HostAdapter;
 }): ReactElement {
   return (
     <div className="message__text message__text--markdown">
       <ReactMarkdown
         components={{
+          a: ({ href, children }) => <AnswerLink href={href} onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost}>{children}</AnswerLink>,
           code: ({ children }) => {
             const value = String(children).replace(/\n$/, '').trim();
             if (props.onOpenArtifact && FILE_MENTION.test(value)) {
@@ -317,9 +320,28 @@ function MessageImpl(props: MessageProps): ReactElement {
                     </div>
                   )}
                   <p className="message__text">{m.text}</p>
+                  {/* Round-3 (P0-5): a mid-run guidance stays VISIBLE but stops
+                      pretending to be a normal user turn. Excluded from the
+                      turn boundary and from turnCount (see message-identity /
+                      conversation-history), and flagged here so a person
+                      reading this transcript later can tell a guidance apart
+                      from a real turn — and see that this one never landed. */}
+                  {m.steerState !== undefined && (
+                    <span
+                      className={`message__steer-flag message__steer-flag--${m.steerState}`}
+                      data-steer-state={m.steerState}
+                      title={
+                        m.steerState === 'delivered'
+                          ? '这条引导已送入运行中的任务，不计入轮次'
+                          : '这条引导未送达，且不计入轮次'
+                      }
+                    >
+                      {m.steerState === 'delivered' ? '↑ 已送入运行中的任务' : '× 引导未送达'}
+                    </span>
+                  )}
                 </div>
               ) : (
-                <AssistantAnswer text={m.text} onOpenArtifact={props.onOpenArtifact} />
+                <AssistantAnswer text={m.text} onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost} />
               )}
             </div>
             {/* v1.16.4.1: TurnProgress lives on the
@@ -355,13 +377,15 @@ function MessageImpl(props: MessageProps): ReactElement {
       if (fileChangeTool(m.tool) !== null && computeFileChange(m.tool, m.input) !== null) {
         return (
           <FileChangeCard
+              variant="event"
             key={m.id}
             message={m}
             workspacePath={props.workspacePath}
+            onOpenFile={props.onOpenArtifact}
           />
         );
       }
-      return <ToolCard key={m.id} message={m} {...(props.onPromoteRuntimeArtifact ? { onPromoteRuntimeArtifact: props.onPromoteRuntimeArtifact } : {})} />;
+      return <ToolCard variant="event" key={m.id} message={m} {...(props.onPromoteRuntimeArtifact ? { onPromoteRuntimeArtifact: props.onPromoteRuntimeArtifact } : {})} />;
     }
     case 'thinking': {
       return (
@@ -379,7 +403,29 @@ function MessageImpl(props: MessageProps): ReactElement {
       // 2026-09-03: the "Turn N" divider was noise during a long running
       // workflow (each turn_start row). Keep the turn record in state so
       // ProcessHeader stats still count turns; render nothing.
-      return <></>;
+      //
+      // Round-3 (P1-11) EXCEPTION: a turn that delivered nothing says so.
+      // Before this, a failed 0-token turn was indistinguishable from a
+      // finished one — the composer returned to idle and the transcript
+      // simply stopped, which reads as "still working" or "all good".
+      //
+      // P1-11 follow-up: a FAILED turn with a partial answer must not look
+      // done either (three failed turns that all render nothing read as
+      // three successes). The marker wording differs —「未完成」when no
+      // answer exists,「运行失败/触顶截断」when one does — but no failed
+      // turn is ever invisible.
+      if (m.incomplete !== true && m.status !== 'error') return <></>;
+      const label = m.incomplete === true
+        ? '本轮未完成'
+        : m.stopReason === 'max_tokens' ? '本轮输出触顶截断' : '本轮运行失败';
+      return (
+        <div className="message message--turn-incomplete" role="listitem">
+          <span className="message__turn-incomplete" data-turn-incomplete="true">
+            {label}
+            {m.stopReason === 'failed' ? ' · 运行未成功结束' : ''}
+          </span>
+        </div>
+      );
     }
     case 'compaction': {
       return <CompactionCard key={m.id} message={m} />;

@@ -1,0 +1,10 @@
+{"type":"run_start","sessionId":"eph-57437841-14b4-4f65-b599-bcc8b1c21753","turnId":"turn-c2198d25-1c17-47b9-ac55-45886af3cb3a","providerId":"fixture","model":"default"}
+{"type":"tool_use","toolCallId":"fx-call-1","name":"read_file"}
+{"type":"tool_result","toolCallId":"fx-call-1","status":"succeeded","output":"","truncated":false}
+{"type":"usage","usage":{"inputTokens":16,"outputTokens":8,"totalTokens":24}}
+{"type":"message_start"}
+{"type":"message_delta","text":"The package name is "}
+{"type":"message_delta","text":"@trylo/cli."}
+{"type":"usage","usage":{"inputTokens":32,"outputTokens":12,"totalTokens":44}}
+{"type":"message_end"}
+{"type":"run_result","status":"completed","finishReason":"stop","sessionId":"eph-57437841-14b4-4f65-b599-bcc8b1c21753","turnId":"turn-c2198d25-1c17-47b9-ac55-45886af3cb3a","iterations":2,"usage":{"inputTokens":48,"outputTokens":20,"totalTokens":68},"durationMs":24,"lastMessage":"The package name is @trylo/cli."}

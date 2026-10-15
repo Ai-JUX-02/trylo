@@ -104,12 +104,7 @@ describe('windows-mcp manifest (PR-6, §6.6/§10.3)', () => {
     assert.equal(WINDOWS_MCP_ALLOWED_TOOLS.length + WINDOWS_MCP_DENIED_TOOLS.length, 21);
   });
 
-  it('the vendored fork exists and carries the fork-added/changed surface', {
-    // The fork source lives outside this repo (vendored after install);
-    // a fresh clone legitimately has none. The guard is only meaningful
-    // in a development checkout that has the fork vendored.
-    skip: !fs.existsSync(WINDOWS_MCP_FORK_SRC) && 'vendored fork source not present in this checkout',
-  }, () => {
+  it('the vendored fork exists and carries the fork-added/changed surface', () => {
     // The pinned tarball is still upstream; the fork is overlaid after
     // install. If the fork is missing or stripped, `Ocr` silently
     // disappears from tools/list and the expectedTools drift check fails

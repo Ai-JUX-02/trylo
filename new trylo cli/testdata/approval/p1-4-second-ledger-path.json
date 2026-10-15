@@ -1,0 +1,22 @@
+{
+  "id": "approval/p1-4-second-ledger-path",
+  "attack": "同一 grant 引用拿到另一条账本路径（第二个 store）去二次消费",
+  "kind": "second-store-reference",
+  "issuance": {
+    "action": "activate",
+    "candidateId": "cand-mit",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "scope": "docs",
+    "issuedAt": "2026-09-01T00:00:00Z",
+    "expiry": "2027-01-01T00:00:00Z"
+  },
+  "input": {
+    "tokenGrantId": "issued",
+    "action": "activate",
+    "candidateId": "cand-mit",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "scope": "docs",
+    "now": "2026-09-12T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "unknown_grant" }
+}

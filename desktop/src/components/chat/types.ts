@@ -7,6 +7,14 @@
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export interface StreamSource {
+  readonly blockId?: string;
+  readonly firstSeq: number;
+  readonly lastSeq: number;
+  readonly firstTs: number;
+  readonly lastTs: number;
+}
+
 export interface MessageBase {
   /** Stable id for React keys. */
   readonly id: string;
@@ -33,6 +41,8 @@ export interface MessageBase {
   // (§9.3) instead of re-deriving phase boundaries from
   // array order.
   readonly phaseId?: string;
+  /** Bounded stream receipt for replay-safe updates across recovery. */
+  readonly streamSource?: StreamSource;
 }
 
 export interface TextMessage extends MessageBase {
@@ -73,6 +83,22 @@ export interface TextMessage extends MessageBase {
   // user bubble).
   readonly turnStartedAt?: number;
   readonly finalElapsedMs?: number;
+  /**
+   * Round-3 (P0-5): set ONLY on a user bubble produced by the explicit
+   * mid-run interrupt ("立即打断"). Such a bubble is an INTERVENTION inside
+   * the turn that is already running — not a new turn:
+   *
+   *   - `lastUserIndex` skips it, so every row that follows stays stamped with
+   *     the id of the REAL user turn (that is what made the assistant rows
+   *     appear to belong to the guidance, while `latestRun.meta.turnId` still
+   *     said otherwise — two records disagreed about "which turn is this");
+   *   - `turnCount` excludes it, so a rejected guidance can no longer push
+   *     `session.turnCount` to 2 and look like a whole extra user turn.
+   *
+   * It is still visible in the transcript: the person has to be able to read
+   * what they asked for, and whether it landed.
+   */
+  readonly steerState?: 'delivered' | 'failed';
 }
 
 export interface NoticeMessage extends MessageBase {
@@ -101,6 +127,8 @@ export interface ToolMessage extends MessageBase {
   readonly outputContent?: readonly import('../../tooling/tool-result-content').ToolResultContent[];
   readonly outputError?: string;
   readonly durationMs?: number;
+  /** Timestamp of the matching tool_result, not the start of a later tool. */
+  readonly completedAt?: number;
   /** True if the user has expanded the body. (UI-local state.) */
   readonly expanded?: boolean;
   // v1.16.5+ (spec §5.2): the stable invocation id from the
@@ -156,9 +184,40 @@ export interface TurnMessage extends MessageBase {
   readonly depth: number;
   readonly agentId: string | null;
   readonly status: 'running' | 'done' | 'error';
-  /** From turn_end. */
-  readonly stopReason?: 'end_turn' | 'tool_use' | 'max_tokens';
+  /** From turn_end. `failed` is Round-3 P1-11: the v1 adapter used to encode
+   *  every non-completed run as `tool_use`, so a 0-token provider failure was
+   *  indistinguishable from a real tool turn and landed as `done`. */
+  readonly stopReason?: 'end_turn' | 'tool_use' | 'max_tokens' | 'failed';
+  /** Round-3 P1-11: set when the run ended without delivering anything —
+   *  a FAILED turn with no assistant text in it, whatever the token count
+   *  claims (tools having run, or usage being absent, does not rescue it —
+   *  tools running is not delivery, the answer is). The UI renders it as
+   *  「本轮未完成」 so a silent failure cannot pass for a finished one. */
+  readonly incomplete?: boolean;
   readonly usage?: { readonly input_tokens?: number; readonly output_tokens?: number };
+}
+
+/**
+ * Why a turn ended, derived from its stop reason.
+ *
+ * An exhaustive `Record`, not a ternary: a new stop reason must fail to
+ * compile here rather than silently inherit "fine".
+ */
+export type TurnCompletion = 'completed' | 'incomplete' | 'failed';
+
+const TURN_COMPLETION: Record<
+  NonNullable<TurnMessage['stopReason']>,
+  TurnCompletion
+> = {
+  end_turn: 'completed',
+  tool_use: 'completed',
+  max_tokens: 'failed',
+  failed: 'failed',
+};
+
+/** Classify a turn. An absent stop reason cannot claim success. */
+export function turnCompletion(stopReason: TurnMessage['stopReason']): TurnCompletion {
+  return stopReason === undefined ? 'incomplete' : TURN_COMPLETION[stopReason];
 }
 
 /**
@@ -182,6 +241,8 @@ export interface CompactionMessage extends MessageBase {
  * back the sub-agent detail drawer for managed-work.
  */
 export interface SubagentMessage extends MessageBase {
+  /** Canonical invocation identity, distinct from the unique UI row id. */
+  readonly subagentId?: string;
   readonly kind: 'subagent';
   readonly status: 'running' | 'done' | 'waiting' | 'failed' | 'cancelled';
   readonly agentType: string;

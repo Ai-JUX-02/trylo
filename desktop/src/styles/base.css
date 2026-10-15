@@ -26,7 +26,7 @@ body {
   line-height: var(--leading-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 button {
@@ -39,7 +39,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--link);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -58,8 +58,9 @@ pre {
 }
 
 a {
-  color: var(--accent);
-  text-decoration: none;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 ::selection {

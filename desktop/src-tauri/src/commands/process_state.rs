@@ -33,7 +33,15 @@ pub struct ProcessMetadata {
 }
 
 pub struct ProcessEntry {
-    pub writer: Box<dyn Write + Send>,
+    /// P08 §4.2: stdin is a TAKEABLE ownership slot.
+    ///
+    /// `None` means the writer has already been dropped, i.e. stdin is
+    /// closed (the child sees EOF). Closing stdin is *dropping the
+    /// writer*, never killing the process — stdout, the killer and the
+    /// exit attribution all stay owned by this entry, so a one-shot CLI
+    /// can be told "the prompt is complete" while it is still streaming
+    /// and while `stop` remains able to terminate its whole tree.
+    pub writer: Option<Box<dyn Write + Send>>,
     /// Terminates the child process *tree*. On Windows this is
     /// `taskkill /T /F` by pid (the audit requires "终止正确进程
     /// 树，避免仅关闭 stdin"); elsewhere a `kill -KILL`. The
@@ -46,6 +54,19 @@ pub struct ProcessEntry {
     pub pid: u32,
     /// Optional debug attribution (project / conversation / run).
     pub metadata: ProcessMetadata,
+}
+
+impl ProcessEntry {
+    /// P08 §4.2: close stdin by taking (and dropping) the writer.
+    /// Idempotent — a second call takes `None` and does nothing.
+    pub fn close_input(&mut self) {
+        if let Some(mut writer) = self.writer.take() {
+            // Flush first so a buffered prompt reaches the child; a flush
+            // failure here is not actionable (we are closing anyway).
+            let _ = writer.flush();
+            drop(writer);
+        }
+    }
 }
 
 #[derive(Default)]

@@ -1,0 +1,15 @@
+{
+  "description": "P00 §7 license-gate fixtures. expect=pass|fail|parse. Not product dependencies.",
+  "fixtures": [
+    "apache-c-compiler",
+    "apache-b-adapter",
+    "apache-a-no-adr",
+    "gpl-core",
+    "agpl-tool",
+    "unknown-unlicensed",
+    "missing-notice",
+    "spdx-and",
+    "spdx-or",
+    "spdx-with"
+  ]
+}

@@ -8,11 +8,71 @@
 // subsequent actions are now per-call approvals. No new event, no new store:
 // the badge is a pure projection of the entries the card already holds.
 
-import { render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { describe, expect, it, vi } from 'vitest'
 import { CodeReasoningTranscript } from './CodeReasoningTranscript'
 import type { ThinkingMessage, ToolMessage } from './types'
+
+describe('approved event flow disclosure', () => {
+  it('shows a reasoning-only entry in full without another disclosure', () => {
+    const raw = '原始思考保留标点和换行。\n第二段也原样保留。';
+    const view = render(<CodeReasoningTranscript entries={[
+      { ...thinking(), summary: 'An internal reasoning summary.', preview: raw, fullLength: raw.length },
+    ]} active={false} turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning__head')).toBeNull();
+    expect(view.container.querySelector('.disclosure')).toHaveClass('disclosure--open');
+    expect(view.container.querySelector('.code-reasoning__passage-text')?.textContent).toBe(raw);
+  });
+
+  it('uses the real finding after the last action and preserves the original note text', () => {
+    const raw = 'Qoder processes are gone again (count 0).';
+    const view = render(<CodeReasoningTranscript entries={[
+      thinking(),
+      tool({ tool: 'mcp__trylo-windows__Wait', input: { duration: 10 }, summary: '{"duration":10}' }),
+      { ...thinking(), id: 'finding', summary: '复查时 Qoder 进程数为 0', preview: raw, fullLength: raw.length },
+    ]} active={false} turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning__summary')).toHaveTextContent('复查时 Qoder 进程数为 0');
+    expect(view.getByText(raw)).toBeInTheDocument();
+    expect(view.container.querySelector('.code-reasoning__head')).not.toHaveTextContent('duration');
+  });
+
+  it('does not turn an earlier intention or raw parameters into a completed result', () => {
+    const entries = [
+      { ...thinking(), summary: '准备打开 Qoder 窗口', preview: '准备打开 Qoder 窗口' },
+      tool({ tool: 'mcp__trylo-windows__Wait', input: { duration: 10 }, summary: '{"duration":10}' }),
+    ];
+    const view = render(<CodeReasoningTranscript entries={entries} active={false} turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning__summary')).toHaveTextContent('等待结束');
+    expect(view.container.querySelector('.code-reasoning__head')).not.toHaveTextContent('准备打开');
+    view.rerender(<CodeReasoningTranscript entries={[entries[0]!, { ...entries[1]!, status: 'running' } as ToolMessage]} active turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning__summary')).toHaveTextContent('正在等待');
+    expect(view.container.querySelector('.code-reasoning__head')).not.toHaveTextContent('duration');
+  });
+
+  it('keeps a manually opened process visible when the task completes', () => {
+    vi.useFakeTimers();
+    try {
+      const entries = [thinking(), tool({ status: 'running' })];
+      const view = render(<CodeReasoningTranscript entries={entries} active turnId="u1" phaseId="p1" />);
+      const head = view.container.querySelector('.code-reasoning__head')!;
+      fireEvent.click(head);
+      fireEvent.click(head);
+      view.rerender(<CodeReasoningTranscript entries={[entries[0]!, tool({ status: 'done' })]} active={false} turnId="u1" phaseId="p1" />);
+      act(() => { vi.advanceTimersByTime(500); });
+      expect(head).toHaveAttribute('aria-expanded', 'true');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('shows failed output by default and never marks an interrupted phase successful', () => {
+    const view = render(<CodeReasoningTranscript entries={[tool({status:'error'})]} active={false} turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning__head')).toHaveAttribute('aria-expanded', 'true');
+    expect(view.container.querySelector('.code-reasoning')).not.toHaveClass('code-reasoning--done');
+    view.rerender(<CodeReasoningTranscript entries={[tool({status:'interrupted'})]} active={false} turnId="u1" phaseId="p1" />);
+    expect(view.container.querySelector('.code-reasoning')).not.toHaveClass('code-reasoning--done');
+    expect(view.container.querySelector('.code-reasoning__summary')).toHaveTextContent('本次执行已中断');
+  });
+});
 
 // Render probe: the transcript's children are the expensive part it must
 // stop re-rendering. Counting ToolCard renders through a mock observes the

@@ -56,6 +56,11 @@ export type PermissionMode = 'chat' | 'plan' | 'agent';
  *  defaults. The mapping itself lives in permission-policy.ts. */
 import type { PermissionLevel } from '../permission/permission-policy';
 import {
+  DEFAULT_CLI_RUNTIME_PROTOCOL,
+  parseCliRuntimeProtocol,
+  type CliRuntimeProtocol,
+} from '../runtime/cli-runtime-protocol';
+import {
   DEFAULT_LEARNING_INFERENCE,
   DEFAULT_USER_LEARNING_SETTINGS,
   type EnforcementMode,
@@ -257,6 +262,15 @@ export interface TryloSettings {
   readonly cliPath: string;
   readonly workspace: string;
   readonly userLearning: UserLearningSettings;
+  /**
+   * P08 §4.1: which CLI runtime contract Desktop spawns.
+   *
+   * Developer-only opt-in. The default is `legacy-stream-json` until
+   * release parity passes; flipping it is a release decision. Absent
+   * (never persisted / pre-P08 value) migrates to the legacy default so
+   * no existing user is silently moved to the new CLI.
+   */
+  readonly cliRuntimeProtocol: CliRuntimeProtocol;
 }
 
 const STORAGE_KEY = 'trylo:settings:v1';
@@ -288,6 +302,7 @@ const DEFAULTS: TryloSettings = {
   cliPath: 'C:/trylo-cli/cli.js',
   workspace: 'C:/work/demo-ws',
   userLearning: { ...DEFAULT_USER_LEARNING_SETTINGS },
+  cliRuntimeProtocol: DEFAULT_CLI_RUNTIME_PROTOCOL,
 };
 
 function subConnectionDefaults(): SubConnection {
@@ -488,6 +503,11 @@ function migrateSettings(value: unknown): TryloSettings | null {
     cliPath: stringValue(stored['cliPath'], DEFAULTS.cliPath),
     workspace: stringValue(stored['workspace'], DEFAULTS.workspace),
     userLearning: migrateUserLearning(stored['userLearning'], DEFAULTS.userLearning),
+    // P08 §4.1: additive migration. An unrecognised value falls back to
+    // the legacy default rather than throwing — a bad stored value must
+    // never lock the user out of their settings.
+    cliRuntimeProtocol:
+      parseCliRuntimeProtocol(stored['cliRuntimeProtocol']) ?? DEFAULT_CLI_RUNTIME_PROTOCOL,
   };
 }
 
@@ -549,12 +569,18 @@ function parseStoredSettings(raw: string | null): TryloSettings | null {
 }
 
 export function loadSettings(): TryloSettings {
-  if (typeof window === 'undefined') return DEFAULTS;
-  const primary = parseStoredSettings(window.localStorage.getItem(STORAGE_KEY));
-  if (primary) return primary;
   // A malformed/partially-written primary must not strand the user. The
   // backup is the last parseable value captured before a successful save.
-  return parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
+  const settings = typeof window === 'undefined' ? DEFAULTS
+    : parseStoredSettings(window.localStorage.getItem(STORAGE_KEY))
+      ?? parseStoredSettings(window.localStorage.getItem(STORAGE_BACKUP_KEY)) ?? DEFAULTS;
+  const preview = import.meta.env.DEV
+    ? parseCliRuntimeProtocol(import.meta.env.VITE_TRYLO_CLI_RUNTIME_PROTOCOL) : null;
+  // A local preview selects protocol and entry together. An empty v1 path
+  // delegates to the native resolver (and TRYLO_CLI_SCRIPT from the launcher),
+  // without rewriting the user's persisted runtime or connection settings.
+  return preview ? { ...settings, cliRuntimeProtocol: preview,
+    ...(preview === 'trylo-v1' ? { cliPath: '' } : {}) } : settings;
 }
 
 export function saveSettings(s: TryloSettings): void {

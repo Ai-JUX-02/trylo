@@ -46,6 +46,11 @@ function normalizeAgentMode(value) {
 }
 
 function classifyTimelineEvent(payload, title, detail) {
+  if (payload.toolCallId) {
+    if (/read|grep|glob|search|inspect/i.test(title)) return 'inspect';
+    if (/edit|write|patch/i.test(title)) return 'change';
+    if (/bash|shell|command|exec/i.test(title)) return 'command';
+  }
   const haystack = `${payload.kind || ''} ${title} ${detail}`.toLowerCase();
   if (/permission|approval|approve/.test(haystack)) return 'approval';
   if (/write|edit|patch|create|modified|file/.test(haystack)) return 'change';
@@ -82,7 +87,7 @@ function buildConversationFromSession(session) {
         title: String(event.title || '思考摘要').slice(0, 120),
         text: String(event.rawDetail || event.detail || '').trim(),
         at: Number(event.at) || Number(turn.startedAt) || Date.now(),
-        status: event.status === 'running' ? 'streaming' : 'done',
+        status: ['running', 'streaming'].includes(event.status) ? 'streaming' : 'done',
         mode: normalizeAgentMode(turn.mode),
         turnId: String(turn.id || ''),
       });
@@ -176,6 +181,8 @@ function createRemoteGateway(options = {}) {
   let startedAt = 0;
   let handlers = { ...(options.handlers || {}) };
   let progressSignalCharacters = 0;
+  let frozenElapsedMs = null;
+  const thinkingSnapshots = new Map();
   const sockets = new Set();
   const socketTickets = new Map();
   const state = {
@@ -264,13 +271,14 @@ function createRemoteGateway(options = {}) {
   };
 
   const buildSnapshot = () => {
-    const elapsedMs = startedAt && state.agent.status !== 'idle' ? Date.now() - startedAt : 0;
-    const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
+    const elapsedMs = frozenElapsedMs ?? (startedAt ? Date.now() - startedAt : null);
+    const seconds = Math.max(0, Math.floor((elapsedMs ?? 0) / 1000));
     return {
       device: { ...state.device, lastSeenAt: Date.now() },
       agent: {
         ...state.agent,
         elapsed: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
+        elapsedMs,
         timeline: state.agent.timeline.map(item => ({ ...item })),
       },
       sessions: state.sessions.map(item => ({ ...item })),
@@ -300,25 +308,41 @@ function createRemoteGateway(options = {}) {
       state.agent.technicalEventCount += 1;
       return;
     }
+    const existingIndex = payload.id ? state.agent.timeline.findIndex(item => item.id === String(payload.id)) : -1;
+    const existing = existingIndex >= 0 ? state.agent.timeline[existingIndex] : null;
     const previous = state.agent.timeline[state.agent.timeline.length - 1];
-    if (previous && previous.title === title && previous.detail === detail) return;
+    if (!payload.toolCallId && previous && previous.title === title && previous.detail === detail) return;
     const activeIndex = state.agent.timeline.findIndex(item => item.state === 'active');
-    if (activeIndex >= 0) state.agent.timeline[activeIndex].state = 'done';
+    if (!payload.toolCallId && activeIndex >= 0) state.agent.timeline[activeIndex].state = 'done';
     const kind = classifyTimelineEvent(payload, title, detail);
-    state.agent.timeline.push({
+    const item = {
+      ...existing,
       id: String(payload.id || crypto.randomUUID()),
       title: title.slice(0, 120),
       detail: detail.slice(0, 240),
       kind,
-      state: payload.phase === 'completed' ? 'done' : 'active',
+      state: payload.phase === 'failed' ? 'error' : payload.phase === 'completed' ? 'done' : 'active',
       at: new Date(Number(payload.at) || Date.now()).toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
       }),
-    });
+      ...(payload.turnId ? { turnId: String(payload.turnId) } : {}),
+      ...(payload.toolCallId ? { toolCallId: String(payload.toolCallId) } : {}),
+      ...(typeof payload.input === 'string' ? { input: payload.input.slice(0, 24000) } : {}),
+      ...(typeof payload.output === 'string' ? { output: payload.output.slice(0, 24000) } : {}),
+      ...(Number.isFinite(payload.durationMs) ? { durationMs: Math.max(0, payload.durationMs) } : {}),
+    };
+    if (existing) state.agent.timeline[existingIndex] = { ...item, at: existing.at };
+    else state.agent.timeline.push(item);
     state.agent.timeline = state.agent.timeline.slice(-TIMELINE_LIMIT);
     return kind;
+  };
+
+  const settleExecution = now => {
+    if (frozenElapsedMs === null && startedAt) frozenElapsedMs = Math.max(0, now - startedAt);
+    state.agent.timeline = state.agent.timeline.map(item => item.state === 'active' ? { ...item, state: 'interrupted' } : item);
+    state.conversation = state.conversation.map(item => item.role === 'tool' && item.status === 'streaming' ? { ...item, status: 'interrupted' } : item.role === 'thinking' && item.status === 'streaming' ? { ...item, status: 'done' } : item);
   };
 
   const setProgress = value => {
@@ -383,12 +407,18 @@ function createRemoteGateway(options = {}) {
 
     if (payload.type === 'agentState') {
       const rawState = String(payload.state || '').toLowerCase();
+      // Ready/idle is a process binding observation, not a new run outcome.
+      if (rawState === 'idle' && (['done', 'failed'].includes(state.agent.status) || state.agent.phase === 'stopped')) {
+        state.device.lastSeenAt = now;
+        broadcast({ type: 'snapshot_update', snapshot: buildSnapshot(), at: now });
+        return;
+      }
       const status = normalizeAgentStatus(rawState);
       const previousStatus = state.agent.status;
       const isStarting = status !== 'idle'
         && (previousStatus === 'idle' || previousStatus === 'done' || previousStatus === 'failed' || !startedAt);
-      if (isStarting) startedAt = now;
-      if (status === 'idle') startedAt = 0;
+      if (isStarting) { startedAt = now; frozenElapsedMs = null; }
+      if (status === 'idle' && frozenElapsedMs === null && startedAt) settleExecution(now);
       if (isStarting) {
         state.agent.timeline = [];
         state.agent.finalResponse = null;
@@ -409,19 +439,33 @@ function createRemoteGateway(options = {}) {
       updateProgressForTrace(kind);
       state.agent.mode = normalizeAgentMode(payload.mode || state.agent.mode);
       state.agent.phase = payload.kind === 'tool' ? 'running' : state.agent.phase;
+      if (payload.toolCallId) {
+        const id = String(payload.id || `${payload.turnId || 'active'}:tool:${payload.toolCallId}`);
+        const existing = state.conversation.find(item => item.id === id || (item.role === 'tool' && item.toolCallId === String(payload.toolCallId) && item.turnId === String(payload.turnId || '')));
+        state.conversation = upsertConversationItem(state.conversation, {
+          ...existing, id: existing?.id || id, role: 'tool', title: String(payload.title || 'Tool').slice(0, 120),
+          text: existing?.text || String(payload.detail || '').slice(0, 240), at: existing?.at || now,
+          turnId: String(payload.turnId || ''), toolCallId: String(payload.toolCallId),
+          status: payload.phase === 'failed' ? 'error' : payload.phase === 'completed' ? 'done' : 'streaming',
+          ...(typeof payload.input === 'string' ? { input: payload.input.slice(0, 24000) } : {}),
+          ...(typeof payload.output === 'string' ? { output: payload.output.slice(0, 24000) } : {}),
+          ...(Number.isFinite(payload.durationMs) ? { durationMs: Math.max(0, payload.durationMs) } : {}),
+        });
+      }
     } else if (payload.type === 'assistant') {
+      settleExecution(now);
       state.agent.status = 'done';
       state.agent.title = '任务已完成';
       state.agent.detail = String(payload.text || '').slice(0, 180);
       state.agent.progress = 100;
       state.agent.mode = normalizeAgentMode(payload.mode || state.agent.mode);
       state.agent.phase = 'completed';
-      state.agent.finalResponse = {
+      if (payload.text) state.agent.finalResponse = {
         text: String(payload.text || ''),
         at: now,
       };
       const turnId = String(payload.turnId || 'active');
-      state.conversation = upsertConversationItem(state.conversation, {
+      if (payload.text) state.conversation = upsertConversationItem(state.conversation, {
         id: `${turnId}:assistant-live`,
         role: 'assistant',
         text: String(payload.text || '').slice(0, 24000),
@@ -433,15 +477,17 @@ function createRemoteGateway(options = {}) {
       const activeIndex = state.agent.timeline.findIndex(item => item.state === 'active');
       if (activeIndex >= 0) state.agent.timeline[activeIndex].state = 'done';
     } else if (payload.type === 'error') {
+      settleExecution(now);
       state.agent.status = 'failed';
       state.agent.title = '任务执行失败';
       state.agent.detail = String(payload.message || 'Unknown error').slice(0, 180);
       state.agent.phase = 'failed';
     } else if (payload.type === 'stopped') {
+      settleExecution(now);
       state.agent.status = 'waiting';
       state.agent.title = '任务已停止';
       state.agent.detail = '等待新的操作';
-      state.agent.phase = 'waiting';
+      state.agent.phase = 'stopped';
     } else if (payload.type === 'modeState') {
       state.agent.mode = normalizeAgentMode(payload.mode);
     } else if (payload.type === 'projectsState') {
@@ -456,6 +502,13 @@ function createRemoteGateway(options = {}) {
     } else if (payload.type === 'turnStarted') {
       if (state.agent.status !== 'idle') advanceProgress(1, 3, 22);
       const turn = payload.turn && typeof payload.turn === 'object' ? payload.turn : {};
+      if (state.agent.turnId !== String(turn.id || 'active')) {
+        state.agent.turnId = String(turn.id || 'active');
+        state.agent.timeline = [];
+        state.agent.finalResponse = null;
+        startedAt = Number(turn.startedAt) || now;
+        frozenElapsedMs = null;
+      }
       const prompt = String(turn.prompt || '').trim();
       if (prompt) {
         state.conversation = upsertConversationItem(state.conversation, {
@@ -475,14 +528,16 @@ function createRemoteGateway(options = {}) {
         if (text) {
           const turnId = String(payload.turnId || 'active');
           const liveId = `${turnId}:thinking-live`;
+          thinkingSnapshots.set(turnId, now);
+          if (thinkingSnapshots.size > 40) thinkingSnapshots.delete(thinkingSnapshots.keys().next().value);
           const liveItem = state.conversation.find(item => item.id === liveId);
           state.conversation = upsertConversationItem(state.conversation, {
             id: liveItem ? liveId : String(event.id || `${turnId}:thinking`),
             role: 'thinking',
             title: String(event.title || '思考摘要').slice(0, 120),
-            text: liveItem?.text || text,
+            text,
             at: Number(event.at) || now,
-            status: event.status === 'running' ? 'streaming' : 'done',
+            status: ['running', 'streaming'].includes(event.status) ? 'streaming' : 'done',
             mode: state.agent.mode,
             turnId,
           });
@@ -507,9 +562,9 @@ function createRemoteGateway(options = {}) {
       }
     } else if (payload.type === 'ideStreamThinking') {
       const delta = String(payload.delta || '');
-      if (delta) {
+      const turnId = String(payload.turnId || 'active');
+      if (delta && thinkingSnapshots.get(turnId) !== now) {
         updateProgressForStream(delta.length, 'thinking');
-        const turnId = String(payload.turnId || 'active');
         const id = `${turnId}:thinking-live`;
         const existing = state.conversation.find(item => item.id === id)
           || [...state.conversation].reverse().find(item => item.role === 'thinking' && item.turnId === turnId);
@@ -528,9 +583,11 @@ function createRemoteGateway(options = {}) {
         });
       }
     } else if (payload.type === 'turnFinished') {
+      settleExecution(now);
       const turn = payload.turn && typeof payload.turn === 'object' ? payload.turn : {};
       const resultText = String(turn.resultText || '').trim();
       if (resultText) {
+        state.agent.finalResponse = { text: resultText.slice(0, 24000), at: now };
         const turnId = String(turn.id || 'active');
         state.conversation = upsertConversationItem(state.conversation, {
           id: `${turnId}:assistant-live`,
@@ -544,11 +601,21 @@ function createRemoteGateway(options = {}) {
       }
     } else if (payload.type === 'sessionState') {
       const activeSessionId = String(payload.activeSessionId || '');
+      if (activeSessionId !== state.activeSessionId) {
+        state.agent.timeline = [];
+        state.agent.status = 'idle';
+        state.agent.phase = 'ready';
+        state.agent.finalResponse = null;
+        state.agent.turnId = '';
+        startedAt = 0;
+        frozenElapsedMs = null;
+      }
       const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
       state.sessions = (Array.isArray(payload.sessions) ? payload.sessions : []).slice(0, 40).map(session => ({
         id: String(session.id || ''),
         title: String(session.title || 'New session').slice(0, 100),
         preview: String(session.preview || '').slice(0, 180),
+        ...(session.surface === 'work' || session.surface === 'code' ? { surface: session.surface } : {}),
         updatedAt: Number(session.updatedAt) || Date.now(),
         active: String(session.id || '') === activeSessionId,
         workspace: session.workspace && typeof session.workspace === 'object'
@@ -561,7 +628,18 @@ function createRemoteGateway(options = {}) {
       }));
       state.activeSessionId = activeSessionId;
       const activeSession = sessions.find(session => String(session && session.id || '') === activeSessionId) || sessions[0];
-      state.conversation = buildConversationFromSession(activeSession);
+      state.conversation = Array.isArray(payload.conversation)
+        ? payload.conversation.slice(-CONVERSATION_LIMIT).filter(item => item && ['user', 'assistant', 'thinking', 'tool'].includes(item.role)).map(item => ({
+            id: String(item.id || crypto.randomUUID()), role: item.role,
+            text: String(item.text || '').slice(0, 24000), title: String(item.title || '').slice(0, 120),
+            at: Number(item.at) || now, turnId: String(item.turnId || ''),
+            status: ['streaming', 'done', 'error', 'interrupted'].includes(item.status) ? item.status : 'done',
+            ...(item.toolCallId ? { toolCallId: String(item.toolCallId) } : {}),
+            ...(typeof item.input === 'string' ? { input: item.input.slice(0, 24000) } : {}),
+            ...(typeof item.output === 'string' ? { output: item.output.slice(0, 24000) } : {}),
+            ...(Number.isFinite(item.durationMs) ? { durationMs: Math.max(0, item.durationMs) } : {}),
+          }))
+        : buildConversationFromSession(activeSession);
     } else if (payload.type === 'funHistoryState') {
       broadcast({ type: 'action_event', action: 'fun', payload, at: now });
     } else if (payload.type === 'permissionRequestState') {
@@ -785,6 +863,12 @@ function createRemoteGateway(options = {}) {
       const projectId = decodeURIComponent(projectMatch[1]);
       await invokeHandler('project', { projectId });
       sendJson(request, response, 202, { accepted: true, projectId });
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/sessions') {
+      const body = await readJsonBody(request);
+      const result = await invokeHandler('session', { create: true, surface: body.surface === 'work' ? 'work' : 'code' });
+      sendJson(request, response, 202, { accepted: true, ...(result || {}) });
       return;
     }
     const sessionMatch = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/select$/);

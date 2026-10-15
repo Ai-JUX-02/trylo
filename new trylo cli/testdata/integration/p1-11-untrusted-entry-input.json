@@ -1,0 +1,7 @@
+{
+  "id": "integration/p1-11-untrusted-entry-input",
+  "attack": "入口声称接受 JSON/旧版本不可信输入，null/原始类型不得抛 TypeError，必须 fail closed",
+  "kind": "untrusted-entry",
+  "inputs": [null, 42, "submit_evidence", {}, { "kind": "exploding_kind" }],
+  "expect": { "ok": false }
+}

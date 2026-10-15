@@ -1,0 +1,30 @@
+{
+  "id": "integration/p0-2-self-reported-verdict",
+  "attack": "admission 直接自报 kinds=[external_verifier] 与 externalVerdict=pass（旧合同攻击面）。WP-F 之后 admission 只接受不透明 receiptRef；自报字段完全失去权力，引用在权威 registry 中不存在即拒绝。",
+  "kind": "self-reported-verdict",
+  "draft": {
+    "kind": "submit_evidence",
+    "evidenceId": "ev-1",
+    "summary": "十段验证通过"
+  },
+  "admission": {
+    "commandId": "cmd-1",
+    "issuedAt": "2026-09-13T00:00:00.000Z",
+    "proposalId": "tool_package:cand-mit",
+    "dataVersion": "validation-x",
+    "receiptRef": "receipt:attacker-made-up",
+    "scope": "docs",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "provenance": "attacker-claims-verifier",
+    "generatorId": "attacker",
+    "verifierId": "someone-else",
+    "kinds": [
+      "external_verifier"
+    ],
+    "externalVerdict": "pass"
+  },
+  "expect": {
+    "ok": false,
+    "reason": "verification_receipt_unavailable"
+  }
+}

@@ -190,7 +190,7 @@ mod tests {
             map.insert(
                 "a".to_string(),
                 crate::commands::process_state::ProcessEntry {
-                    writer: Box::new(Vec::new()),
+                    writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
                     killer: spy_killer(&SPAWN_KILLS),
                     label: "trylo-core".to_string(),
                     pid: 100,
@@ -200,7 +200,7 @@ mod tests {
             map.insert(
                 "b".to_string(),
                 crate::commands::process_state::ProcessEntry {
-                    writer: Box::new(Vec::new()),
+                    writer: Some(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>),
                     killer: spy_killer(&SPAWN_KILLS),
                     label: "cc-cli".to_string(),
                     pid: 101,
@@ -231,7 +231,7 @@ mod tests {
             map.insert(
                 "t1".to_string(),
                 crate::commands::pty::PtyProcess {
-                    writer: Box::new(Vec::new()),
+                    writer: Box::new(Vec::new()) as Box<dyn std::io::Write + Send>,
                     killer: spy_killer(&PTY_KILLS),
                 },
             );
@@ -250,7 +250,7 @@ mod tests {
             map.insert(
                 "l1".to_string(),
                 crate::commands::lsp_state::LspProcess {
-                    writer: Box::new(Vec::new()),
+                    writer: Box::new(Vec::new()) as Box<dyn std::io::Write + Send>,
                     killer: spy_killer(&LSP_KILLS),
                 },
             );

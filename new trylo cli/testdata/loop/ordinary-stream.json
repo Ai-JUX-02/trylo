@@ -1,0 +1,4 @@
+{
+  "terminal": "completed",
+  "requiredKinds": ["turn_start", "text", "usage", "terminal"]
+}

@@ -1,7 +1,7 @@
 // Trylo Desktop — ComputerWorkflowPanel
 //
-// Windows-MCP whitelist only (11 tools). WatchDog off, screenshots
-// capped 1920×1080, no persistence. Fully auto mode: medium actions
+// Windows-MCP whitelist only. WatchDog off, original screenshots live in
+// the transient tool cache. Fully auto mode: medium actions
 // show AutoNotice countdown, high-risk still blocks via ApprovalCard.
 
 import { memo, type ReactElement } from 'react'
@@ -28,7 +28,7 @@ function ComputerWorkflowPanelImpl(props: ComputerWorkflowPanelProps): ReactElem
       {props.displayInfo ? (
         <div className="auto-notice auto-notice--info">
           <span className="auto-notice__detail">
-            {props.displayInfo} · 截图上限 1920×1080 · 不持久化
+            {props.displayInfo} · 原图可在电脑悬浮窗查看
           </span>
         </div>
       ) : null}

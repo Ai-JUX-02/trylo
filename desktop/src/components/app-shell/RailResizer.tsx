@@ -10,7 +10,7 @@
 // dragging right makes it wider; for the right rail the handle
 // sits on its left edge and dragging right makes it narrower.
 
-import { useRef, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
 
 export interface RailResizerProps {
   /** Which rail this resizer controls. */
@@ -27,12 +27,21 @@ export interface RailResizerProps {
 
 export function RailResizer(props: RailResizerProps): ReactElement {
   const start = useRef<{ x: number; w: number } | null>(null);
+  const finish = useRef<() => void>();
+  useEffect(() => () => finish.current?.(), []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (e.button !== 0) return;
     e.preventDefault();
+    finish.current?.();
     start.current = { x: e.clientX, w: props.width };
+    const handle = e.currentTarget, pointerId = e.pointerId;
+    const previousCursor = document.body.style.cursor, previousSelection = document.body.style.userSelect;
+    // Keep dragging when the pointer crosses a browser/iframe surface.
+    handle.setPointerCapture?.(pointerId);
 
     const onMove = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return;
       const s = start.current;
       if (!s) return;
       const dx = ev.clientX - s.x;
@@ -40,16 +49,24 @@ export function RailResizer(props: RailResizerProps): ReactElement {
       const next = props.side === 'left' ? s.w + dx : s.w - dx;
       props.onChange(Math.round(Math.max(props.min, Math.min(props.max, next))));
     };
-    const onUp = (): void => {
+    const onUp = (ev?: PointerEvent): void => {
+      if (ev && ev.pointerId !== pointerId) return;
       start.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      window.removeEventListener('pointercancel', onUp);
+      handle.removeEventListener('lostpointercapture', onUp);
+      if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelection;
+      finish.current = undefined;
     };
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    handle.addEventListener('lostpointercapture', onUp);
+    finish.current = onUp;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };

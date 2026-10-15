@@ -1,0 +1,10 @@
+{
+  "trigger": {
+    "tool": "write_file",
+    "code": "path_outside_workspace",
+    "repeats": 2
+  },
+  "constraint": "workspace_paths_only",
+  "hint": "Keep every path inside the workspace root for the rest of this turn.",
+  "until": "end_of_this_turn"
+}

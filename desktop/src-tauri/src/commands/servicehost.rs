@@ -95,7 +95,7 @@ fn pong_timeout() -> Duration {
 /// The repo-root `dist/host.bundle.mjs` is only rebuilt by
 /// `prepare-sidecars` (packaging); between sidecar source changes it goes
 /// stale, and a dev shell that loaded it would answer every `tooling.*`
-/// request with UNKNOWN_METHOD while the sidecar itself looks healthy
+/// request with `UNKNOWN_METHOD` while the sidecar itself looks healthy
 /// (A02/A03 of the 2026-09-02 manual acceptance). Debug builds therefore
 /// always run the source directly; a release build from this repo keeps
 /// bundle-first for checkouts without a sidecar dev environment.

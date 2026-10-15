@@ -1,0 +1,219 @@
+import { useEffect, useRef, useState, type ReactElement, type MouseEvent as ReactMouseEvent } from 'react';
+import { Archive, ArchiveRestore, Briefcase, Code2, Pencil, X } from 'lucide-react';
+import type { ConversationSession } from '../../host-adapter/conversation-history';
+
+// ── SessionRow ────────────────────────────────────────────────────────
+// One row per session. Pulled out of the parent JSX so the rename-input
+// state can live in the same component that handles hover, kind icons
+// and the action cluster.
+
+interface SessionRowProps {
+  readonly session: ConversationSession;
+  readonly isActive: boolean;
+  readonly isRunning: boolean;
+  /** 'active' = team run in progress; 'past' = had a team run; null = none. */
+  readonly teamMark: 'active' | 'past' | null;
+  /** Whether this row is currently being renamed inline. */
+  readonly isEditing: boolean;
+  readonly hoverSessionId: string | null;
+  readonly setHoverSessionId: (id: string | null) => void;
+  readonly onSelect: (id: string) => void;
+  readonly onDelete: (id: string) => void;
+  readonly onArchive: (id: string) => void;
+  /** Begin editing this row's title. */
+  readonly onStartEdit: (id: string) => void;
+  /** Commit the new title. The hook host decides whether to keep it
+   *  (trim, deduplicate, etc.). */
+  readonly onCommitEdit: (id: string, title: string) => void;
+  /** Abort the edit without writing. */
+  readonly onCancelEdit: () => void;
+  /** If true, swap the row's hover-actions for an Unarchive button. */
+  readonly archived?: boolean;
+  readonly onUnarchive?: (id: string) => void;
+}
+
+export function SessionRow(props: SessionRowProps): ReactElement {
+  const { session: s } = props;
+  const hovered = props.hoverSessionId === s.id;
+  const KindIcon = s.kind === 'code' ? Code2 : Briefcase;
+
+  const onRowClick = (): void => {
+    if (props.isEditing) return;
+    props.onSelect(s.id);
+  };
+
+  const onDoubleClickTitle = (e: ReactMouseEvent): void => {
+    if (props.archived) return;
+    e.stopPropagation();
+    props.onStartEdit(s.id);
+  };
+
+  return (
+    <li
+      role="listitem"
+      className={
+        `session-row${props.isActive ? ' session-row--active' : ''}`
+        + `${props.archived ? ' session-row--archived' : ''}`
+      }
+      onClick={onRowClick}
+      onMouseEnter={() => props.setHoverSessionId(s.id)}
+      onMouseLeave={() => props.setHoverSessionId(null)}
+      title={s.title}
+      data-kind={s.kind}
+      data-archived={props.archived ? 'true' : 'false'}
+    >
+      <span
+        className={`session-row__kind session-row__kind--${s.kind}${props.archived ? ' session-row__kind--archived' : ''}`}
+        aria-hidden="true"
+      >
+        <KindIcon size={11} strokeWidth={2.2} aria-hidden="true" />
+      </span>
+      {props.isEditing ? (
+        <RenameInput
+          initialTitle={s.title}
+          onCommit={(title) => props.onCommitEdit(s.id, title)}
+          onCancel={props.onCancelEdit}
+        />
+      ) : (
+        <span
+          className="session-row__title"
+          onDoubleClick={onDoubleClickTitle}
+        >
+          {s.title}
+        </span>
+      )}
+      {props.teamMark && !props.archived && (
+        <span
+          className={`session-row__team-mark${props.teamMark === 'active' ? ' session-row__team-mark--active' : ''}`}
+          title={props.teamMark === 'active' ? '团队进行中' : '有团队历史'}
+        >
+          Team
+        </span>
+      )}
+      {props.isRunning && (
+        <span className="spinner spinner--xs" aria-hidden="true" />
+      )}
+      {/* Action cluster — hover-revealed. Archived rows expose the
+         archive-restore button only; live rows show delete + archive. */}
+      {hovered && !props.isRunning && (
+        props.archived && props.onUnarchive ? (
+          <button
+            type="button"
+            className="session-row__action session-row__action--unarchive"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onUnarchive!(s.id);
+            }}
+            title="Restore from archive"
+            aria-label={`Restore ${s.title}`}
+          >
+            <ArchiveRestore size={11} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        ) : (
+          <>
+            {!props.isEditing && !props.archived && (
+              <>
+                <button
+                  type="button"
+                  className="session-row__action session-row__action--rename"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onStartEdit(s.id);
+                  }}
+                  title="Rename"
+                  aria-label={`Rename ${s.title}`}
+                >
+                  <Pencil size={11} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="session-row__action session-row__action--archive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onArchive(s.id);
+                  }}
+                  title="Archive"
+                  aria-label={`Archive ${s.title}`}
+                >
+                  <Archive size={11} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="session-row__action session-row__action--delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.onDelete(s.id);
+                  }}
+                  title="Delete"
+                  aria-label={`Delete ${s.title}`}
+                >
+                  <X size={11} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </>
+        )
+      )}
+    </li>
+  );
+}
+
+// ── RenameInput ───────────────────────────────────────────────────────
+// A minimal inline editor. Enter saves, Escape cancels, blur saves.
+// Lives separately so its input can autofocus + own a ref without the
+// row re-rendering around it.
+interface RenameInputProps {
+  readonly initialTitle: string;
+  readonly onCommit: (title: string) => void;
+  readonly onCancel: () => void;
+}
+
+function RenameInput(props: RenameInputProps): ReactElement {
+  const [value, setValue] = useState(props.initialTitle);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    // Focus + select-all on mount so the user can overtype immediately
+    // (the common case) or paste over a substring (less common).
+    const el = inputRef.current;
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  }, []);
+
+  const commit = (): void => {
+    // Defer to the parent — it applies the trim / no-op-empty rules.
+    // If the user typed nothing different we still bounce through
+    // commit so the row returns to the same shape it had on entry.
+    props.onCommit(value);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      className="session-row__rename-input"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          props.onCancel();
+        }
+      }}
+      onBlur={commit}
+      // Hitting Enter / Escape should NOT blur-then-commit-then-cancel.
+      // preventDefault on KeyDown keeps the input focused, then the
+      // parent's onCommit/onCancel removes the input from the tree so
+      // the final blur never fires.
+      aria-label="Session title"
+      spellCheck={false}
+    />
+  );
+}

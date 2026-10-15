@@ -28,7 +28,7 @@
   align-items: center;
   gap: 4px;
   padding: 3px 6px 3px 8px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border: 0;
   border-radius: var(--radius-pill, 999px);
   background: var(--bg-elevated, rgba(0, 0, 0, 0.18));
   font-size: var(--text-xs, 12px);
@@ -91,7 +91,7 @@
   border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
   border-radius: var(--radius-sm, 4px);
   background: transparent;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.65));
+  color: var(--fg-muted);
   font-size: 14px;
   cursor: pointer;
   flex-shrink: 0;

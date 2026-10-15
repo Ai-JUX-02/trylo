@@ -1,0 +1,82 @@
+{
+  "episodes": [
+    {
+      "id": "obs-a",
+      "conversationId": "conv-1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "baselinePromptHash": "ph_baseline_role",
+      "candidatePromptHash": "ph_candidate_role",
+      "candidatePatch": [
+        {
+          "op": "replace_section",
+          "section": "role",
+          "fromHash": "role_v1",
+          "toHash": "role_v2"
+        }
+      ],
+      "versions": {
+        "model": "grok-4.6",
+        "toolset": "core-tools-1",
+        "codeBaseline": "git:4c3f565",
+        "workflow": "wf:none"
+      },
+      "baselineExternal": {
+        "kind": "test",
+        "result": "fail",
+        "ref": "a-fail",
+        "selfGenerated": false
+      },
+      "candidateExternal": {
+        "kind": "test",
+        "result": "pass",
+        "ref": "a-pass",
+        "selfGenerated": false
+      },
+      "weakSignals": [],
+      "privacy": { "rawUserTextStored": false, "allowedFields": ["id"] }
+    },
+    {
+      "id": "obs-b",
+      "conversationId": "conv-2",
+      "taskFamily": {
+        "id": "docs",
+        "intentClass": "write_release_notes",
+        "checkKind": "acceptance"
+      },
+      "baselinePromptHash": "ph_baseline_role",
+      "candidatePromptHash": "ph_candidate_role",
+      "candidatePatch": [
+        {
+          "op": "replace_section",
+          "section": "role",
+          "fromHash": "role_v1",
+          "toHash": "role_v2"
+        }
+      ],
+      "versions": {
+        "model": "grok-4.6",
+        "toolset": "core-tools-1",
+        "codeBaseline": "git:4c3f565",
+        "workflow": "wf:none"
+      },
+      "baselineExternal": {
+        "kind": "test",
+        "result": "fail",
+        "ref": "b-fail",
+        "selfGenerated": false
+      },
+      "candidateExternal": {
+        "kind": "test",
+        "result": "pass",
+        "ref": "b-pass",
+        "selfGenerated": false
+      },
+      "weakSignals": [],
+      "privacy": { "rawUserTextStored": false, "allowedFields": ["id"] }
+    }
+  ]
+}

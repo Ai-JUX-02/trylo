@@ -21,12 +21,14 @@
 // `process.exited` via `onExit`.
 
 import { hostAdapter } from './index';
+import { localProcessIdentity } from './process-identity';
 import type { FilePath } from './types';
 import type { LoopEvent } from './loop-events';
-import type { ControlFrame } from './control-protocol';
-import { tailRead } from './tail-read';
+import { buildUserPrompt, type ControlFrame } from './control-protocol';
+import { tailTryloEvents, type TailHandle } from './loop-event-tailer';
+export { tailTryloEvents, type TailEventsArgs, type TailHandle } from './loop-event-tailer';
 import { StreamTranslator } from './stream-translator';
-import { materializeToolResultEvents, hasRawToolResultEvents } from '../tooling/tool-result-store';
+import { createBinaryMaterializePump } from './binary-materialize-pump';
 import {
   codePermissionMode,
   toolsForLevel,
@@ -34,51 +36,8 @@ import {
 } from '../permission/permission-policy';
 import type { ChatMessage } from '../components/chat/types';
 import type { ProcessExitInfo } from './process-service';
-
-/**
- * PR-4 (spec §7.1): BinaryRef materialization pump. The stream translator
- * emits tool_result content with RAW base64 blocks; before any of that can
- * reach the reducer / UI / conversation history, each block is written to
- * the ephemeral tool cache and replaced by a `BinaryRef`. Batches are
- * dispatched strictly in arrival order through a per-process promise chain
- * — a slow cache write must never reorder tool_result behind later events.
- * A pump failure degrades to dispatching the batch as-is (the reducer's
- * persisted-shape guard still strips raw base64), never stalls the stream.
- */
-function createBinaryMaterializePump(): (
-  events: readonly LoopEvent[],
-  dispatch: (events: readonly LoopEvent[]) => void,
-) => void {
-  let chain: Promise<void> = Promise.resolve();
-  return (events, dispatch) => {
-    // Synchronous fast path: a batch without raw base64 blocks is
-    // dispatched inline. The event stream stays fully synchronous for
-    // pure-text results (all of today's traffic) — the async pump only
-    // engages when binary materialization is actually needed.
-    if (!hasRawToolResultEvents(events)) {
-      dispatch(events);
-      return;
-    }
-    chain = chain
-      .then(async () => {
-        dispatch(await materializeToolResultEvents(events));
-      })
-      .catch(() => {
-        dispatch(events);
-      });
-  };
-}
-
-/** Product identity layered over the reused CLI runtime. The runtime name is
- * an implementation detail and must not leak into user-facing replies. */
-export const TRYLO_CODE_IDENTITY_PROMPT = [
-  'You are Trylo Code, the coding agent built into Trylo Desktop.',
-  'In every user-facing response, identify yourself only as Trylo Code or Trylo.',
-  'Never claim that you are Claude Code, Claude, Anthropic, Cowork, or another product.',
-  'The underlying runtime and model provider are implementation details; do not mention them unless the user explicitly asks about technical diagnostics.',
-  'Follow the user and project instructions normally, and keep final answers clear, concrete, and complete.',
-  'When you create or modify files, the final answer must end with a short section titled "交付结果" that names every important created or modified file and writes each exact workspace-relative path inside backticks. Briefly state what was delivered and what validation ran. Never finish with only a generic success sentence.',
-].join(' ');
+import { desktopSystemPrompt } from './trylo-system-prompt';
+export { TRYLO_CODE_IDENTITY_PROMPT } from './trylo-system-prompt';
 
 function promptWithHistory(
   priorMessages: readonly ChatMessage[] | undefined,
@@ -220,10 +179,7 @@ function buildCliSpawnArgs(input: BuildCliSpawnArgsInput): {
     // as a single value, not a variadic.
     `--tools=${toolsForLevel(permissionLevel)}`,
   ];
-  const effectiveSystemPrompt = input.systemPrompt?.trim()
-    ? `${input.systemPrompt.trim()}\n\n${TRYLO_CODE_IDENTITY_PROMPT}`
-    : TRYLO_CODE_IDENTITY_PROMPT;
-  cliArgs.push('--append-system-prompt', effectiveSystemPrompt);
+  cliArgs.push('--append-system-prompt', desktopSystemPrompt(input.systemPrompt));
   if (input.extraCliArgs && input.extraCliArgs.length > 0) {
     cliArgs.push(...input.extraCliArgs.slice());
   }
@@ -319,7 +275,7 @@ export async function startTrylo(args: StartTryloArgs): Promise<{
   // The events file is Unique per run so background runs never
   // share a tail cursor. (The stdout path is the authoritative
   // stream; the events file is retained for the dev probe.)
-  const processId = `trylo-${Date.now().toString(36)}`;
+  const processId = localProcessIdentity('trylo');
   const eventsFile = `${args.cwd}/.trylo/loop-${processId}.jsonl` as FilePath;
 
   // With `--input-format stream-json`, the CLI reads the user
@@ -401,17 +357,8 @@ export async function startTrylo(args: StartTryloArgs): Promise<{
   // text is embedded as inert context inside that frame; separate
   // historical user frames would make stream-json run those old
   // turns again.
-  const userMessage = {
-    type: 'user',
-    session_id: '',
-    message: {
-      role: 'user',
-      content: [{ type: 'text', text: promptWithHistory(args.priorMessages, args.prompt) }],
-    },
-    parent_tool_use_id: null,
-  };
   try {
-    await hostAdapter.process.send(handle.id, JSON.stringify(userMessage) + '\n');
+    await hostAdapter.process.send(handle.id, buildUserPrompt(promptWithHistory(args.priorMessages, args.prompt)));
   } catch (error) {
     await hostAdapter.process.stop(handle.id);
     throw new Error('Failed to write the initial Trylo prompt to stdin', {
@@ -481,7 +428,7 @@ export interface StartTryloPrewarmArgs {
 export async function startTryloPrewarm(
   args: StartTryloPrewarmArgs,
 ): Promise<{ processId: string; eventsFile: FilePath }> {
-  const id = `prewarm-${Date.now().toString(36)}`;
+  const id = localProcessIdentity('prewarm');
   const eventsFile = `${args.cwd}/.trylo/loop-${id}.jsonl` as FilePath;
 
   const { command, cliArgs, env } = buildCliSpawnArgs({
@@ -583,17 +530,8 @@ export async function sendPromptToProcess(
   processId: string,
   prompt: string,
 ): Promise<boolean> {
-  const message = {
-    type: 'user',
-    session_id: '',
-    message: {
-      role: 'user',
-      content: [{ type: 'text', text: prompt }],
-    },
-    parent_tool_use_id: null,
-  };
   try {
-    await hostAdapter.process.send(processId, JSON.stringify(message) + '\n');
+    await hostAdapter.process.send(processId, buildUserPrompt(prompt));
     return true;
   } catch {
     // Stdin write failure is non-fatal — the CLI is already done
@@ -602,19 +540,6 @@ export async function sendPromptToProcess(
     console.warn('[trylo] sendPromptToProcess: failed to write to', processId);
     return false;
   }
-}
-
-export interface TailEventsArgs {
-  /** Path to the events JSONL file. */
-  readonly eventsFile: FilePath;
-  /** Called for each batch of new events. */
-  readonly onEvents: (events: readonly LoopEvent[]) => void;
-  /** Poll interval in ms (default 50). */
-  readonly intervalMs?: number;
-  /** P3-B2: only forward events matching this predicate. Used to surface the
-   *  CLI's high-fidelity loop events (which only land in the events file,
-   *  never stdout) without duplicating the stdout-derived stream. */
-  readonly filter?: (e: LoopEvent) => boolean;
 }
 
 /**
@@ -654,67 +579,4 @@ const FILE_ONLY_EVENT_TYPES: ReadonlySet<LoopEvent['type']> = new Set([
 /** Predicate for {@link tailTryloEvents}: forward only file-only events. */
 export function isFileOnlyLoopEvent(e: LoopEvent): boolean {
   return FILE_ONLY_EVENT_TYPES.has(e.type);
-}
-
-export interface TailHandle {
-  /** Stop the tailer. */
-  readonly stop: () => void;
-}
-
-/**
- * Start a JSONL tailer on the events file. Polls the file every
- * 50ms via the hostAdapter.fs.readFile. Returns a handle to stop
- * the tailer.
- */
-export function tailTryloEvents(args: TailEventsArgs): TailHandle {
-  const intervalMs = args.intervalMs ?? 50;
-  let pos = 0;
-  let leftover = '';
-  let stopped = false;
-  const translator = new StreamTranslator();
-  const pump = createBinaryMaterializePump();
-
-  const tick = async (): Promise<void> => {
-    if (stopped) return;
-    try {
-      const result = await tailRead(args.eventsFile, pos, leftover, {
-        readFile: (p) => hostAdapter.fs.readFile(p),
-        stat: async (p) => {
-          try {
-            const s = await hostAdapter.fs.statFile(p);
-            return { size: s.size };
-          } catch {
-            return null;
-          }
-        },
-      });
-      pos = result.pos;
-      leftover = result.leftover;
-      if (result.events.length > 0) {
-        const translated: LoopEvent[] = [];
-        for (const raw of result.events) {
-          const line = JSON.stringify(raw);
-          for (const ev of translator.feed(line)) {
-            translated.push(ev);
-          }
-        }
-        const filtered = args.filter ? translated.filter(args.filter) : translated;
-        if (filtered.length > 0) pump(filtered, args.onEvents);
-      }
-    } catch {
-      // File may not exist yet. Retry.
-    }
-  };
-
-  const id = window.setInterval(() => {
-    void tick();
-  }, intervalMs);
-  void tick();
-
-  return {
-    stop: () => {
-      stopped = true;
-      window.clearInterval(id);
-    },
-  };
 }

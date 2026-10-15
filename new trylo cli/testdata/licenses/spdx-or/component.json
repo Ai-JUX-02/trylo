@@ -1,0 +1,19 @@
+{
+  "id": "spdx-or",
+  "name": "or-sample",
+  "version": "1.0.0",
+  "spdx": "MIT OR GPL-3.0-only",
+  "selectedBranch": "MIT",
+  "tier": "B",
+  "role": "library",
+  "entersArtifact": true,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "pass",
+  "parse": {
+    "operator": "OR",
+    "parts": ["MIT", "GPL-3.0-only"],
+    "selected": "MIT"
+  }
+}

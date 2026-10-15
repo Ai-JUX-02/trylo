@@ -31,10 +31,13 @@ import type { LoopEvent, LoopEventType } from './loop-events';
 import { parseControlFrame, type ControlFrame } from './control-protocol';
 import {
   parseMcpMetaStructured,
+  parseMcpPreview,
   parseToolResultBlock,
   summarizeToolResultContent,
   type AnyToolResultContent,
 } from '../tooling/tool-result-content';
+import { ThinkScrubber } from './think-scrubber';
+import { thinkingSummary } from './thinking-summary';
 
 type BlockType = 'text' | 'thinking' | 'tool_use' | null;
 
@@ -49,81 +52,9 @@ interface ActiveToolUse {
 interface ActiveBlock {
   type: BlockType;
   text: string;
+  blockId?: string;
   /** Set when type === 'tool_use'. */
   tool?: ActiveToolUse;
-}
-
-/**
- * v1.15.9.g: thinking summarizer. Ported from trylo CLI's
- * `src/utils/loopEvents.ts` (the upstream has this exact
- * 3-strategy logic in `summarize()`). We were wrong to
- * think the heuristic wasn't accessible — it's not in
- * the event schema, but the algorithm is plain string
- * matching and runs on our side just fine.
- *
- * Three strategies, in order of preference:
- *
- * Strategy A — pattern match action phrases ("I'll X...",
- *   "I need to X...", "Let me X...", "Reading the file...",
- *   etc.). Highest precision, often a single short
- *   clause like "Read the file" instead of the raw
- *   "The user wants me to read the file".
- *
- * Strategy B — first sentence, capped at 80 chars.
- *
- * Strategy C — first 8 words, with ellipsis if more.
- *
- * Empty / whitespace-only text returns "" so the
- * ThinkingCard falls back to its placeholder ("..." /
- * "thinking").
- */
-const VERB_HINTS: RegExp[] = [
-  /^The\s+user\s+wants\s+me\s+to\s+(.+?)(?:\.|$|\s+to\s+|\s+and\s+|\s+then\s+)/i,
-  /^I'?ll\s+(.+?)(?:\.|$|\s+to\s+|\s+and\s+|\s+then\s+)/i,
-  /^I\s+(?:will|am\s+going\s+to|need\s+to|should|want\s+to|must|have\s+to|can)\s+(.+?)(?:\.|$|\s+to\s+|\s+and\s+|\s+then\s+)/i,
-  /^Let\s+me\s+(.+?)(?:\.|$|\s+to\s+|\s+and\s+|\s+then\s+)/i,
-  /^I'?m\s+going\s+to\s+(.+?)(?:\.|$|\s+to\s+|\s+and\s+|\s+then\s+)/i,
-  /^First,?\s+(?:I\s+)?(?:will\s+|want\s+to\s+|need\s+to\s+|should\s+)?(.+?)(?:\.|$)/i,
-  /^Next,?\s+(?:I\s+)?(?:will\s+|want\s+to\s+|need\s+to\s+|should\s+)?(.+?)(?:\.|$)/i,
-  /^Now\s+(?:I\s+)?(?:will\s+|want\s+to\s+|need\s+to\s+|should\s+)?(.+?)(?:\.|$)/i,
-  /^Then\s+(?:I\s+)?(?:will\s+|want\s+to\s+|need\s+to\s+|should\s+)?(.+?)(?:\.|$)/i,
-  /^I\s+should\s+probably\s+(.+?)(?:\.|$)/i,
-  /^Looking\s+(?:at|for|into)\s+(.+?)(?:\.|$)/i,
-  /^Checking\s+(.+?)(?:\.|$)/i,
-  /^Reading\s+(.+?)(?:\.|$)/i,
-  /^Writing\s+(.+?)(?:\.|$)/i,
-  /^Searching\s+(.+?)(?:\.|$)/i,
-  /^Running\s+(.+?)(?:\.|$)/i,
-  /^Creating\s+(.+?)(?:\.|$)/i,
-  /^Updating\s+(.+?)(?:\.|$)/i,
-  /^Deleting\s+(.+?)(?:\.|$)/i,
-];
-
-function summarize(text: string): string {
-  if (!text || !text.trim()) return '';
-  const trimmed = text.trim();
-
-  // Strategy A: pattern match the first action phrase.
-  for (const re of VERB_HINTS) {
-    const m = trimmed.match(re);
-    if (m && m[1]) {
-      let s = m[1]!.trim();
-      // Strip trailing prepositions / articles for cleaner display
-      s = s.replace(/\s+(a|an|the|to|with|for|on|at|in)$/i, '');
-      return s.charAt(0).toUpperCase() + s.slice(1);
-    }
-  }
-
-  // Strategy B: first sentence. v1.15.9.h: NO truncation
-  // cap. The user wants the full summary text, not a
-  // shortened "..." version.
-  const sentenceMatch = trimmed.match(/^[^.!?\n]+[.!?]/);
-  if (sentenceMatch) {
-    return sentenceMatch[0]!.trim();
-  }
-
-  // Strategy C: all words. NO "..." suffix.
-  return trimmed.split(/\s+/).join(' ');
 }
 
 // v1.15.7: pruned. We only pass through events that
@@ -157,6 +88,10 @@ function buildResultErrorText(parsed: Record<string, unknown>): string {
 
 export class StreamTranslator {
   private active: ActiveBlock = { type: null, text: '' };
+  /** Round-3 P2: the legacy path has the same leak as the v1 adapter — an
+   *  OpenAI-compatible endpoint can put `<think>…</think>` on the text
+   *  channel. Reset per `content_block_start`, flushed at the stop. */
+  private textScrubber = new ThinkScrubber();
   private nextSeq = 0;
   /** v1.15.7: throttle text-delta → reducer emits so
    *  the UI doesn't render 200 times a second. */
@@ -231,8 +166,10 @@ export class StreamTranslator {
       if (!ev) return [];
       const et = ev['type'];
       if (et === 'content_block_start') {
+        this.lastEmitMs = 0;
         const cb = ev['content_block'] as Record<string, unknown> | undefined;
         const bt = (cb?.['type'] as BlockType) ?? null;
+        this.textScrubber = new ThinkScrubber();
         if (bt === 'tool_use') {
           // v1.15.8: tool_use blocks carry the tool id +
           // name in content_block_start, then the input
@@ -249,7 +186,7 @@ export class StreamTranslator {
             },
           };
         } else {
-          this.active = { type: bt, text: '' };
+          this.active = { type: bt, text: '', blockId: `block-${seq}` };
         }
         return [];
       }
@@ -260,7 +197,7 @@ export class StreamTranslator {
         const isThinkingDelta = delta['type'] === 'thinking_delta';
         const isInputJsonDelta = delta['type'] === 'input_json_delta';
         if (isTextDelta) {
-          this.active.text += String(delta['text'] ?? '');
+          this.active.text += this.textScrubber.push(String(delta['text'] ?? '')).text;
         } else if (isThinkingDelta) {
           this.active.text += String(delta['thinking'] ?? '');
         } else if (isInputJsonDelta && this.active.tool) {
@@ -272,23 +209,23 @@ export class StreamTranslator {
         // applyThinking update the existing bubble in
         // place rather than creating a new one. To avoid
         // flooding the reducer (one event per token), we
-        // throttle to once every ~80ms.
+        // throttle to once every ~32ms.
         if (isTextDelta || isThinkingDelta) {
           const now = Date.now();
-          if (now - this.lastEmitMs >= 80) {
+          if (now - this.lastEmitMs >= 32) {
             this.lastEmitMs = now;
             if (isTextDelta) {
               return [{
-                type: 'text', seq, ts, turn: 1,
+                type: 'text', seq, ts, turn: 1, blockId: this.active.blockId,
                 preview: this.active.text,
                 fullText: this.active.text,
                 partial: true,
               }];
             }
             const buf = this.active.text;
-            const summary = summarize(buf);
+            const summary = thinkingSummary(buf);
             return [{
-              type: 'thinking', seq, ts, turn: 1,
+              type: 'thinking', seq, ts, turn: 1, blockId: this.active.blockId,
               summary, preview: buf, fullLength: buf.length,
               partial: true,
             }];
@@ -297,20 +234,26 @@ export class StreamTranslator {
         return [];
       }
       if (et === 'content_block_stop') {
+        const tool = this.active.tool;
+        const blockId = this.active.blockId;
+        // A text block can end mid-think; the scrubber decides whether the
+        // pending fragment is prose or a half-written tag.
+        if (this.active.type === 'text') {
+          this.active.text += this.textScrubber.flush();
+        }
         const buf = this.active.text;
         const bt = this.active.type;
-        const tool = this.active.tool;
         this.active = { type: null, text: '' };
         if (bt === 'text' && buf) {
           return [{
-            type: 'text', seq, ts, turn: 1,
+            type: 'text', seq, ts, turn: 1, blockId,
             preview: buf, fullText: buf,
           }];
         }
         if (bt === 'thinking' && buf) {
-          const summary = summarize(buf);
+          const summary = thinkingSummary(buf);
           return [{
-            type: 'thinking', seq, ts, turn: 1,
+            type: 'thinking', seq, ts, turn: 1, blockId,
             summary, preview: buf, fullLength: buf.length,
             partial: false,
           }];
@@ -413,6 +356,8 @@ export class StreamTranslator {
           }
           const structured = parseMcpMetaStructured(message['mcpMeta']);
           if (structured) blocks.push(structured);
+          const preview = parseMcpPreview(message['mcpMeta']);
+          if (preview && !blocks.some(block => block.type === 'image' && 'ref' in block && block.ref.sha256 === (preview.type === 'image' ? preview.ref.sha256 : ''))) blocks.push(preview);
           const textSummary = summarizeToolResultContent(blocks);
           const isErr = b['is_error'] === true;
           // v1.15.9.b: compute duration from the start

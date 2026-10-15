@@ -1,0 +1,12 @@
+{
+  "protocolVersion": "0.0",
+  "eventId": "evt-unknown-kind-1",
+  "sequence": 3,
+  "timestamp": "2026-09-12T00:00:00.000Z",
+  "kind": "future_vendor_blob",
+  "payload": {
+    "blob": true
+  },
+  "producerId": "cli",
+  "producerSequence": 9
+}

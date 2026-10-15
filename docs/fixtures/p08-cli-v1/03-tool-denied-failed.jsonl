@@ -1,0 +1,5 @@
+{"type":"run_start","sessionId":"eph-7d928ee7-a739-4849-b87b-b01e8f39a13b","turnId":"turn-911abf30-2851-4faa-b518-6ab118a44c2d","providerId":"fixture-write","model":"default"}
+{"type":"tool_use","toolCallId":"fx-write-1","name":"write_file"}
+{"type":"warning","code":"denied","message":""}
+{"type":"warning","code":"observation","message":""}
+{"type":"run_result","status":"failed","finishReason":"","sessionId":"eph-7d928ee7-a739-4849-b87b-b01e8f39a13b","turnId":"turn-911abf30-2851-4faa-b518-6ab118a44c2d","iterations":1,"usage":{"inputTokens":16,"outputTokens":8,"totalTokens":24},"durationMs":16,"lastMessage":""}

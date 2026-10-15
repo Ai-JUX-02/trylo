@@ -1,0 +1,2 @@
+Sure! Here is the card:
+{"trigger":{"tool":"write_file"},"constraint":"workspace_paths_only"}

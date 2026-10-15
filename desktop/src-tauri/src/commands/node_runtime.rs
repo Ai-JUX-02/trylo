@@ -189,6 +189,67 @@ pub fn resolve_workd_script_in(
     None
 }
 
+/// Relative path of the new Trylo CLI entry inside a resource dir / repo.
+///
+/// P08 §WP6: the CLI must never be resolved from a developer's absolute
+/// path. `settings.cliPath` used to default to a hard-coded
+/// `C:/trylo-cli/cli.js` — a path that exists on exactly one
+/// machine. This resolver is the replacement, and it follows the same
+/// priority order as `resolve_node` / `resolve_workd_script`.
+const CLI_SCRIPT_RELATIVE: &str = "cli/dist/cmd/trylo/main.js";
+
+/// Development-checkout location, relative to the repo root.
+const CLI_SCRIPT_DEV_RELATIVE: &str = "new trylo cli/dist/cmd/trylo/main.js";
+
+/// Resolve the new CLI entry script. Priority:
+///   1. `TRYLO_CLI_SCRIPT` (operator override / tests)
+///   2. bundled `<resource_dir>/cli/dist/cmd/trylo/main.js` ← installed app
+///   3. `<repo>/new trylo cli/dist/cmd/trylo/main.js`       ← dev checkout
+///
+/// Returns `None` when nothing exists. The caller turns that into an
+/// explicit "CLI not found" state — it must NOT fall back to a guessed
+/// absolute path, because a wrong path produces a spawn failure that
+/// looks like a CLI bug.
+pub fn resolve_cli_script(resource_dir: Option<&Path>) -> Option<RuntimeResolution> {
+    resolve_cli_script_in(resource_dir, repo_root())
+}
+
+/// Same resolution with the repo-root fallback injected (tests pass `None`
+/// to isolate packaging behaviour from wherever the checkout lives).
+pub fn resolve_cli_script_in(
+    resource_dir: Option<&Path>,
+    repo_root: Option<PathBuf>,
+) -> Option<RuntimeResolution> {
+    if let Ok(explicit) = std::env::var("TRYLO_CLI_SCRIPT") {
+        let trimmed = explicit.trim();
+        if !trimmed.is_empty() {
+            return Some(RuntimeResolution {
+                program: PathBuf::from(trimmed),
+                source: RuntimeSource::Env,
+            });
+        }
+    }
+    if let Some(dir) = resource_dir {
+        let candidate = dir.join(CLI_SCRIPT_RELATIVE);
+        if candidate.is_file() {
+            return Some(RuntimeResolution {
+                program: candidate,
+                source: RuntimeSource::Bundled,
+            });
+        }
+    }
+    if let Some(root) = repo_root {
+        let candidate = root.join(CLI_SCRIPT_DEV_RELATIVE);
+        if candidate.is_file() {
+            return Some(RuntimeResolution {
+                program: candidate,
+                source: RuntimeSource::DevCheckout,
+            });
+        }
+    }
+    None
+}
+
 /// Diag-safe description of a resolution: the source only, never the full
 /// private absolute path (audit §2.3 Task W3: no absolute private paths in
 /// renderer-facing diagnostics).
@@ -274,5 +335,55 @@ mod tests {
         assert!(text.contains("node.exe"));
         assert!(!text.contains("secret"));
         assert!(text.contains("bundled"));
+    }
+
+    // ── P08 §WP6: the new CLI's resource resolution ──────────────────
+
+    #[test]
+    fn cli_script_prefers_the_bundled_copy() {
+        let root = std::env::temp_dir().join(format!("trylo-cli-script-{}", std::process::id()));
+        let bundled = root.join("bundled");
+        let dev = root.join("dev");
+        for base in [&bundled, &dev] {
+            let target = base.join(CLI_SCRIPT_RELATIVE);
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::write(&target, "// stub\n").unwrap();
+        }
+        // The dev checkout needs the OTHER relative path.
+        let dev_target = dev.join(CLI_SCRIPT_DEV_RELATIVE);
+        std::fs::create_dir_all(dev_target.parent().unwrap()).unwrap();
+        std::fs::write(&dev_target, "// stub\n").unwrap();
+
+        let resolved = resolve_cli_script_in(Some(&bundled), Some(dev))
+            .expect("bundled copy present");
+        assert_eq!(resolved.source, RuntimeSource::Bundled);
+        assert!(resolved.program.starts_with(&bundled));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cli_script_falls_back_to_the_repo_checkout() {
+        let root = std::env::temp_dir().join(format!("trylo-cli-dev-{}", std::process::id()));
+        let dev = root.join("dev");
+        let target = dev.join(CLI_SCRIPT_DEV_RELATIVE);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(&target, "// stub\n").unwrap();
+
+        let resolved = resolve_cli_script_in(None, Some(dev)).expect("dev copy present");
+        assert_eq!(resolved.source, RuntimeSource::DevCheckout);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cli_script_reports_none_rather_than_guessing_a_path() {
+        // The whole point of WP6: never invent an absolute developer path.
+        // A guessed path turns "the CLI is not installed" into a spawn
+        // failure that reads like a CLI bug.
+        let root = std::env::temp_dir().join(format!("trylo-cli-missing-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(resolve_cli_script_in(Some(&root), Some(root.clone())).is_none());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

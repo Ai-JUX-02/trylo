@@ -1,0 +1,14 @@
+{
+  "id": "gpl-core",
+  "name": "gpl-sample",
+  "version": "1.0.0",
+  "spdx": "GPL-3.0-only",
+  "tier": "B",
+  "role": "library",
+  "entersArtifact": true,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "fail",
+  "failReason": "GPL copyleft"
+}

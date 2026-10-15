@@ -51,6 +51,15 @@ export interface ProcessService {
    * Spawn a sidecar process. Returns once the Rust side has the
    * child handle. The `onOutput` callback is invoked for every
    * line of stdout; `onExit` fires once when the child exits.
+   *
+   * P08 §4.2: `onStderr` is a SEPARATE channel. It exists because the
+   * new CLI reports pre-run failures (bad session id, missing
+   * credential) on stderr with an exit code and NOTHING on stdout —
+   * a caller that only reads stdout would wait forever for a terminal
+   * event. stderr must never be merged into the stdout JSONL stream.
+   *
+   * It is opt-in: the legacy CC CLI floods stderr with debug logging,
+   * so callers that don't need it get `Stdio::null()` on the Rust side.
    */
   spawn(opts: {
     command: string;
@@ -62,11 +71,26 @@ export interface ProcessService {
     /** Debug attribution, surfaced by `list()` for diagnostics. */
     metadata?: Readonly<{ projectKey?: string; conversationId?: string; runId?: string }>;
     onOutput: (line: string) => void;
+    /** P08 §4.2: stderr lines, on their own channel. Omit to discard. */
+    onStderr?: (line: string) => void;
     onExit?: (info: ProcessExitInfo) => void;
   }): Promise<ProcessHandle>;
 
   /** Write a single line of text to the process's stdin. */
   send(id: ProcessId, message: string): Promise<void>;
+
+  /**
+   * P08 §4.2: close the process's STDIN and nothing else.
+   *
+   * This is how a one-shot CLI is told "the prompt is complete": the
+   * new CLI's `run` does not start executing until stdin reaches EOF.
+   * It is NOT a stop — stdout keeps streaming, the cancellation handle
+   * stays armed, and the child's exit is still attributed to this id.
+   *
+   * Idempotent: closing an already-closed stdin succeeds. A later
+   * `send` on the same id fails with a broken-pipe error.
+   */
+  closeInput(id: ProcessId): Promise<void>;
 
   /** Stop the process. Idempotent. */
   stop(id: ProcessId): Promise<void>;

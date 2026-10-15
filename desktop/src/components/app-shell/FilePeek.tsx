@@ -18,6 +18,7 @@
 
 import type { CSSProperties, ReactElement } from 'react';
 import { useEffect } from 'react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
 import type { FilePath } from '../../host-adapter/types';
 import { PreviewRouter, previewKindFor, previewKindLabel } from '../preview';
 
@@ -33,7 +34,6 @@ export interface FilePeekProps {
 
 export function FilePeek(props: FilePeekProps): ReactElement {
   const kind = previewKindFor(props.path);
-  const lastModified = 'just now'; // Phase 3: real mtime via hostAdapter.fs.statFile
   const expanded = props.expanded === true;
   const style: CSSProperties | undefined =
     !expanded && props.width !== undefined ? { width: props.width } : undefined;
@@ -57,7 +57,7 @@ export function FilePeek(props: FilePeekProps): ReactElement {
     >
       <header className="file-peek__header">
         <div className="file-peek__path" title={props.path}>
-          <span className="file-peek__path-text">{props.path}</span>
+          <span className="file-peek__path-text">{props.path.replace(/\\/g, '/').split('/').at(-1)}</span>
         </div>
         {props.onToggleExpanded && (
           <button
@@ -68,7 +68,7 @@ export function FilePeek(props: FilePeekProps): ReactElement {
             aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen preview'}
             aria-pressed={expanded}
           >
-            {expanded ? '⤡' : '⤢'}
+            {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </button>
         )}
         <button
@@ -78,13 +78,11 @@ export function FilePeek(props: FilePeekProps): ReactElement {
           title="Close"
           aria-label="Close file preview"
         >
-          ×
+          <X size={15} />
         </button>
       </header>
       <div className="file-peek__meta">
         <span>{previewKindLabel(kind)}</span>
-        <span className="file-peek__sep">·</span>
-        <span>{lastModified}</span>
       </div>
       <PreviewRouter path={props.path} content={props.content} />
     </aside>

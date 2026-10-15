@@ -1,14 +1,22 @@
 Trylo
 Copyright 2026 the Trylo authors
 
-This product includes software developed as part of the Trylo project.
+This source snapshot includes the Trylo project code and its new TypeScript CLI.
+First-party project code is distributed under the repository's Apache-2.0 LICENSE.
 
-Third-party components bundled or referenced by this repository:
+Third-party components retain their own licenses, copyright notices and terms.
+In particular, the CLI sandbox adapter carries @anthropic-ai/sandbox-runtime
+0.0.73 provenance and LICENSE under:
+new trylo cli/src/internal/adapters/sandbox/vendor/sandbox-runtime/
 
-* ripgrep (runtime tooling) — MIT License — Copyright (c) 2015 Andrew Gallant
-  (referenced components are distributed with the separately installed agent
-  runtime; see docs/ for details)
+Existing vendored adapters and sidecars retain their source-level notices and
+provenance. Referenced build inputs and optional external runtimes are not
+automatically included by this source snapshot. The old proprietary CLI
+distribution is not shipped here.
 
-The Trylo desktop client is designed to drive a locally installed agent
-runtime (Claude Code). That runtime is not part of this repository and is
-governed by its own license and terms of use.
+This file does not replace the artifact-level dependency inventory required for
+a binary release. Binary packaging and its final notices remain under review.
+
+Previously acknowledged runtime tooling:
+* ripgrep — MIT License — Copyright (c) 2015 Andrew Gallant.
+  No new ripgrep binary is added by this source checkpoint.

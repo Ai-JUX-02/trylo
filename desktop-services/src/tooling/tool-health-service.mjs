@@ -30,7 +30,30 @@ import { probePlaywrightChromium } from './tool-browser-condition.mjs';
 import { probeAppCondition } from './tool-app-condition.mjs';
 
 const VERSION_PROBE_TIMEOUT_MS = 2000;
+// Node MCP startup competes with desktop builds on Windows; a real browser
+// CLI took 1756 ms, leaving little margin in the former two-second bound.
+const NODE_VERSION_PROBE_TIMEOUT_MS = 6000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+// The python-metadata probe carries its own bound and its own retry because
+// its cost profile is NOT the console-script's. Measured on the owner's
+// machine (2026-10-03, windows-mcp 0.8.5 under a local override): five
+// consecutive probes of
+//   <venv>\Scripts\python.exe -c "import importlib.metadata ..."
+// returned null at 2002ms, null at 2008ms, '0.8.5' at 1869ms, '0.8.5' at
+// 1772ms and null at 2015ms — the real cost straddles a 2s bound, so the
+// same unchanged install flipped between 可用 and 未安装 run to run (the
+// user-visible symptom: the "缺少可选工具" notice listed Windows-MCP on some
+// turns and not on others, inside one conversation).
+//
+// The bound must therefore clear the measured cost with headroom. This does
+// NOT relax the assertion: the probe still has to prove the venv exists, the
+// interpreter runs, and the distribution reports a version — a slow or
+// broken interpreter still degrades to `not-installed`. Only the
+// stopwatch was wrong.
+const PYTHON_METADATA_PROBE_TIMEOUT_MS = 6000;
+/** Delay before the one bounded probe retry (same as `probeVersion`, PR-7). */
+const PROBE_RETRY_DELAY_MS = 400;
 
 /**
  * PR-6 (§8.2): read the pinned distribution's version from its OWN venv.
@@ -39,7 +62,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
  * it proves the venv exists, the interpreter runs, and the distribution the
  * lock materialised is the one the manifest pins. Never rejects.
  */
-export function defaultProbePythonMetadata(entryExecutable, expectedName, timeoutMs = VERSION_PROBE_TIMEOUT_MS) {
+export function defaultProbePythonMetadata(entryExecutable, expectedName, timeoutMs = PYTHON_METADATA_PROBE_TIMEOUT_MS) {
   return new Promise((resolve) => {
     // entryExecutable = <versionDir>/.venv/Scripts/windows-mcp.exe → the
     // interpreter sits in the same Scripts directory.
@@ -143,7 +166,30 @@ function probeVersionOnce(executable, timeoutMs, runner) {  return new Promise((
   });
 }
 
-export function createToolHealthService({ packages, catalog, now = () => Date.now(), probe = probeVersion, probePythonMetadata = defaultProbePythonMetadata, probeCondition = probePlaywrightChromium, probeApp = probeAppCondition } = {}) {
+/**
+ * Run one probe with a SINGLE bounded retry after a miss.
+ *
+ * `probeVersion` carries this retry inside itself (PR-7: a real-time AV scan
+ * can transiently hold a freshly-placed binary). The python-metadata probe
+ * needs the same treatment, and putting it HERE — in the caller, around
+ * whatever probe was injected — keeps the two honest in the same way and
+ * keeps it TESTABLE: a scripted probe sees the retry too, so the rescue and
+ * the non-pardon are both observable.
+ *
+ * A miss is `null` only. Two misses stay `null` — the retry is never a
+ * pardon for an interpreter that cannot actually answer.
+ */
+export function probeWithOneRetry(probe, retryDelayMs = PROBE_RETRY_DELAY_MS) {
+  return Promise.resolve()
+    .then(probe)
+    .then((first) => {
+      if (first !== null) return first;
+      return new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+        .then(probe);
+    });
+}
+
+export function createToolHealthService({ packages, catalog, now = () => Date.now(), probe = probeVersion, probePythonMetadata = defaultProbePythonMetadata, probeCondition = probePlaywrightChromium, probeApp = probeAppCondition, browserBackend = 'screencast' } = {}) {
   const cache = new Map();
 
   function cacheKey(manifest) {
@@ -195,7 +241,8 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
     }
 
     if (manifest.healthCheck === 'version-handshake') {
-      const reported = await probe(installed.executable, VERSION_PROBE_TIMEOUT_MS, manifest.artifact?.runner ?? null);
+      const runner = manifest.artifact?.runner ?? null;
+      const reported = await probe(installed.executable, runner === 'node' ? NODE_VERSION_PROBE_TIMEOUT_MS : VERSION_PROBE_TIMEOUT_MS, runner);
       record.reportedVersion = reported;
       // A LOCAL OVERRIDE is the user's own explicitly-provided build (dev
       // build / self-compiled transport). Its version legitimately differs
@@ -232,7 +279,7 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
       // as a pass for ANY build. The honest probe asks the installed
       // distribution metadata inside the package's own venv interpreter.
       const pythonPackage = manifest.artifact?.pythonPackage ?? manifest.id;
-      const reported = await probePythonMetadata(installed.executable, pythonPackage);
+      const reported = await probeWithOneRetry(() => probePythonMetadata(installed.executable, pythonPackage));
       record.reportedVersion = reported;
       if (reported === null) {
         record.state = 'not-installed';
@@ -285,7 +332,7 @@ export function createToolHealthService({ packages, catalog, now = () => Date.no
     // itself (playwright → the Chromium body in the ms-playwright cache).
     // The condition failing degrades the record even when the package digest
     // and version are perfect — 「包已装但浏览器本体缺失时不能显示完全可用」.
-    if (record.available && manifest.browserCondition?.kind === 'playwright-chromium') {
+    if (record.available && manifest.browserCondition?.kind === 'playwright-chromium' && browserBackend !== 'native') {
       const condition = probeCondition();
       record.condition = {
         ok: condition.ok,

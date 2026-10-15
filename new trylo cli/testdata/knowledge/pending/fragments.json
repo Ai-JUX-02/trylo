@@ -1,0 +1,11 @@
+[
+  {
+    "id": "pending-1",
+    "type": "method",
+    "origin": "inferred",
+    "scope": "candidate",
+    "version": 1,
+    "state": "pending",
+    "body": "retry the provider by switching models"
+  }
+]

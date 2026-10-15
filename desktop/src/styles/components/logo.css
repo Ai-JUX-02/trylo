@@ -1,9 +1,14 @@
-/* Trylo Desktop — Logo (Trilo mark).
+/* Trylo Desktop — Logo (Trylo mark).
  *
- * The mark's cream gradient is set on the SVG via inline
- * stopColor in the React component (so the gradient can be
- * themed by tokens). The wrapper around the SVG is just
- * for sizing — see Logo.tsx.
+ * The mark's colours are set on the SVG via inline stopColor in
+ * the React component (so the gradient can be themed by tokens).
+ * The wrapper around the SVG is just for sizing — see Logo.tsx.
+ *
+ * 2026-10-14: `withBg` (the left-rail brand) wraps the mark in a
+ * #111318 chip whose SVG canvas is intentionally LARGER than the
+ * chip — 75% path-box coverage plus round caps. A flex container
+ * would shrink that canvas back to the chip size and silently
+ * flatten the mark; the rule below is the guard.
  */
 
 .logo-wrap {
@@ -12,4 +17,8 @@
   justify-content: center;
   flex: 0 0 auto;
   line-height: 0;
+}
+
+.trilo-mark--chip > svg {
+  flex-shrink: 0;
 }

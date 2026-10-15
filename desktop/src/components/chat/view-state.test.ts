@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveConversationRunViewState,
+  viewStateLabel,
   viewStateShowsFooterDots,
   viewStateShowsHeaderPulse,
   viewStateTone,
@@ -190,5 +191,21 @@ describe('view-state motion helpers (spec §7.2)', () => {
     expect(viewStateTone('thinking')).toBe('running');
     expect(viewStateTone('failed')).toBe('error');
     expect(viewStateTone('cancelled')).toBe('error');
+  });
+
+  it('labels every state exactly once (Round-3 P2: one wording, all surfaces)', () => {
+    // ProcessHeader and StreamingIndicator both render this map. A fourth
+    // phrasing invented in either component breaks this contract first.
+    expect(viewStateLabel('idle')).toBe('已就绪');
+    expect(viewStateLabel('preparing')).toBe('正在准备…');
+    expect(viewStateLabel('waiting_first_output')).toBe('正在准备…');
+    expect(viewStateLabel('thinking')).toBe('思考中…');
+    expect(viewStateLabel('tool_running')).toBe('正在执行…');
+    expect(viewStateLabel('finalizing')).toBe('正在收尾…');
+    expect(viewStateLabel('awaiting_input')).toBe('等待你的回复');
+    expect(viewStateLabel('reconnecting')).toBe('正在重新连接…');
+    expect(viewStateLabel('completed')).toBe('已完成');
+    expect(viewStateLabel('failed')).toBe('失败');
+    expect(viewStateLabel('cancelled')).toBe('已停止');
   });
 });

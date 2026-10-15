@@ -90,6 +90,19 @@ vi.mock('./index', async () => {
 import { sendPromptToProcess, startTrylo, startTryloPrewarm } from './trylo-runner';
 import type { FilePath } from './types';
 
+it('parallel spawns and prewarms never share an events file when the clock is fixed', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(12345);
+  try {
+    const args = { cwd: 'D:/work' as FilePath, prompt: 'hello', cliPath: 'cli.js',
+      apiKey: '', apiHost: '', apiModel: '', onEvents: () => {} };
+    const starts = await Promise.all([startTrylo(args), startTrylo(args),
+      startTryloPrewarm(args), startTryloPrewarm(args)]);
+    expect(new Set(starts.map(start => start.eventsFile)).size).toBe(4);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 beforeEach(() => {
   spawnCalls.length = 0;
   sendCalls.length = 0;

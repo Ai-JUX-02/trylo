@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Message } from './Message';
+import type { TurnMessage } from './types';
+
+/** Round-3 (P1-11): a turn row, defaulted to a healthy finished turn. */
+function turnMessage(over: Partial<TurnMessage> = {}): TurnMessage {
+  return { id: 'turn-1', kind: 'turn', role: 'assistant', createdAt: 10,
+    turn: 1, depth: 0, agentId: null, status: 'done', stopReason: 'end_turn', ...over };
+}
 
 describe('Message assistant delivery', () => {
   it('renders the image a user sent inside the sent bubble', () => {
@@ -65,5 +72,73 @@ describe('Message assistant delivery', () => {
     );
     expect(screen.getByText('核心路径是否仍要最终验证？')).toBeTruthy();
     expect(screen.getByText('想确认一下')).toBeTruthy();
+  });
+});
+
+describe('Message steer rows (Round-3 P0-5)', () => {
+  // A guidance is visible but must never read as a normal user turn: it is
+  // excluded from the turn boundary and from turnCount, so the flag on the
+  // row is the ONLY thing telling the reader what this bubble is.
+  it('marks a guidance that never landed', () => {
+    const { container } = render(
+      <Message
+        message={{
+          id: 'u-steer',
+          kind: 'text',
+          role: 'user',
+          createdAt: 2,
+          text: '停止重复运行同一条命令',
+          steerState: 'failed',
+        }}
+      />,
+    );
+    expect(screen.getByText('停止重复运行同一条命令')).toBeTruthy();
+    const flag = container.querySelector('[data-steer-state="failed"]');
+    expect(flag).not.toBeNull();
+    expect(flag?.textContent).toContain('引导未送达');
+  });
+
+  it('marks a guidance that reached the running task', () => {
+    const { container } = render(
+      <Message
+        message={{
+          id: 'u-steer-2',
+          kind: 'text',
+          role: 'user',
+          createdAt: 2,
+          text: '改用更简单的方法',
+          steerState: 'delivered',
+        }}
+      />,
+    );
+    expect(screen.getByText('改用更简单的方法')).toBeTruthy();
+    expect(container.querySelector('[data-steer-state="delivered"]')?.textContent).toContain(
+      '已送入运行中的任务',
+    );
+  });
+
+  it('keeps a real user bubble unflagged', () => {
+    const { container } = render(
+      <Message
+        message={{ id: 'u-real', kind: 'text', role: 'user', createdAt: 1, text: '普通提问' }}
+      />,
+    );
+    expect(container.querySelector('[data-steer-state]')).toBeNull();
+  });
+});
+
+// The UI half of P1-11: the turn row is the only place this can surface, and
+// it rendered NOTHING before (Message.tsx `case 'turn'` returned `<></>`).
+describe('P1-11 — the transcript shows 本轮未完成', () => {
+  it('renders nothing for a turn that delivered something', () => {
+    render(<Message message={turnMessage({ stopReason: 'end_turn', status: 'done' })} />);
+    expect(screen.queryByText(/本轮未完成/)).toBeNull();
+  });
+
+  it('renders 本轮未完成 for a turn that delivered nothing', () => {
+    render(<Message message={turnMessage({ stopReason: 'failed', status: 'error', incomplete: true })} />);
+    const row = screen.getByText(/本轮未完成/);
+    expect(row).toBeTruthy();
+    expect(screen.getByText(/运行未成功结束/)).toBeTruthy();
   });
 });

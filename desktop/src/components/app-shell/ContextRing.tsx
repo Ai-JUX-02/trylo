@@ -15,10 +15,6 @@
 //   - The button briefly shows a "✓" confirmation
 //     when clicked (1.5s), so the user has clear
 //     visual feedback that the action was registered.
-//   - The tooltip (title attribute) explains what
-//     happens: "Click to compact the current context.
-//     Writes /compact to the CLI. Requires tauri:dev
-//     to actually run."
 //   - The label next to the ring still shows the
 //     current token count, e.g. "47k".
 //
@@ -26,10 +22,28 @@
 // (e.g. "47k · 24%"). The user can read it directly
 // without opening a popover.
 //
-// Trade-off vs v1.16.2.5: no fancy popover, no per-
-// model display, no "No live CLI" badge. We accept
-// the trade-off because the popover kept breaking
-// and the user just wants the feature to work.
+// v1.17.4: the tooltip became a custom pill. It used
+// to be the button's `title` attribute: unstylable
+// (system font, OS timing, no placement control), its
+// copy leaked dev instructions into the UI ("Run
+// `pnpm tauri:dev` to actually trigger the
+// compaction"), and the same string doubled as the
+// aria-label so screen readers read the whole lecture.
+// Now:
+//   - A small inverted pill ("点击压缩上下文" /
+//     "上下文用量" when passive) fades in 300ms after
+//     hover or keyboard focus, and hides on leave,
+//     blur, Escape or click.
+//   - It opens UPWARD (the v1.16.2.5 popover opened
+//     downward and kept getting clipped by the
+//     composer's bottom edge) and is right-aligned to
+//     the ring so it never leaves the window.
+//   - The pill is aria-hidden and purely visual; the
+//     same short string is the button's aria-label.
+//   - Hover lives on a wrapper span, NOT the button:
+//     a disabled button fires no mouse events, and
+//     the passive ring must still show its hint (the
+//     native title used to).
 //
 // Data flow (unchanged):
 //   CLI emits turn_end.usage.input_tokens
@@ -51,6 +65,12 @@ export interface ContextRingProps {
   readonly onCompact?: () => void;
 }
 
+/** Hover/focus delay before the tooltip pill fades in. */
+const TIP_DELAY_MS = 300;
+
+/** How long the "✓ Sent" confirmation stays after a click. */
+const CONFIRM_MS = 1500;
+
 function tierClass(pct: number): string {
   if (pct < 60) return 'safe';
   if (pct < 85) return 'warm';
@@ -68,74 +88,112 @@ export function ContextRing(props: ContextRingProps): ReactElement {
   const arcPct = hasData ? Math.max(pct, 2) : 2;
   const tier = tierClass(pct);
   const shortLabel = hasData ? formatTokenCountShort(used) : '0';
-  const compactTitle = onCompact
-    ? 'Click to compact the current context. Writes /compact to the CLI. Run `pnpm tauri:dev` to actually trigger the compaction.'
-    : 'Context window usage';
   const interactive = typeof onCompact === 'function';
+  // One short string, two jobs: the pill's copy and the
+  // button's accessible name. The old dev-facing sentence
+  // ("...Run `pnpm tauri:dev` to actually trigger...") is
+  // gone from the UI; it lives in the header comment.
+  const tipText = interactive ? '点击压缩上下文' : '上下文用量';
 
   // v1.16.2.6: brief ✓ confirmation after click. 1.5s.
   // Auto-resets. No popover, no portal, no positioning.
   const [justFired, setJustFired] = useState(false);
-  const timer = useRef<number | null>(null);
+  // v1.17.4: tooltip pill visibility (delayed, see TIP_DELAY_MS).
+  const [tipOpen, setTipOpen] = useState(false);
+  const firedTimer = useRef<number | null>(null);
+  const tipTimer = useRef<number | null>(null);
   useEffect(() => () => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
+    if (firedTimer.current !== null) window.clearTimeout(firedTimer.current);
+    if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
   }, []);
+
+  const showTip = (): void => {
+    if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
+    tipTimer.current = window.setTimeout(() => {
+      setTipOpen(true);
+      tipTimer.current = null;
+    }, TIP_DELAY_MS);
+  };
+
+  const hideTip = (): void => {
+    if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
+    tipTimer.current = null;
+    setTipOpen(false);
+  };
 
   const handleClick = (): void => {
     onCompact?.();
     setJustFired(true);
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
+    // The ✓ Sent confirmation owns the moment; the pill
+    // fades out instead of competing with it.
+    hideTip();
+    if (firedTimer.current !== null) window.clearTimeout(firedTimer.current);
+    firedTimer.current = window.setTimeout(() => {
       setJustFired(false);
-      timer.current = null;
-    }, 1500);
+      firedTimer.current = null;
+    }, CONFIRM_MS);
   };
 
   return (
-    <button
-      type="button"
-      className={`context-ring context-ring--${tier}${interactive ? ' context-ring--clickable' : ''}`}
-      title={compactTitle}
-      aria-label={compactTitle}
-      onClick={interactive ? handleClick : undefined}
-      disabled={!interactive}
-    >
-      {/* SVG ring gauge showing context usage percentage */}
-      <svg
-        className="context-ring__gauge"
-        width="20"
-        height="20"
-        viewBox="0 0 20 20"
+    <span className="context-ring-wrap" onMouseEnter={showTip} onMouseLeave={hideTip}>
+      <button
+        type="button"
+        className={`context-ring context-ring--${tier}${interactive ? ' context-ring--clickable' : ''}`}
+        aria-label={tipText}
+        onClick={interactive ? handleClick : undefined}
+        onFocus={showTip}
+        onBlur={hideTip}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') hideTip();
+        }}
+        disabled={!interactive}
+      >
+        {/* SVG ring gauge showing context usage percentage */}
+        <svg
+          className="context-ring__gauge"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+        >
+          {/* Background track */}
+          <circle
+            cx="10"
+            cy="10"
+            r="8"
+            fill="none"
+            stroke="var(--border, rgba(255, 255, 255, 0.12))"
+            strokeWidth="2.5"
+          />
+          {/* Foreground arc — stroke-dasharray draws the filled portion */}
+          <circle
+            cx="10"
+            cy="10"
+            r="8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray={`${(arcPct / 100) * 50.27} 50.27`}
+            transform="rotate(-90 10 10)"
+            className={`context-ring__arc context-ring__arc--${tier}`}
+          />
+        </svg>
+        {(justFired || hasData) && (
+          <span className="context-ring__label">
+            {justFired ? '✓ Sent' : `${shortLabel}${hasData ? ` · ${Math.round(pct)}%` : ''}`}
+          </span>
+        )}
+      </button>
+      {/* v1.17.4: the pill is a SIBLING of the button (positioned
+          against the wrapper), visual only — the button's
+          aria-label carries the same words for AT. */}
+      <span
+        className={`context-ring__tip${tipOpen ? ' context-ring__tip--open' : ''}`}
         aria-hidden="true"
       >
-        {/* Background track */}
-        <circle
-          cx="10"
-          cy="10"
-          r="8"
-          fill="none"
-          stroke="var(--border, rgba(255, 255, 255, 0.12))"
-          strokeWidth="2.5"
-        />
-        {/* Foreground arc — stroke-dasharray draws the filled portion */}
-        <circle
-          cx="10"
-          cy="10"
-          r="8"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeDasharray={`${(arcPct / 100) * 50.27} 50.27`}
-          transform="rotate(-90 10 10)"
-          className={`context-ring__arc context-ring__arc--${tier}`}
-        />
-      </svg>
-      {(justFired || hasData) && (
-        <span className="context-ring__label">
-          {justFired ? '✓ Sent' : `${shortLabel}${hasData ? ` · ${Math.round(pct)}%` : ''}`}
-        </span>
-      )}
-    </button>
+        {tipText}
+      </span>
+    </span>
   );
 }

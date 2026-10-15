@@ -1,0 +1,2 @@
+cannot resume session nope-not-here: missing_session
+if no other trylo process is running, delete the stale .lock next to the session file

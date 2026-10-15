@@ -1,0 +1,16 @@
+{
+  "upstream": "@anthropic-ai/sandbox-runtime",
+  "version": "0.0.73",
+  "copiedFrom": "npm:@anthropic-ai/sandbox-runtime@0.0.73",
+  "license": "see LICENSE in this directory",
+  "artifacts": {
+    "srt-win-x64": {
+      "bytes": 3070976,
+      "sha256": "6e7390465aac0ea6dd5e33082a41325ba344607dc4c513737a958e4692fd23cd"
+    },
+    "srt-win-arm64": {
+      "bytes": 2737152,
+      "sha256": "9f2ef95fa521530f7f9a753683187bb5ee57376e4eec848670c562017140fcaa"
+    }
+  }
+}

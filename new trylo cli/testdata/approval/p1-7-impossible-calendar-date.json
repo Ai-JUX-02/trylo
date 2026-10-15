@@ -1,0 +1,14 @@
+{
+  "id": "approval/p1-7-impossible-calendar-date",
+  "attack": "regex+Date.parse 会把 2026-02-30 归一化为 3 月；严格日历校验必须拒绝",
+  "kind": "invalid-calendar-date",
+  "issuance": {
+    "action": "modify",
+    "candidateId": "cand-mit",
+    "packageVersionId": "pkg:pdf-lint:1.0.0",
+    "scope": "docs",
+    "issuedAt": "2026-09-01T00:00:00Z",
+    "expiry": "2026-02-30T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "invalid_expiry" }
+}

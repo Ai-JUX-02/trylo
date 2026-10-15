@@ -153,8 +153,8 @@ describe('projectLoopEvents', () => {
       },
       { type: 'ideStreamThinking', turnId: 'turn-1', delta: 'Let me reason about this task carefully', at: 2000 },
       { type: 'ideStreamText', turnId: 'turn-1', delta: 'I will check the repo first.', at: 3000 },
-      { type: 'trace', kind: 'tool', title: 'Bash', detail: '{"command":"ls -la"}', phase: 'running', at: 4000 },
-      { type: 'trace', kind: 'tool', title: 'Bash', detail: '', phase: 'completed', at: 5000 },
+      { type: 'trace', kind: 'tool', title: 'Bash', detail: '{"command":"ls -la"}', phase: 'running', at: 4000, id: 'turn-1:tool:t1', turnId: 'turn-1', toolCallId: 't1', input: '{"command":"ls -la"}' },
+      { type: 'trace', kind: 'tool', title: 'Bash', detail: '', phase: 'completed', at: 5000, id: 'turn-1:tool:t1', turnId: 'turn-1', toolCallId: 't1', output: 'src', durationMs: 12 },
       { type: 'turnFinished', turn: { id: 'turn-1', resultText: 'Done.', completedAt: 6000, mode: 'agent' }, at: 6000 },
     ]);
   });
@@ -167,6 +167,11 @@ describe('projectLoopEvents', () => {
     ];
     const out = projectLoopEvents(events, 't', 'agent', now);
     expect(out.map((e) => e.type)).toEqual(['turnStarted', 'trace', 'turnFinished']);
+  });
+
+  it('preserves tool failures, identity and result details for the phone', () => {
+    const output = projectLoopEvents([le('tool_result', 1, { id: 'call', turn: 1, tool: 'Bash', ok: false, output: '', error: 'exit 1', durationMs: 42 })], 'run', 'agent', now);
+    expect(output[0]).toMatchObject({ type: 'trace', id: 'run:tool:call', toolCallId: 'call', phase: 'failed', output: 'exit 1', durationMs: 42 });
   });
 
   it('emits only the incremental text delta across a batch (text accumulator)', () => {
@@ -307,6 +312,7 @@ describe('projectSessionState', () => {
       id: 'c2',
       title: 'Second chat',
       preview: 'newer',
+      surface: 'code',
       updatedAt: 3000,
       workspace: { id: 'c2', name: 'Second chat', path: '' },
     });
@@ -322,6 +328,26 @@ describe('projectSessionState', () => {
     };
     const out = projectSessionState({ history, kind: 'code', now });
     expect(out.sessions[0]?.preview).toBe('final answer');
+  });
+
+  it('restores only the selected conversation with reasoning and tool evidence', () => {
+    const history: WorkspaceConversationHistory = {
+      version: 1, activeByKind: { code: 'c1', work: null },
+      conversations: {
+        c1: makeRecord('c1', 'Selected', [
+          userMsg('u', 'check files', 1000),
+          { id: 'reason', kind: 'thinking', role: 'assistant', createdAt: 1001, turnId: 'u', summary: 'Inspect', preview: 'Reading files', fullLength: 13, partial: true, turn: 1 },
+          { id: 'tool', kind: 'tool', role: 'assistant', createdAt: 1002, turnId: 'u', tool: 'Read', toolCallId: 'call-1', summary: 'Read file', status: 'error', input: { file_path: 'missing.ts' }, outputError: 'File not found', durationMs: 12 },
+        ], 1002),
+        c2: makeRecord('c2', 'Other', [userMsg('other', 'private other chat', 2000)], 2000),
+      },
+    };
+    const out = projectSessionState({ history, kind: 'code', now });
+    expect(out.conversation?.map((message) => message.role)).toEqual(['user', 'thinking', 'tool']);
+    expect(out.conversation?.[1]?.status).toBe('streaming');
+    expect(out.conversation?.[2]).toMatchObject({ toolCallId: 'call-1', status: 'error', output: 'File not found', durationMs: 12 });
+    expect(out.conversation?.[2]?.input).toContain('missing.ts');
+    expect(out.conversation?.some((message) => message.text.includes('private other'))).toBe(false);
   });
 
   it('slices the preview to 180', () => {

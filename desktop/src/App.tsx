@@ -50,6 +50,10 @@ import {
   settingsForCodeRun,
   useConversationRunViewState,
 } from './runtime/conversation-run-supervisor'
+// P08 §WP6: where the CLI lives is resolved from the packaged resources
+// at startup, never hard-coded into a run.
+import { resolveCliRuntime } from './host-adapter/cli-runtime-path'
+import { setCliRuntimeResolution } from './runtime/cli-runtime-resolution'
 // M4-C5: unified Code/Work run timing (spec §7.2). Created per send
 // in `onSend`; derived latencies let cold vs warm be measured without
 // any real-model cost (P1-3 — this is the production call site).
@@ -72,6 +76,9 @@ import {
 import { useConversationAttachments } from './attachments/use-conversation-attachments'
 import { toWorkDescriptor } from './attachments/attachment-acquisition'
 import { applyEvents, finalizeLatestTurnTimer } from './components/chat/events'
+// Round-3 P2: model-mentioned file links resolve a bare basename against
+// the files this conversation actually touched (no more root-join 404).
+import { resolveMentionPath, toolPathsOf } from './components/chat/artifact-mention'
 // 2026-08-30 (routing-fix step 7): the Work conversation adapter —
 // routes ordinary chat through the stable Code runtime, never the workd
 // task pipeline.
@@ -107,6 +114,16 @@ import type { ResultDockStatus } from './components/chat/ResultDock'
 import { ResultDock } from './components/chat/ResultDock'
 import { CodeResultContent } from './components/chat/CodeResultContent'
 import { WorkResultContent, latestRunArtifactCount } from './components/chat/WorkResultContent'
+// Round-3 (P1-9): the observer that leaves a closing record when a run is
+// stopped by hand. See src/components/chat/run-terminal-notice.ts.
+import { createTerminalNoticeObserver } from './components/chat/run-terminal-notice'
+// Round-3 (P0-5): the interrupt outcome is reason-typed, not a boolean.
+// See src/runtime/steer-delivery.ts.
+import {
+  isSteerRetryable,
+  steerBubbleState,
+  steerOutcomeText,
+} from './runtime/steer-delivery'
 import { resultDockPrefsStore, type ResultDockKey } from './result-dock/result-dock-prefs'
 import { useResultDockOpen } from './result-dock/use-result-dock-prefs'
 import { applyRecovery } from './recovery/persisted-state-recovery'
@@ -158,7 +175,7 @@ import type { ResolvedToolRuntime } from './services-host/methods'
 // P0-A (audit §3.3): the tool platform health state machine + the pre-send
 // capability gate (缺失不再静默 — §3.2).
 import { decideSendCapabilityGate, useToolPlatformState } from './tooling/use-tool-platform-state'
-// The IDE-style embedded browser panel (fork of vscode-browser-preview).
+// The Desktop-owned native browser panel.
 import { useBrowserPreview } from './tooling/use-browser-preview'
 import { createToolRiskClassifier } from './tooling/tool-risk-classifier'
 import { officecliClassifier } from './tooling/classifiers/officecli-classifier'
@@ -251,7 +268,6 @@ import { pickFolder } from './host-adapter/pick-folder'
 import {
   CollaborationSwitch,
   PersonTeamStatusBar,
-  PersonTeamComposeHint,
   SurfaceHost,
   applyTeamEvents,
   cancelTeamSeat,
@@ -467,17 +483,6 @@ export interface Workspace {
 function basenameOf(p: string): string {
   const m = p.match(/[^/\\]+$/)
   return m ? m[0] : p
-}
-
-/** Resolve a Git repo-relative path against the workspace root, rejecting
- *  absolute / device / traversal paths (spec §13.4). */
-function repoAbsPath(root: string, rel: string): string | null {
-  if (!rel || rel.startsWith('/') || /^[a-z]:/i.test(rel) || rel.includes('\\')) return null
-  const parts = rel.split('/')
-  if (parts.some((part) => part === '..' || part === '.')) return null
-  const clean = parts.filter((part) => part !== '')
-  if (clean.length === 0) return null
-  return `${root.replace(/[\\/]+$/, '')}/${clean.join('/')}`
 }
 
 // P2-1 A-Edge (audit §4 P1-4): Work artifact "Open" capability routing.
@@ -699,6 +704,24 @@ function App(): ReactElement {
     })
   }, [])
   useEffect(() => {
+    // P08 §WP6: resolve the CLI + Node from the packaged resources once
+    // per launch, so no run is ever spawned from a developer's absolute
+    // path. A failure here is non-fatal: the run path then keeps the
+    // configured value and reports the spawn failure honestly instead of
+    // silently using a path that does not exist.
+    let cancelled = false
+    void resolveCliRuntime()
+      .then((resolution) => {
+        if (!cancelled) setCliRuntimeResolution(resolution)
+      })
+      .catch(() => {
+        if (!cancelled) setCliRuntimeResolution(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  useEffect(() => {
     const root = currentWorkspace.root
     if (teamRunsLoadedRootRef.current === root) return
     teamRunsLoadedRootRef.current = root
@@ -906,13 +929,8 @@ function App(): ReactElement {
   const [rightRailOpen, setRightRailOpen] = useState(false)
   // v1.17.1: live rail widths (px), driven by the draggable
   // resizers so the user can stretch / shrink the panels.
-  const [leftWidth, setLeftWidth] = useState(240)
-  const [rightWidth, setRightWidth] = useState(300)
-  // Preview rail (FilePeek): same resizer pattern. `peekWidth` is the
-  // dragged width; `peekExpanded` is the one-click fullscreen preview
-  // that covers the window until toggled off or Escape (dragged width
-  // is restored, not lost).
-  const [peekWidth, setPeekWidth] = useState(480)
+  const [leftWidth, setLeftWidth] = useState(210)
+  const [rightWidth, setRightWidth] = useState(360)
   const [peekExpanded, setPeekExpanded] = useState(false)
   // v1.16.3: inline-edit of past user messages. When
   // set, the corresponding <p> in Message.tsx swaps to a
@@ -1780,6 +1798,7 @@ function App(): ReactElement {
             id: session.id,
             title: session.title.slice(0, 120),
             preview: '',
+            surface: session.kind,
             updatedAt: session.updatedAt,
             workspace: { id: session.id, name: session.title.slice(0, 120), path: '' },
           }))
@@ -1794,17 +1813,30 @@ function App(): ReactElement {
           const root = context.currentWorkspace.root
           const history = historiesRef.current[workspaceKey(root)]
           const record = history?.conversations[sessionId]
-          if (!record) return { switching: false }
+          if (!record) throw new Error('Remote conversation is unavailable')
           void forceFlushHistory(root)
+          historiesRef.current = { ...historiesRef.current, [workspaceKey(root)]: selectConversation(history!, sessionId) }
+          remoteContextRef.current = { ...context, topMode: record.session.kind }
           updateHistoryAt(root, (h) => selectConversation(h, sessionId))
           setTopMode(record.session.kind)
           if (record.session.kind === 'code' && record.session.codeMode) {
             setCodeMode(record.session.codeMode)
           }
-          return { switching: true }
+          return { switching: false }
+        },
+        create: async (surface) => {
+          const context = remoteContextRef.current
+          const root = context.currentWorkspace.root
+          const history = historiesRef.current[workspaceKey(root)] ?? emptyWorkspaceHistory()
+          const created = createConversation(history, { kind: surface, codeMode: codeModeFromRemoteMode(settingsRef.current.permissionMode) })
+          historiesRef.current = { ...historiesRef.current, [workspaceKey(root)]: created.history }
+          remoteContextRef.current = { ...context, topMode: surface }
+          setHistories((previous) => ({ ...previous, [workspaceKey(root)]: created.history }))
+          setTopMode(surface)
+          return created.session.id
         },
       },
-      sendTask: async ({ projectKey, conversationId, mode, text, requestId, attachments }) => {
+      sendTask: async ({ projectKey, conversationId, mode, surface, text, requestId, attachments }) => {
         // Explicit (projectKey, conversationId) from the mobile request —
         // never guessed from the current UI selection (spec §8.1).
         const current = settingsRef.current
@@ -1814,7 +1846,13 @@ function App(): ReactElement {
         const root = workspace.root
         const key = workspaceKey(root)
         let history = historiesRef.current[key]
-        if (!history) history = ensureConversation(emptyWorkspaceHistory(), 'code', 'agent')
+        if (!history) history = ensureConversation(emptyWorkspaceHistory(), surface, 'agent')
+        if (history.conversations[conversationId] && history.conversations[conversationId]?.session.kind !== surface) {
+          throw new Error('The selected conversation uses a different Desktop surface')
+        }
+        if (surface === 'work' && !history.conversations[conversationId]) {
+          throw new Error('Select or create a Work conversation before sending')
+        }
         if (!history.conversations[conversationId]) {
           // Insert the EXACT mobile-requested conversation id so run
           // write-back lands in the Desktop history (spec §8.1). Mirrors
@@ -1851,16 +1889,36 @@ function App(): ReactElement {
           created = await materializeRemoteAttachments(root, conversationId, attachments)
           if (created.length) {
             conversationAttachmentStore.addRemoteAttachments(
-              { surface: 'code', projectKey, conversationId },
+              { surface, projectKey, conversationId },
               created,
             )
           }
         }
         const record = history.conversations[conversationId]
+        const sendTurnId = `remote-${requestId}`
+        const userMessage = beginConversationTurn({ text, turnId: sendTurnId, now: Date.now(),
+          attachments: created.map((attachment) => ({ id: attachment.id, name: attachment.name, kind: attachment.kind, size: attachment.size })) })
+        const appendUser = (previous: readonly ChatMessage[]): readonly ChatMessage[] =>
+          previous.some((message) => message.id === sendTurnId) ? previous : [...previous, userMessage]
+        historiesRef.current = { ...historiesRef.current, [key]: updateConversationMessages(history, conversationId, appendUser) }
+        updateMessagesAt(root, conversationId, appendUser)
         // Mirror the desktop code-send path: prepend the attachment context so
         // the agent knows to read the materialised files via its file tools.
         const attachmentCtx = created.length ? buildAttachmentPromptContext(created) : ''
         const prompt = attachmentCtx ? `${attachmentCtx}\n\n${text}` : text
+        if (surface === 'work') {
+          await sendWorkChat(supervisor, {
+            projectKey, conversationId, text: prompt,
+            settings: settingsForCodeRun(current, root), systemPrompt: buildWorkProfilePrompt(root),
+            codeMode: 'agent', permissionLevel: effectivePermission.level,
+            priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES, turnId: sendTurnId,
+            requestedProfileId: workProfileIdFor(current.workBrowserDebug, current.workCad),
+            computerUse: false,
+            lifecycleObserver: codeLifecycleObserver,
+            onEvents: (events) => updateMessagesAt(root, conversationId, (prev) => applyEvents(prev, events)),
+          })
+          return
+        }
         await supervisor.runCode(projectKey, conversationId, {
           prompt,
           settings: settingsForCodeRun(current, root),
@@ -1870,7 +1928,7 @@ function App(): ReactElement {
           // replayed run; the active override wins.
           permissionLevel: effectivePermission.level,
           priorMessages: record?.messages ?? EMPTY_CHAT_MESSAGES,
-          turnId: `remote-${requestId}`,
+          turnId: sendTurnId,
           lifecycleObserver: codeLifecycleObserver,
           onEvents: (events) => {
             feedTeamEvents(
@@ -1967,13 +2025,15 @@ function App(): ReactElement {
     serviceManager,
   })
 
-  // The IDE-style embedded browser (fork of vscode-browser-preview's CDP
-  // screencast architecture). App owns the controller; the Work surface
-  // hosts the drawer. The browser runs in the Service Host sidecar and
-  // streams frames back as events — everything stays on this machine.
+  // App owns the native browser controller; the Work surface
+  // hosts the drawer. Desktop owns its WebView2 contents; the Service Host
+  // connects the browser MCP to those same contents through CDP.
   const browserPreview = useBrowserPreview({
+    initiallyVisible: false,
     facade: toolingFacadeRef.current,
     serviceManager,
+    projectRoot: currentWorkspace.root,
+    conversationId: topMode === 'code' ? codeSessionId : workSessionId,
   })
 
   // Hermes session mirror (spec §7.4): mirrors a FINISHED conversation so
@@ -2082,9 +2142,33 @@ function App(): ReactElement {
     [bumpLearning],
   )
 
+  // Round-3 (P1-9): a stopped run must leave a closing record in the
+  // conversation itself. The TARGET is resolved when the run terminates, not
+  // at mount — an 11-minute run is often stopped after navigating elsewhere,
+  // and a stale closure would write the record to whatever conversation was
+  // active when React first rendered this hook.
+  const runTerminalTargetRef = useRef({ root: currentWorkspace.root, conversationId: codeSessionId })
+  useEffect(() => {
+    runTerminalTargetRef.current = { root: currentWorkspace.root, conversationId: codeSessionId }
+  }, [currentWorkspace.root, codeSessionId])
+  const terminalNoticeObserver = useMemo(
+    () =>
+      createTerminalNoticeObserver((target) => {
+        updateMessagesAt(target.root, target.conversationId, (prev) =>
+          // Idempotent append: the observer already dedupes per runId, and the
+          // notice id is derived from that runId, so a replay cannot stack.
+          prev.some((message) => message.id === target.message.id)
+            ? prev
+            : [...prev, target.message],
+        )
+      }),
+    [updateMessagesAt],
+  )
+
   // Code lifecycle: result projection first, companion taps behind it,
-  // Hermes mirror and learning trigger, remote gateway projection last.
-  const codeLifecycleObserver = useMemo(
+  // Hermes mirror and learning trigger, remote gateway projection last,
+  // then the terminal record that closes the conversation view.
+  const codeLifecycleObserverBase = useMemo(
     () =>
       composeLifecycleObservers(
         composeLifecycleObservers(
@@ -2100,6 +2184,13 @@ function App(): ReactElement {
         userLearningLifecycle,
       ),
     [codeProjector, companion, remoteController, userLearningLifecycle],
+  )
+  // The terminal record rides on top so it never alters what the projectors
+  // write — it is a closing RECORD for a run whose visible tail stopped
+  // mid-sentence. See run-terminal-notice.ts (Round-3 P1-9).
+  const codeLifecycleObserver = useMemo(
+    () => composeLifecycleObservers(codeLifecycleObserverBase, terminalNoticeObserver),
+    [codeLifecycleObserverBase, terminalNoticeObserver],
   )
 
   useEffect(() => {
@@ -3231,6 +3322,7 @@ function App(): ReactElement {
       // walks the merged message list.
       const findCode = supervisor.pendingCodePermissions().find((r) => r.requestId === id)
       if (findCode) {
+        setRightRailOpen(true)
         void (async () => {
           const preview = await buildApprovalPreview({
             toolName: findCode.toolName,
@@ -3271,6 +3363,7 @@ function App(): ReactElement {
       // previews are out of scope for the P3 first cut.
       const findWork = workMessagesRef.current.find((m) => m.kind === 'approval' && m.approvalId === id)
       if (findWork && findWork.kind === 'approval') {
+        setRightRailOpen(true)
         setApprovalDiffState({
           identity: { id, path: '(work request)', source: 'work' },
           preview: findWork.preview,
@@ -4274,9 +4367,6 @@ function App(): ReactElement {
         />
       )
     }
-    if (teamComposerLive && canSuggestTeam && collaborationSurface === 'person') {
-      return <PersonTeamComposeHint onCompose={handleComposeTeamFromPerson} />
-    }
     return undefined
   }, [
     teamRunForCurrentSession,
@@ -4292,7 +4382,29 @@ function App(): ReactElement {
       const draft = getComposerDraft()
       const sessionId = currentActiveSession?.id ?? null
       const root = currentWorkspace.root
-      if (!draft || !sessionId) return Promise.resolve()
+      // Round-3 P0-10: this used to `return Promise.resolve()` silently — a
+      // click on 开始 that vanished with no reason line, no notice, nothing.
+      // A start that cannot start must say so in the composer AND in the
+      // transcript of the conversation the user is looking at.
+      if (!draft || !sessionId) {
+        const message = !sessionId
+          ? '没有可用的会话，无法开始这场团队。'
+          : '团队草稿不见了，请重新选一个模板再开始。'
+        setComposerLaunchError(message)
+        if (sessionId) {
+          updateMessagesAt(root, sessionId, (prev) => [
+            ...prev,
+            {
+              id: `team-launch-${Date.now().toString(36)}`,
+              kind: 'notice' as const,
+              role: 'system' as const,
+              createdAt: Date.now(),
+              text: message,
+            },
+          ])
+        }
+        return Promise.resolve()
+      }
       return (async () => {
         const result = await startTeamTurn({
           workspaceRoot: root,
@@ -4445,34 +4557,11 @@ function App(): ReactElement {
     setLeftRailCollapsed((v) => !v)
   }, [])
 
-  const onToggleRightRail = useCallback((): void => {
-    setRightRailOpen((v) => !v)
-  }, [])
-
   // ── File peek (base capability: shared by Code AND Work) ──
   // Text-likes are read as UTF-8 and rendered by PreviewRouter
   // (markdown / html / csv / dxf / gerber / text). Byte-backed kinds
   // skip the text read — decoding binary as UTF-8 garbles the rail —
   // and each component loads bytes itself.
-  const onSelectFile = useCallback(async (path: string, kind: 'file' | 'dir'): Promise<void> => {
-    if (kind === 'dir') return
-    if (previewKindNeedsBytes(previewKindFor(path))) {
-      setPeekFile({ path, content: '' })
-      return
-    }
-    try {
-      const content = await hostAdapter.fs.readFile(path)
-      setPeekFile({ path, content })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setPeekFile({ path, content: `Error reading ${path}\n\n${msg}` })
-    }
-  }, [])
-
-  const onClosePeek = useCallback((): void => {
-    setPeekFile(null)
-  }, [])
-
   // P2-1 (spec §9.6): an explicit Git-diff right-pane distinct from a plain
   // file peek. Diff bodies are resolved via the HostAdapter (never invoke).
   //
@@ -4487,9 +4576,34 @@ function App(): ReactElement {
     diff?: import('./components/code-surface/GitDiffView').GitFileDiffData
     error?: string
   } | null>(null)
+  const onSelectFile = useCallback(async (path: string, kind: 'file' | 'dir'): Promise<void> => {
+    if (kind === 'dir') return
+    setRightRailOpen(true)
+    diffTracker.invalidate()
+    setGitDiffState(null)
+    if (previewKindNeedsBytes(previewKindFor(path))) {
+      setPeekFile({ path, content: '' })
+      return
+    }
+    try {
+      const content = await hostAdapter.fs.readFile(path)
+      setPeekFile({ path, content })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setPeekFile({ path, content: `Error reading ${path}\n\n${msg}` })
+    }
+  }, [diffTracker])
+
+  const onClosePeek = useCallback((): void => {
+    setPeekFile(null)
+    setPeekExpanded(false)
+  }, [])
+
   const onOpenDiff = useCallback(
     (path: string, oldPath?: string): void => {
       setPeekFile(null)
+      setPeekExpanded(false)
+      setRightRailOpen(true)
       // Mint a NEW full identity (requestId + root + session + path + oldPath).
       // A newer diff implicitly invalidates every older in-flight request.
       const identity = diffTracker.begin(currentWorkspace.root, codeSessionId ?? '', path, oldPath)
@@ -4527,7 +4641,14 @@ function App(): ReactElement {
   }, [currentWorkspaceId, codeSessionId, diffTracker])
   const onOpenResultFile = useCallback(
     (relPath: string): void => {
-      const abs = repoAbsPath(currentWorkspace.root, relPath)
+      // Round-3 P2: a bare basename falls back to the newest same-name file
+      // this conversation touched (read via ref so the callback identity
+      // stays stable across streaming deltas — Message rows are memoized).
+      const abs = resolveMentionPath(
+        currentWorkspace.root,
+        relPath,
+        toolPathsOf(messagesRef.current),
+      )
       if (!abs) return
       void onSelectFile(abs, 'file')
     },
@@ -4537,6 +4658,15 @@ function App(): ReactElement {
     diffTracker.invalidate()
     setGitDiffState(null)
   }, [diffTracker])
+
+  const onToggleRightRail = useCallback((): void => {
+    if (rightRailOpen) {
+      onClosePeek()
+      onCloseGitDiff()
+      onCloseApprovalDiff()
+    }
+    setRightRailOpen(!rightRailOpen)
+  }, [rightRailOpen, onClosePeek, onCloseGitDiff, onCloseApprovalDiff])
 
   // ── Send ──────────────────────────────────────────────────
   const onSend = useCallback(
@@ -4989,16 +5119,6 @@ function App(): ReactElement {
       }).attachments,
     )
     const steerPrompt = attachmentCtx ? `${attachmentCtx}\n\n${first.text}` : first.text
-    updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
-      ...prev,
-      {
-        id: first.turnId,
-        role: 'user',
-        kind: 'text',
-        createdAt: now,
-        text: first.text,
-      },
-    ])
     try {
       const traceId = tracesByConversationRef.current.get(
         conversationTraceKey(projectKeyAtSend, sessionIdAtSend),
@@ -5007,20 +5127,71 @@ function App(): ReactElement {
     } catch {
       /* never block steer */
     }
-    void supervisor.steerCode(projectKeyAtSend, sessionIdAtSend, steerPrompt).then((sent) => {
-      if (sent) return
-      updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
-        ...prev,
-        {
-          id: `code-steer-error-${Date.now().toString(36)}`,
-          kind: 'error',
-          role: 'system',
-          createdAt: Date.now(),
-          userMessage: '当前任务没有接受这条引导，请重试或先停止任务。',
-          diagnosticId: `code-steer-rejected:${first.turnId}`,
-        },
-      ])
-    })
+    // Round-3 (P0-5): NO bubble before the runtime answers, and no judgement
+    // until then either.
+    //
+    // The old flow appended the user bubble first and then read one boolean:
+    // FALSE became `⚠ Task failed / 当前任务没有接受这条引导` whatever had
+    // actually happened — including "this CLI cannot be interrupted mid-turn
+    // at all", where nothing was ever attempted. A false failure is worse
+    // than a real one: it sends the person off to retry or stop a redirection
+    // that (may have) already landed.
+    //
+    // Success is likewise NOT read off the message stream: every row stamped
+    // after the bubble inherits the bubble's id (events.ts → lastUserIndex),
+    // so "the turnId migrated" proves nothing about the CLI. The only honest
+    // success claim available is "the frame reached the running process".
+    void supervisor
+      .steerCode(projectKeyAtSend, sessionIdAtSend, steerPrompt)
+      .then((delivery) => {
+        const bubbleState = steerBubbleState(delivery)
+        if (bubbleState !== null) {
+          updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
+            ...prev,
+            {
+              id: first.turnId,
+              role: 'user',
+              kind: 'text',
+              createdAt: now,
+              text: first.text,
+              // An intervention inside the running turn: visible, marked, and
+              // explicitly NOT a turn of its own (turn count + turn boundary).
+              steerState: bubbleState,
+            },
+          ])
+        }
+        if (bubbleState === 'delivered') return
+        const text = steerOutcomeText(delivery)
+        if (text === null) return
+        if (delivery.kind === 'unsupported') {
+          // Nothing was attempted, so nothing was lost: put the guidance back
+          // at the HEAD of the queue and it runs as the next real turn when
+          // this one ends. Retrying by hand cannot change what this runtime
+          // can do — that is why this is a notice, not a failure card.
+          const queue = pendingCodeQueueRef.current.get(key) ?? []
+          pendingCodeQueueRef.current.set(key, [first, ...queue])
+          bumpQueueTick()
+        }
+        updateMessagesAt(currentWorkspace.root, sessionIdAtSend, (prev) => [
+          ...prev,
+          isSteerRetryable(delivery)
+            ? {
+                id: `code-steer-error-${first.turnId}`,
+                kind: 'error',
+                role: 'system',
+                createdAt: Date.now(),
+                userMessage: text,
+                diagnosticId: `code-steer-${delivery.kind}:${first.turnId}`,
+              }
+            : {
+                id: `code-steer-notice-${first.turnId}`,
+                kind: 'notice',
+                role: 'system',
+                createdAt: Date.now(),
+                text,
+              },
+        ])
+      })
   }, [codeSessionId, currentWorkspace.root, setNextLearningDirective, supervisor, updateMessagesAt])
 
   /** Flush: when a live turn returns to idle and this conversation has a
@@ -5071,7 +5242,12 @@ function App(): ReactElement {
   // driven by ArtifactCard and stay on workArtifactHost.
   const onOpenWorkArtifact = useCallback(
     (path: string): void => {
-      const resolvedPath = repoAbsPath(currentWorkspace.root, path) ?? path
+      // Round-3 P2: same basename fallback as Code (see onOpenResultFile).
+      const resolvedPath = resolveMentionPath(
+        currentWorkspace.root,
+        path,
+        toolPathsOf(workMessagesRef.current),
+      ) ?? path
       const cap = artifactCapabilityFor(resolvedPath)
       if (
         cap.kind === 'text-preview' ||
@@ -5296,24 +5472,23 @@ function App(): ReactElement {
       onArchiveSession={onArchiveSession}
       onUnarchiveSession={onUnarchiveSession}
       topMode={topMode}
-      onTopModeChange={onTopModeChange}
       // Person | Team surface (spec §1.2). A second segmented
       // control on the right of the TopBar; visually quieter than
       // the Code | Work tab so it doesn't read as a third product
       // mode. Owns `collaborationSurface` together with the main
       // column (SurfaceHost below).
       topBarCollaborationSwitch={
-        <CollaborationSwitch value={collaborationSurface} onChange={setCollaborationSurface} />
+        <CollaborationSwitch value={collaborationSurface} onChange={setCollaborationSurface}
+          onCompose={teamComposerLive && canSuggestTeam ? handleComposeTeamFromPerson : undefined} />
       }
       peekFile={peekFile}
       onClosePeek={onClosePeek}
-      peekWidth={peekWidth}
-      onPeekWidthChange={setPeekWidth}
       peekExpanded={peekExpanded}
       onTogglePeekExpanded={() => setPeekExpanded((v) => !v)}
       gitDiff={
         gitDiffState
           ? {
+              id: gitDiffState.identity.requestId,
               path: gitDiffState.identity.path,
               diff: gitDiffState.diff,
               error: gitDiffState.error,
@@ -5330,6 +5505,7 @@ function App(): ReactElement {
       approvalDiff={
         approvalDiffState
           ? {
+              id: approvalDiffState.identity.id,
               path: approvalDiffState.identity.path,
               source: approvalDiffState.identity.source,
               ...(approvalDiffState.diff ? { diff: approvalDiffState.diff } : {}),
@@ -5353,6 +5529,9 @@ function App(): ReactElement {
         setLearningPanelOpen(true)
       }}
       browserPreview={browserPreview}
+      serviceManager={serviceManager}
+      toolingFacade={toolingFacadeRef.current}
+      toolMessages={topMode === 'code' ? mergedMessages : workMergedMessages}
       remoteController={remoteController}
       // 2026-08-29: TopBar "远程" button opens the pairing
       // modal (the new home of the pairing QR). The modal
@@ -5376,23 +5555,16 @@ function App(): ReactElement {
       activityItems={activityItems}
       topBarRight={
         <>
-          <button
-            type="button"
-            className={`top-bar__learning${learningPanelOpen ? ' is-active' : ''}`}
-            onClick={() => setLearningPanelOpen((open) => !open)}
-            title="学习：用户认知 / 代理学习"
-          >
-            学习
-          </button>
+
           <button
             type="button"
             className={`top-bar__rail-toggle${rightRailOpen ? ' top-bar__rail-toggle--active' : ''}`}
-            onClick={onToggleRightRail}
-            title="Toggle file tree"
-            aria-label="Toggle file tree"
+            onClick={() => { window.dispatchEvent(new Event('trylo:close-browser-preview')); onToggleRightRail(); }}
+            title="结果侧栏"
+            aria-label="结果侧栏"
             aria-pressed={rightRailOpen}
           >
-            <PanelRight size={15} strokeWidth={2.2} aria-hidden="true" />
+            <PanelRight size={16} strokeWidth={1.65} aria-hidden="true" /><span>结果</span>
           </button>
         </>
       }
@@ -5431,6 +5603,7 @@ function App(): ReactElement {
               context={context}
               activeSession={currentActiveSession}
               topMode={topMode}
+          onTopModeChange={onTopModeChange}
               codeMode={codeMode}
               onCodeModeChange={onCodeModeChange}
               // v1.16.1: plan → agent transition handler.

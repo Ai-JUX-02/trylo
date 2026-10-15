@@ -1,0 +1,4 @@
+{
+  "terminal": "completed",
+  "requiredKinds": ["api_retry", "terminal"]
+}

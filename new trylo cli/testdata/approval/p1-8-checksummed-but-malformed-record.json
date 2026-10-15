@@ -1,0 +1,18 @@
+{
+  "id": "approval/p1-8-checksummed-but-malformed-record",
+  "attack": "一行 checksum 对自身 payload 正确、但 kind 是未知枚举的记录；深度 schema 校验必须拒绝",
+  "kind": "corrupt-ledger-line",
+  "payload": {
+    "formatVersion": 1,
+    "kind": "grant_teleported",
+    "sequence": 1,
+    "grantId": "grant:x",
+    "action": "acquire",
+    "candidateId": "cand",
+    "packageVersionId": "pkg",
+    "scope": "docs",
+    "issuedAt": "2026-09-01T00:00:00Z",
+    "expiry": "2026-12-01T00:00:00Z"
+  },
+  "expect": { "ok": false, "code": "ledger_corrupt" }
+}

@@ -37,6 +37,7 @@ export interface AgentConversationSurfaceProps {
   /** The composer (InputBar) fully configured by the
    *  capability. */
   readonly composer: ReactNode;
+  readonly starterSlot?: ReactNode;
   /** Above the timeline — e.g. the Work API-key banner. */
   readonly bannerSlot?: ReactNode;
   /** Top-right overlay — e.g. the Work Diagnostics
@@ -95,7 +96,7 @@ export function AgentConversationSurface(
 ): ReactElement {
   const isEmpty = props.messages.length === 0;
   return (
-    <div className="chat-panel">
+    <div className="chat-panel" data-empty={isEmpty}>
       {props.cornerSlot !== undefined && (
         <div className="chat-panel__corner">{props.cornerSlot}</div>
       )}
@@ -103,7 +104,11 @@ export function AgentConversationSurface(
         <div className="chat-panel__banner">{props.bannerSlot}</div>
       )}
       {isEmpty ? (
-        props.emptyState
+        <div className="chat-panel__home">
+          {props.emptyState}
+          {props.composer}
+          {props.starterSlot}
+        </div>
       ) : (
         <MessageList
           surface={props.surface}
@@ -133,7 +138,7 @@ export function AgentConversationSurface(
       {props.personTeamStatusBarSlot}
       {props.cognitionBadgeSlot}
       {props.learningReceiptSlot}
-      {props.composer}
+      {!isEmpty && props.composer}
     </div>
   );
 }

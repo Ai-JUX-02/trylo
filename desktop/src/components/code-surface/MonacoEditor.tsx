@@ -18,6 +18,7 @@ import {
 } from 'react';
 import type * as monaco from 'monaco-editor';
 import { initMonaco } from '../../monaco-init';
+import { useAppearance } from '../../settings/appearance-store';
 import './MonacoEditor.css';
 
 export interface MonacoEditorProps {
@@ -56,6 +57,8 @@ type Status = 'init' | 'ready' | 'error';
 
 export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
   (props, ref): ReactElement => {
+    const { theme: appearance } = useAppearance();
+    const resolvedTheme = props.theme ?? (appearance === 'dark' ? 'vs-dark' : 'vs');
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     /** Latest value of `props` reference. The onChange subscription
@@ -118,7 +121,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
           const editor = monacoNs.editor.create(containerRef.current, {
             value: initialValue,
             language: props.language,
-            theme: props.theme ?? 'vs-dark',
+            theme: resolvedTheme,
             automaticLayout: true,
             minimap: { enabled: false },
             fontSize: 13,
@@ -217,11 +220,11 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, MonacoEditorProps>(
     // the live closure (vs the stale mount-time one). No-op when
     // the value is undefined.
     useEffect(() => {
-      const theme = propsRef.current.theme;
+      const theme = resolvedTheme;
       const editor = editorRef.current;
       if (!editor || !theme) return;
       void import('monaco-editor').then((m) => m.editor.setTheme(theme));
-    }, [propsRef.current.theme]);
+    }, [resolvedTheme]);
 
     return (
       <div className="monaco-editor-wrap">

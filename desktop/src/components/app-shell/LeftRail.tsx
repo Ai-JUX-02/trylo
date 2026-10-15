@@ -1,55 +1,22 @@
-// Trylo Desktop — LeftRail. v1.17 CodeBuddy-style layout.
-//
-// The left rail is a single, focused navigation column:
-//
-//   WORKSPACES            ← top level, the "总项目 / workspace"
-//   ├── ● trylo           ← a workspace == a project folder
-//   │      ▾ Sessions     ← history nested under the project,
-//   │         💬 你好呀       collapsible (like CodeBuddy)
-//   │         💬 你好
-//   │         + New session
-//   │      ▸ Archived (3)   ← collapsible; soft-deleted sessions
-//   ├── ○ other-workspace
-//   + Open folder
-//
-// The file tree is NO LONGER here — it lives in the toggleable
-// right rail (RightRail.tsx). This frees the left rail to be a
-// clean "project → conversation history" tree, the inverse of
-// Cursor's file-first layout.
-//
-// 2026-09-06:
-//   * Rename: double-click a session title (or the inline pencil icon on
-//     hover) to edit it inline. Enter / blur saves, Escape cancels.
-//   * Archive: hover-revealed archive icon (round-badge) soft-deletes the
-//     row without losing its messages / attachments. Unarchive is one
-//     click from the Archived disclosure.
-//   * Kind badges are now lucide icons (Code2 / Briefcase) instead of
-//     the rounded "C" / "W" tile, per the design note: "code/work 图标
-//     还是太丑了".
-//   * The active conversation list is now filtered — archived sessions
-//     only show in the disclosure. Active / running / un-run counts are
-//     preserved exactly.
-
+import { Logo } from '../brand/Logo';
+import { SessionRow } from './SessionRow';
+import { ProfileCard, ProfileAvatarView } from './ProfileCard';
+import { SquarePen, PanelLeft, Layers2, Blocks, Sparkles, RadioTower, Settings2, Folder, FolderPlus } from 'lucide-react';
 import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type ReactElement,
 } from 'react';
 import {
   Archive,
-  ArchiveRestore,
-  Briefcase,
-  Code2,
-  Folders,
-  Pencil,
   Plus,
   X,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
 import type { ConversationSession } from '../../host-adapter/conversation-history';
+import { useUserProfile } from '../../user-profile/use-user-profile';
 
 /** Shape of a workspace the rail needs. Defined here so
  *  LeftRail is self-contained; App.tsx re-exports the
@@ -93,9 +60,16 @@ export interface LeftRailProps {
    *  active list. */
   readonly onUnarchiveSession: (id: string) => void;
   readonly onToggleCollapse: () => void;
+  readonly onOpenActivity?: () => void;
+  readonly activeRuns?: number;
+  readonly onOpenTools?: () => void;
+  readonly onOpenLearning?: () => void;
+  readonly onOpenRemote?: () => void;
+  readonly remoteRunning?: boolean;
+  readonly onOpenSettings?: () => void;
 }
 
-export function LeftRail(props: LeftRailProps): ReactElement {
+export function LeftRail(props: LeftRailProps): ReactElement | null {
   const [hoverSessionId, setHoverSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   // 2026-09-06: the Archived disclosure lives per-active-workspace but
@@ -104,6 +78,12 @@ export function LeftRail(props: LeftRailProps): ReactElement {
   // workspace switches (the closest sane per-project choice would be a
   // Set<workspaceId> stored on the workspace index; not worth it now).
   const [archiveOpen, setArchiveOpen] = useState(false);
+  // User identity card (nickname / bio / avatar). Self-contained:
+  // loads and saves through the profile store, no App plumbing.
+  const profile = useUserProfile();
+  // The ProfileCard is portalled to <body> and anchored to this
+  // row's rect (it overflows the 210px rail by design).
+  const profileRowRef = useRef<HTMLDivElement>(null);
 
   // v1.17.1: a project row itself is the dropdown — clicking it
   // expands / collapses its session list (no separate "Sessions"
@@ -119,24 +99,7 @@ export function LeftRail(props: LeftRailProps): ReactElement {
     setEditingSessionId(null);
   }, [props.currentWorkspaceId]);
 
-  if (props.collapsed) {
-    return (
-      <aside
-        className="left-rail left-rail--collapsed"
-        aria-label="Workspaces and sessions"
-      >
-        <button
-          type="button"
-          className="left-rail__collapse"
-          onClick={props.onToggleCollapse}
-          title="Expand"
-          aria-label="Expand rail"
-        >
-          ›
-        </button>
-      </aside>
-    );
-  }
+  if (props.collapsed) return null;
 
   const toggleProject = (wsId: string): void => {
     if (expandedId === wsId) {
@@ -157,23 +120,22 @@ export function LeftRail(props: LeftRailProps): ReactElement {
     <aside
       className="left-rail"
       aria-label="Workspaces and sessions"
+      style={{ position: 'relative' }}
     >
       <div className="left-rail__header">
-        <button
-          type="button"
-          className="left-rail__collapse"
-          onClick={props.onToggleCollapse}
-          title="Collapse"
-          aria-label="Collapse rail"
-        >
-          ‹
-        </button>
+        <div className="left-rail__brand"><Logo size={40} tone="cream" variant="solid" withBg decorative /><span>Trylo</span></div>
+        <button type="button" className="left-rail__collapse" onClick={props.onToggleCollapse} title="收起侧栏" aria-label="Collapse rail"><PanelLeft size={16} /></button>
       </div>
+      <nav className="left-rail__navigation" aria-label="任务导航">
+        <button type="button" className="left-rail__nav left-rail__new" onClick={props.onNewSession}><SquarePen size={16} /><span>新任务</span></button>
+        {props.onOpenActivity && <button type="button" className="left-rail__nav" onClick={props.onOpenActivity}><Layers2 size={16} /><span>后台任务</span>{(props.activeRuns ?? 0) > 0 && <span className="left-rail__count">{props.activeRuns}</span>}</button>}
+        {props.onOpenTools && <button type="button" className="left-rail__nav" onClick={props.onOpenTools}><Blocks size={16} /><span>工具与技能</span></button>}
+      </nav>
 
       <section className="left-rail__section left-rail__section--workspaces" aria-label="Workspaces">
         <div className="left-rail__section-title">
-          <Folders size={12} strokeWidth={2.2} aria-hidden="true" />
-          <span>Workspaces</span>
+          <span>项目</span>
+          <button type="button" className="left-rail__project-add" onClick={props.onOpenFolder} aria-label="打开项目" title="打开项目"><Plus size={16} /></button>
         </div>
 
         <ul className="left-rail__workspaces" role="list">
@@ -198,10 +160,7 @@ export function LeftRail(props: LeftRailProps): ReactElement {
                     <span className="workspace-item__chev" aria-hidden="true">
                       {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </span>
-                    <span
-                      className={`workspace-item__dot${active ? ' workspace-item__dot--active' : ''}`}
-                      aria-hidden="true"
-                    />
+                    <Folder size={16} aria-hidden="true" />
                     <span className="workspace-item__name">{ws.name}</span>
                   </button>
                   {active && (
@@ -235,7 +194,7 @@ export function LeftRail(props: LeftRailProps): ReactElement {
                   {expanded && active && (
                     <div className="workspace-node__children">
                       {liveSessions.length === 0 ? (
-                      <div className="left-rail__empty">No sessions yet.</div>
+                      <div className="left-rail__empty">还没有对话</div>
                     ) : (
                       <ul className="left-rail__sessions" role="list">
                         {liveSessions.map((s) => (
@@ -332,226 +291,72 @@ export function LeftRail(props: LeftRailProps): ReactElement {
           onClick={props.onOpenFolder}
           title="Open a folder as a new workspace"
         >
-          <Plus size={12} strokeWidth={2.2} aria-hidden="true" />
-          <span>Open folder</span>
+          <FolderPlus size={16} aria-hidden="true" />
+          <span>打开项目</span>
         </button>
       </section>
+      <nav className="left-rail__footer" aria-label="应用设置">
+        {props.onOpenLearning && <button type="button" className="left-rail__nav" onClick={props.onOpenLearning}><Sparkles size={16} /><span>学习与偏好</span></button>}
+        {props.onOpenRemote && <button type="button" className="left-rail__nav" onClick={props.onOpenRemote}><RadioTower size={16} /><span>远程连接</span>{props.remoteRunning && <span className="left-rail__online" title="远程服务运行中" />}</button>}
+        {props.onOpenSettings && (
+          <div className="left-rail__profile-wrap" ref={profileRowRef}>
+            <button
+              type="button"
+              className={`left-rail__profile${profile.step !== 'closed' ? ' left-rail__profile--open' : ''}`}
+              onClick={profile.toggle}
+              aria-expanded={profile.step !== 'closed'}
+              aria-label="用户资料"
+            >
+              <ProfileAvatarView
+                className="left-rail__avatar"
+                avatar={profile.profile.avatar}
+                avatarUrl={profile.profile.avatarUrl}
+                size={28}
+              />
+              <span className="left-rail__profile-text">
+                {profile.step === 'closed' ? '本地工作区' : profile.profile.nickname}
+                <small>{profile.step === 'closed' ? '设置与连接' : '用户资料'}</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="left-rail__profile-gear"
+              onClick={() => {
+                profile.close();
+                props.onOpenSettings?.();
+              }}
+              aria-label="设置"
+              title="设置"
+            >
+              <Settings2 size={16} />
+            </button>
+          </div>
+        )}
+      </nav>
+      {profile.step !== 'closed' && props.onOpenSettings && (
+        <ProfileCard
+          step={profile.step}
+          profile={profile.profile}
+          draft={profile.draft}
+          notice={profile.notice}
+          picking={profile.picking}
+          anchorRef={profileRowRef}
+          onClose={profile.close}
+          onOpenSettings={() => {
+            profile.close();
+            props.onOpenSettings?.();
+          }}
+          onCommitNickname={profile.commitNickname}
+          onCommitBio={profile.commitBio}
+          onStartAvatarEdit={profile.startAvatarEdit}
+          onBackToCard={profile.backToCard}
+          onPickImage={() => void profile.pickImage()}
+          onPickPreset={profile.pickPreset}
+          onConfirmAvatar={profile.confirmAvatar}
+          onCancelAvatar={profile.cancelAvatar}
+        />
+      )}
     </aside>
   );
 }
 
-// ── SessionRow ────────────────────────────────────────────────────────
-// One row per session. Pulled out of the parent JSX so the rename-input
-// state can live in the same component that handles hover, kind icons
-// and the action cluster.
-
-interface SessionRowProps {
-  readonly session: ConversationSession;
-  readonly isActive: boolean;
-  readonly isRunning: boolean;
-  /** 'active' = team run in progress; 'past' = had a team run; null = none. */
-  readonly teamMark: 'active' | 'past' | null;
-  /** Whether this row is currently being renamed inline. */
-  readonly isEditing: boolean;
-  readonly hoverSessionId: string | null;
-  readonly setHoverSessionId: (id: string | null) => void;
-  readonly onSelect: (id: string) => void;
-  readonly onDelete: (id: string) => void;
-  readonly onArchive: (id: string) => void;
-  /** Begin editing this row's title. */
-  readonly onStartEdit: (id: string) => void;
-  /** Commit the new title. The hook host decides whether to keep it
-   *  (trim, deduplicate, etc.). */
-  readonly onCommitEdit: (id: string, title: string) => void;
-  /** Abort the edit without writing. */
-  readonly onCancelEdit: () => void;
-  /** If true, swap the row's hover-actions for an Unarchive button. */
-  readonly archived?: boolean;
-  readonly onUnarchive?: (id: string) => void;
-}
-
-function SessionRow(props: SessionRowProps): ReactElement {
-  const { session: s } = props;
-  const hovered = props.hoverSessionId === s.id;
-  const KindIcon = s.kind === 'code' ? Code2 : Briefcase;
-
-  const onRowClick = (): void => {
-    if (props.isEditing) return;
-    props.onSelect(s.id);
-  };
-
-  const onDoubleClickTitle = (e: ReactMouseEvent): void => {
-    if (props.archived) return;
-    e.stopPropagation();
-    props.onStartEdit(s.id);
-  };
-
-  return (
-    <li
-      role="listitem"
-      className={
-        `session-row${props.isActive ? ' session-row--active' : ''}`
-        + `${props.archived ? ' session-row--archived' : ''}`
-      }
-      onClick={onRowClick}
-      onMouseEnter={() => props.setHoverSessionId(s.id)}
-      onMouseLeave={() => props.setHoverSessionId(null)}
-      title={s.title}
-      data-kind={s.kind}
-      data-archived={props.archived ? 'true' : 'false'}
-    >
-      <span
-        className={`session-row__kind session-row__kind--${s.kind}${props.archived ? ' session-row__kind--archived' : ''}`}
-        aria-hidden="true"
-      >
-        <KindIcon size={11} strokeWidth={2.2} aria-hidden="true" />
-      </span>
-      {props.isEditing ? (
-        <RenameInput
-          initialTitle={s.title}
-          onCommit={(title) => props.onCommitEdit(s.id, title)}
-          onCancel={props.onCancelEdit}
-        />
-      ) : (
-        <span
-          className="session-row__title"
-          onDoubleClick={onDoubleClickTitle}
-        >
-          {s.title}
-        </span>
-      )}
-      {props.teamMark && !props.archived && (
-        <span
-          className={`session-row__team-mark${props.teamMark === 'active' ? ' session-row__team-mark--active' : ''}`}
-          title={props.teamMark === 'active' ? '团队进行中' : '有团队历史'}
-        >
-          Team
-        </span>
-      )}
-      {props.isRunning && (
-        <span className="spinner spinner--xs" aria-hidden="true" />
-      )}
-      {/* Action cluster — hover-revealed. Archived rows expose the
-         archive-restore button only; live rows show delete + archive. */}
-      {hovered && !props.isRunning && (
-        props.archived && props.onUnarchive ? (
-          <button
-            type="button"
-            className="session-row__action session-row__action--unarchive"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onUnarchive!(s.id);
-            }}
-            title="Restore from archive"
-            aria-label={`Restore ${s.title}`}
-          >
-            <ArchiveRestore size={11} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        ) : (
-          <>
-            {!props.isEditing && !props.archived && (
-              <>
-                <button
-                  type="button"
-                  className="session-row__action session-row__action--rename"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.onStartEdit(s.id);
-                  }}
-                  title="Rename"
-                  aria-label={`Rename ${s.title}`}
-                >
-                  <Pencil size={11} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="session-row__action session-row__action--archive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.onArchive(s.id);
-                  }}
-                  title="Archive"
-                  aria-label={`Archive ${s.title}`}
-                >
-                  <Archive size={11} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="session-row__action session-row__action--delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.onDelete(s.id);
-                  }}
-                  title="Delete"
-                  aria-label={`Delete ${s.title}`}
-                >
-                  <X size={11} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-              </>
-            )}
-          </>
-        )
-      )}
-    </li>
-  );
-}
-
-// ── RenameInput ───────────────────────────────────────────────────────
-// A minimal inline editor. Enter saves, Escape cancels, blur saves.
-// Lives separately so its input can autofocus + own a ref without the
-// row re-rendering around it.
-interface RenameInputProps {
-  readonly initialTitle: string;
-  readonly onCommit: (title: string) => void;
-  readonly onCancel: () => void;
-}
-
-function RenameInput(props: RenameInputProps): ReactElement {
-  const [value, setValue] = useState(props.initialTitle);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    // Focus + select-all on mount so the user can overtype immediately
-    // (the common case) or paste over a substring (less common).
-    const el = inputRef.current;
-    if (el) {
-      el.focus();
-      el.select();
-    }
-  }, []);
-
-  const commit = (): void => {
-    // Defer to the parent — it applies the trim / no-op-empty rules.
-    // If the user typed nothing different we still bounce through
-    // commit so the row returns to the same shape it had on entry.
-    props.onCommit(value);
-  };
-
-  return (
-    <input
-      ref={inputRef}
-      type="text"
-      className="session-row__rename-input"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          commit();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          props.onCancel();
-        }
-      }}
-      onBlur={commit}
-      // Hitting Enter / Escape should NOT blur-then-commit-then-cancel.
-      // preventDefault on KeyDown keeps the input focused, then the
-      // parent's onCommit/onCancel removes the input from the tree so
-      // the final blur never fires.
-      aria-label="Session title"
-      spellCheck={false}
-    />
-  );
-}

@@ -1,0 +1,14 @@
+{
+  "id": "agpl-tool",
+  "name": "agpl-sample",
+  "version": "1.0.0",
+  "spdx": "AGPL-3.0-only",
+  "tier": "C",
+  "role": "tool",
+  "entersArtifact": false,
+  "hasNotice": false,
+  "noticeRequired": false,
+  "exceptionAdr": false,
+  "expect": "fail",
+  "failReason": "AGPL copyleft"
+}

@@ -1,0 +1,127 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BrowserToolSidebar, browserSidebarPhase } from './BrowserToolSidebar'
+import type { BrowserPreviewController } from '../../tooling/use-browser-preview'
+import type { ToolPreviewState } from '../../tooling/tool-preview-state'
+
+class ResizeFixture { observe(): void {} disconnect(): void {} }
+beforeEach(() => { vi.stubGlobal('ResizeObserver', ResizeFixture) })
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+const state: ToolPreviewState = { title: '浏览器', status: '执行中', detail: '', hasStarted: true, active: true, action: { id: 'step', title: '点击', target: '保存', status: '执行中' } }
+function controller(over: Partial<BrowserPreviewController> = {}): BrowserPreviewController {
+  return { scope: 'one', status: 'running', detail: '', url: 'https://page.test', frameSeq: 0, latestFrame: null, zoom: 1,
+    nativeState: { ok: true, scope: 'one', state: 'running', detail: '', control: 'agent', inFlight: 0, activeLabel: 'view-one', tabs: [{ id: 'target-one', label: 'view-one', title: 'Page', url: 'https://page.test' }] },
+    start: vi.fn(async () => {}), stop: vi.fn(async () => {}), navigate: vi.fn(async () => {}), input: vi.fn(async () => {}), setVisible: vi.fn(), setViewportSize: vi.fn(), setBounds: vi.fn(async () => {}), setZoom: vi.fn(async () => {}), takeControl: vi.fn(async () => {}), releaseControl: vi.fn(async () => {}), selectTab: vi.fn(async () => {}), createTab: vi.fn(async () => {}), ...over }
+}
+describe('native browser sidebar', () => {
+  it('shows the current action and control owner prominently above the page', () => {
+    const { container } = render(<BrowserToolSidebar state={state} preview={controller()} width={480} running onClose={() => {}} />)
+    const activity = container.querySelector('.browser-tool-sidebar__action-row[data-live]')!
+    expect(activity.textContent).toContain('智能体操作')
+    expect(activity.textContent).toContain('正在点击『保存』')
+    expect(activity.querySelector('.browser-tool-sidebar__activity-icon')).toBeTruthy()
+    expect(container.querySelector('.browser-tool-sidebar__controls')?.textContent).not.toContain('智能体操作')
+  })
+  it('does not repeat the assistant final answer in the browser footer', () => {
+    const finalAnswer = '网页已经处理完毕，以下是详细的完整结果。'
+    render(<BrowserToolSidebar state={{ ...state, active: false, settlement: { outcome: 'done', summary: finalAnswer } }} preview={controller()} width={480} onClose={() => {}} />)
+    expect(screen.queryByText(finalAnswer)).toBeNull()
+    expect(screen.getByRole('button', { name: /最近操作/ })).toBeTruthy()
+  })
+  it('shows an empty new-tab address without exposing the internal target marker', () => {
+    render(<BrowserToolSidebar state={state} preview={controller({ url: 'about:blank#trylo-native-private-id' })} width={480} onClose={() => {}} />)
+    expect((screen.getByRole('textbox', { name: '网页地址' }) as HTMLInputElement).value).toBe('')
+    expect(screen.queryByText(/trylo-native-private-id/)).toBeNull()
+  })
+  it('never uses a bitmap as live browser content even if a legacy frame exists', () => {
+    const preview = controller({ latestFrame: { data: 'legacy-data', deviceWidth: 1440, deviceHeight: 900, pageScaleFactor: 1 } })
+    const { container } = render(<BrowserToolSidebar state={state} preview={preview} width={480} running onClose={() => {}} />)
+    expect(container.querySelector('.browser-tool-sidebar__picture[data-native]')).toBeTruthy()
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByRole('button', { name: '我接管' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '我接管' }))
+    expect(preview.takeControl).toHaveBeenCalledOnce()
+  })
+  it('distinguishes pending takeover from confirmed control and allows handing back', () => {
+    const preview = controller()
+    const { rerender } = render(<BrowserToolSidebar state={state} preview={{ ...preview, nativeState: { ...preview.nativeState!, control: 'pending', inFlight: 1 } }} width={480} onClose={() => {}} />)
+    expect(screen.getByText('等待当前操作结束')).toBeTruthy()
+    expect(screen.queryByText('你已接管')).toBeNull()
+    rerender(<BrowserToolSidebar state={state} preview={{ ...preview, nativeState: { ...preview.nativeState!, control: 'user' } }} width={480} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: '交回智能体' }))
+    expect(preview.releaseControl).toHaveBeenCalledOnce()
+  })
+  it('states that the task still runs when only browser tool calls are held', () => {
+    const preview = controller()
+    render(<BrowserToolSidebar state={state} preview={{ ...preview, nativeState: { ...preview.nativeState!, control: 'user' } }} width={480} running onClose={() => {}} />)
+    expect(screen.getByText('浏览器操作已暂停；智能体仍在运行。')).toBeTruthy()
+    expect(screen.getByText('你已接管')).toBeTruthy()
+    expect(screen.getByText('等待交回控制权')).toBeTruthy()
+    expect(screen.queryByText('正在点击『保存』')).toBeNull()
+  })
+  it('the shared zoom buttons invoke actual native page zoom and fullscreen remains reachable', () => {
+    const preview = controller(), fullscreen = vi.fn()
+    render(<BrowserToolSidebar state={state} preview={preview} width={480} onToggleFullscreen={fullscreen} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: '200%' }))
+    expect(preview.setZoom).toHaveBeenCalledWith(2)
+    expect(screen.queryByRole('group', { name: '画面缩放' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '浏览器全屏' }))
+    expect(fullscreen).toHaveBeenCalledOnce()
+  })
+  it('uses the real native tab identity for selection and creation', () => {
+    const preview = controller()
+    render(<BrowserToolSidebar state={state} preview={preview} width={480} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Page' }))
+    expect(preview.selectTab).toHaveBeenCalledWith('view-one')
+    fireEvent.click(screen.getByRole('button', { name: '新建浏览器标签页' }))
+    expect(preview.createTab).toHaveBeenCalledOnce()
+  })
+  it('routes address, history, reload and closing a native tab to the real controller', async () => {
+    const navigation = vi.fn(async () => {}), closeTab = vi.fn(async () => {})
+    const preview = controller({ navigation, closeTab })
+    render(<BrowserToolSidebar state={state} preview={preview} width={480} onClose={() => {}} />)
+    const address = screen.getByRole('textbox', { name: '网页地址' })
+    fireEvent.change(address, { target: { value: 'example.test/path' } }); fireEvent.submit(address.closest('form')!)
+    await waitFor(() => expect(preview.navigate).toHaveBeenCalledWith('https://example.test/path'))
+    fireEvent.change(address, { target: { value: 'localhost:3000/page' } }); fireEvent.submit(address.closest('form')!)
+    await waitFor(() => expect(preview.navigate).toHaveBeenCalledWith('http://localhost:3000/page'))
+    fireEvent.click(screen.getByRole('button', { name: '网页后退' })); expect(navigation).toHaveBeenCalledWith('back')
+    fireEvent.click(screen.getByRole('button', { name: '网页前进' })); expect(navigation).toHaveBeenCalledWith('forward')
+    fireEvent.click(screen.getByRole('button', { name: '刷新网页' })); expect(navigation).toHaveBeenCalledWith('reload')
+    fireEvent.click(screen.getByRole('button', { name: '关闭标签页：Page' })); expect(closeTab).toHaveBeenCalledWith('view-one')
+  })
+  it('failed actions remain visible without opening history after a later successful action', () => {
+    const failed = { id: 'failed', title: '点击', target: '保存', status: '失败', error: '目标按钮已移除' }
+    render(<BrowserToolSidebar state={{ ...state, actions: [failed, state.action!] }} preview={controller()} width={480} onClose={() => {}} />)
+    expect(screen.getByRole('alert').textContent).toContain('目标按钮已移除')
+    expect(screen.queryByRole('list', { name: '最近工具操作' })).toBeNull()
+  })
+  it('reports failed takeover and does not manufacture a success receipt', async () => {
+    const preview = controller({ takeControl: vi.fn(async () => { throw new Error('接管请求失败') }) })
+    render(<BrowserToolSidebar state={state} preview={preview} width={480} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: '我接管' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('接管请求失败'))
+    expect(screen.queryByText('你已接管')).toBeNull()
+  })
+  it('replay is read-only evidence and never forwards keyboard, wheel or pointer input', () => {
+    const preview = controller()
+    const { container } = render(<BrowserToolSidebar state={state} preview={preview} replay={{ step: { src: 'data:image/png;base64,AA==', receivedAt: 1 } }} width={480} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: '画面' }))
+    const image = container.querySelector('img')!
+    expect(image.getAttribute('tabindex')).toBeNull()
+    fireEvent.pointerDown(image, { clientX: 20, clientY: 20 }); fireEvent.keyDown(image, { key: 'a' }); fireEvent.wheel(image, { deltaY: 100 })
+    expect(preview.input).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '回到实时' }))
+    expect(container.querySelector('img')).toBeNull()
+  })
+})
+describe('seven distinct browser phases', () => {
+  it.each([
+    ['idle', { hasStarted: false }, 'stopped'], ['connecting', {}, 'starting'],
+    ['executing', { active: true }, 'running'], ['done', { hasStarted: true }, 'running'],
+    ['disconnected', {}, 'error'], ['failed', { action: { id: 'f', title: '点击', target: '', status: '失败' } }, 'running'],
+    ['stopped', { settlement: { outcome: 'interrupted', summary: '任务已停止' } }, 'running'],
+  ] as const)('%s', (expected, projected, status) => {
+    expect(browserSidebarPhase({ title: '浏览器', status: '', detail: '', ...projected }, status)).toBe(expected)
+  })
+})

@@ -16,7 +16,7 @@
 // loop animation next to TurnProgress or the Tool loader.
 
 import type { ReactElement } from 'react';
-import { type ConversationRunViewState, viewStateShowsFooterDots } from './view-state';
+import { type ConversationRunViewState, viewStateLabel, viewStateShowsFooterDots } from './view-state';
 
 export interface StreamingIndicatorProps {
   /** The shared visible run state (spec §5.3). The dots
@@ -27,10 +27,11 @@ export interface StreamingIndicatorProps {
 
 export function StreamingIndicator(props: StreamingIndicatorProps): ReactElement | null {
   if (!viewStateShowsFooterDots(props.visibleState)) return null;
-  const waiting = props.visibleState === 'preparing' || props.visibleState === 'waiting_first_output';
+  // Round-3 P2: the footer says exactly what the header says for the same
+  // state (viewStateLabel) — no second phrasing, no missing ellipsis.
   return (
     <div className="streaming-indicator" role="status" aria-live="polite" data-state={props.visibleState}>
-      <span className="streaming-indicator__label">{waiting ? '正在准备' : '正在思考'}</span>
+      <span className="streaming-indicator__label">{viewStateLabel(props.visibleState)}</span>
       <span className="streaming-indicator__dots" aria-hidden="true">
         <span className="streaming-indicator__dot" />
         <span className="streaming-indicator__dot" />

@@ -1,90 +1,9 @@
-/* Trylo Desktop — ChatPanel.
- *
- * The main content area. Hosts the TryloFrame iframe. The
- * "lamp glow" signature element lives here: a directional
- * warm radial gradient behind the panel, gated by the
- * --lamp-glow-on token. See spike-results/phase-2-ui-redesign.md §6.
- */
-
-.chat-panel {
-  position: relative;
-  height: 100%;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  isolation: isolate;
-  transition: opacity var(--duration-base) var(--ease-out);
-  /* v1.15.7: was missing min-height:0 on the flex
-   * container, so MessageList's `overflow-y:auto` never
-   * had a constrained height to scroll within. Without
-   * this, the panel grows to fit its children and the
-   * scrollbar never appears. */
-  min-height: 0;
-}
-
-.chat-panel::before {
-  /* The lamp glow. */
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: var(--lamp-glow-on, 0);
-  background: radial-gradient(
-    ellipse 70% 60% at 50% 35%,
-    var(--lamp-warm-glow) 0%,
-    rgba(232, 225, 208, 0.025) 45%,
-    transparent 75%
-  );
-  transition: opacity var(--duration-slow) var(--ease-out);
-}
-
-.chat-panel__frame {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  border: none;
-  background: transparent;
-}
-
-/* v1.16.5+ (M3): capability slots of the shared
- * AgentConversationSurface. The corner slot floats over
- * the timeline's top-right (Work Diagnostics toggle) so
- * it never consumes layout space or shifts the canvas
- * when switching Code ↔ Work. The banner slot sits above
- * the timeline without changing the composer baseline. */
-.chat-panel__corner {
-  position: absolute;
-  top: var(--space-3);
-  right: var(--space-4);
-  z-index: 5;
-}
-
-.chat-panel__banner {
-  flex: 0 0 auto;
-  padding: var(--space-3) var(--space-4) 0;
-}
-
-/* Work reuses the Code chat primitives, but its empty state also has a
- * descriptive hint. Keep both inside the remaining chat area so the hint
- * cannot collide with the composer in a short window. */
-.work-empty-state {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  overflow: hidden;
-}
-
-/* 2026-08-28 (Work chat-mode split): the task-suggestion
-   chip under a conversation send whose text reads like a
-   work order. One quiet row: label + accept button. */
+.chat-panel { position: relative; width: 100%; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--bg); isolation: isolate; }
+.chat-panel__home { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-block: 118px 36px; }
+.chat-panel__home .input-bar-wrapper { margin-top: 0; margin-bottom: 0; }
+.chat-panel__corner { position: absolute; top: 12px; right: 16px; z-index: 5; }
+.chat-panel__banner { flex: 0 0 auto; padding: 12px 16px 0; }
+@media (max-height: 680px) { .chat-panel__home { justify-content: flex-start; padding-block: 36px; } }
 .task-suggestion {
   display: inline-flex;
   align-items: center;

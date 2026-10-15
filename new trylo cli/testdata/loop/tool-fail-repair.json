@@ -1,0 +1,4 @@
+{
+  "terminal": "completed",
+  "requiredKinds": ["tool_result", "text", "terminal"]
+}

@@ -255,9 +255,9 @@ export function createRemoteAdapter(options) {
         publicUrl = tunnelResult.publicUrl || '';
         tunnelRunning = tunnelResult.running;
       } catch (err) {
-        // Tunnel is optional: Remote works on LAN without it. Record and
-        // continue so the user can still pair over the local network.
-        sanitizedNote(`tunnel start failed (${err?.message || err}) — LAN pairing still available`);
+        // Keep the loopback gateway available for diagnostics/retry. Phone
+        // pairing still requires an externally reachable HTTPS endpoint.
+        sanitizedNote(`tunnel start failed (${err?.message || err}) — phone pairing requires HTTPS`);
       }
     }
     emitStatus();
@@ -299,6 +299,19 @@ export function createRemoteAdapter(options) {
   async function pairingInfo() {
     if (!gateway) {
       throw Object.assign(new Error('Remote gateway is not running.'), { code: 'REMOTE_NOT_RUNNING' });
+    }
+    // The listener is loopback-only; its fallback URL cannot be reached by a
+    // phone and production mobile correctly requires HTTPS. Never turn that
+    // local diagnostic endpoint into a misleading pairing QR.
+    let pairingUrl;
+    try { pairingUrl = new URL(publicUrl); } catch {}
+    if (!pairingUrl || pairingUrl.protocol !== 'https:'
+      || ['localhost', '127.0.0.1', '[::1]'].includes(pairingUrl.hostname)
+      || pairingUrl.username || pairingUrl.password || pairingUrl.search || pairingUrl.hash
+      || (pairingUrl.pathname !== '' && pairingUrl.pathname !== '/')) {
+      throw Object.assign(new Error('手机配对需要可从手机访问的 HTTPS 远程地址。请在远程设置中配置隧道或 HTTPS 地址后重试。'), {
+        code: 'REMOTE_PUBLIC_URL_REQUIRED', statusCode: 409,
+      });
     }
     const pairing = gateway.getPairingInfo(publicUrl || undefined);
     let qrDataUrl = '';

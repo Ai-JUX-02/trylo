@@ -86,6 +86,14 @@ vi.mock('../host-adapter/index', async () => {
   };
 });
 
+// Round-3 P1-10: the pre-spawn runtime guard stays out of these suites (its
+// own suite proves it with an injected probe); the mocked hostAdapter would
+// otherwise hang every run on the real probe timeout.
+vi.mock('./cli-runtime-guard', () => ({
+  verifyCliRuntime: vi.fn(async () => ({ ok: true })),
+  resetCliRuntimeGuardForTests: vi.fn(),
+}));
+
 // Import AFTER the mock.
 import { ConversationRunSupervisor } from './conversation-run-supervisor';
 import type { SettingsForCodeRun } from './runtime-types';
@@ -158,7 +166,11 @@ describe('ConversationRunSupervisor (M4-A Code lifecycle)', () => {
     const before = sup.getViewState('proj', 'convA');
     const linesBefore = spawned[0]!.promptLines.length;
 
-    await expect(sup.steerCode('proj', 'convA', '改用更简单的方案')).resolves.toBe(true);
+    // Round-3 P0-5: reason-typed. The frame really reached the running CLI —
+    // that is the only success claim anyone can honestly make here.
+    await expect(sup.steerCode('proj', 'convA', '改用更简单的方案')).resolves.toEqual({
+      kind: 'delivered',
+    });
 
     const after = sup.getViewState('proj', 'convA');
     expect(spawned).toHaveLength(1);
@@ -271,18 +283,21 @@ describe('ConversationRunSupervisor (M4-A Code lifecycle)', () => {
     expect(sup.activeCodeRuns().map((r) => r.conversationId)).toEqual(['convC']);
   });
 
-  it('a stop during an in-flight spawn cancels it and never projects a run state (§11.1 gap #2)', async () => {
+  it('a stop during pre-spawn checks cancels before any process exists (§11.1 gap #2)', async () => {
     const sup = new ConversationRunSupervisor();
     holdSpawn = true;
     const runPromise = sup.runCode('proj', 'convA', request('a'));
-    await Promise.resolve(); // the spawn is now suspended
-    await sup.stopConversation('proj', 'convA'); // supersede the spawn
+    await Promise.resolve(); // the run is still in pre-spawn checks
+    await sup.stopConversation('proj', 'convA'); // supersede it there
     holdSpawn = false;
     releaseSpawn();
     await runPromise;
-    // The orphan it created was stopped, and no late spawn set a
-    // wrong "running" state on the (now deleting) conversation.
-    expect(stopCalls).toContain('proc-1');
+    // Round-3 P1-10: the runtime guard made pre-spawn cancellable — the
+    // generation check after it returns quietly, so nothing ever spawns:
+    // no orphan to stop later, and no late spawn sets a wrong "running"
+    // state on the (now stopping) conversation.
+    expect(spawned).toHaveLength(0);
+    expect(stopCalls).toHaveLength(0);
     expect(sup.getViewState('proj', 'convA').running).toBe(false);
   });
 

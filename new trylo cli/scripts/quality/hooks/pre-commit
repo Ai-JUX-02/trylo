@@ -1,0 +1,18 @@
+#!/bin/sh
+# Structural defense for "new trylo cli": a red gate must not ride along with
+# the next commit. The guard is scoped — commits that do not touch this
+# directory pass through untouched, so the hook is safe to install
+# repo-wide via `core.hooksPath`.
+#
+# Installed by: node "new trylo cli/scripts/quality/install-hooks.mjs"
+
+if git rev-parse --verify --quiet HEAD > /dev/null 2>&1; then
+  staged=$(git diff --cached --name-only)
+else
+  staged=$(git ls-files)
+fi
+echo "$staged" | grep -q "^new trylo cli/" || exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+node "$root/new trylo cli/scripts/quality/pre-commit-check.mjs"
+exit $?

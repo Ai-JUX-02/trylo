@@ -16,6 +16,8 @@
 import type { ServicesClient } from '../services-host/services-client';
 import { ServiceRequestError } from '../services-host/services-client';
 import type {
+  ComputerPreviewStartParams,
+  ComputerPreviewResult,
   ResolvedToolRuntime,
   ToolingHealthResult,
   ToolingInstallBrowserResult,
@@ -33,10 +35,13 @@ import type {
   ViewportInputParams,
   ViewportInputResult,
   ViewportNavigateResult,
+  ViewportResizeParams,
+  ViewportResizeResult,
   ViewportStartResult,
   ViewportStopResult,
 } from '../services-host/methods';
 import type { ResolveToolRuntimeRequest } from './types';
+import { nativeBrowserCommand } from '../host-adapter/native-browser';
 
 /**
  * Sidecar JOB budgets (per-call `timeoutMs` overrides; the RPC default is
@@ -52,6 +57,20 @@ const HEALTH_TIMEOUT_MS = 120_000;
 
 export function createToolingFacade(client: ServicesClient) {
   return {
+    // Subscribe during effect setup, not facade construction in render.
+    // StrictMode discards a render and replays setup/cleanup; each setup
+    // must attach to the committed client and return its own cleanup.
+    connectNativeBridge: (): (() => void) => client.onEvent('tooling.nativeBrowserCommand', command => {
+      void nativeBrowserCommand(command).then(
+        result => client.request('tooling.nativeBrowserCommandResult', { id: command.id, result }),
+        error => client.request('tooling.nativeBrowserCommandResult', { id: command.id, error: error instanceof Error ? error.message : String(error) }),
+      ).catch(() => {});
+    }),
+    nativeBrowserOpen: (scope: { readonly projectRoot: string; readonly conversationId: string }) => client.request('tooling.nativeBrowserOpen', scope, { timeoutMs: 60000 }),
+    nativeBrowserState: (scope: string) => client.request('tooling.nativeBrowserState', { scope }),
+    nativeBrowserControl: (scope: string, heldByUser: boolean) => client.request('tooling.nativeBrowserControl', { scope, heldByUser }),
+    nativeBrowserSelect: (scope: string, label: string) => client.request('tooling.nativeBrowserSelect', { scope, label }),
+    nativeBrowserCreate: (scope: string) => client.request('tooling.nativeBrowserCreate', { scope }),
     /**
      * Compose one run's tool Profile, or `null` when the tool plane cannot
      * answer. Never rejects.
@@ -143,10 +162,19 @@ export function createToolingFacade(client: ServicesClient) {
     /** Embedded browser panel (fork of vscode-browser-preview's CDP
      *  screencast architecture). `viewportStart` may take a while to boot
      *  Chromium and locate a page target — grant it a generous budget. */
-    async viewportStart(cdpPort?: number): Promise<ViewportStartResult> {
-      return client.request('tooling.viewportStart', cdpPort ? { cdpPort } : {}, {
+    async viewportStart(cdpPort?: number, scope?: { readonly projectRoot: string; readonly conversationId: string }, viewport?: { readonly width: number; readonly height: number }): Promise<ViewportStartResult> {
+      return client.request('tooling.viewportStart', {
+        ...(scope ?? (cdpPort ? { cdpPort } : {})),
+        ...(viewport ? { viewportWidth: viewport.width, viewportHeight: viewport.height } : {}),
+      }, {
         timeoutMs: 60_000,
       });
+    },
+
+    /** Re-emulate the page to the panel's current box. Called on panel resize
+     *  so the frame keeps filling the sidebar instead of letterboxing. */
+    async viewportResize(params: ViewportResizeParams): Promise<ViewportResizeResult> {
+      return client.request('tooling.viewportResize', params);
     },
 
     async viewportNavigate(url: string): Promise<ViewportNavigateResult> {
@@ -159,6 +187,18 @@ export function createToolingFacade(client: ServicesClient) {
 
     async viewportStop(): Promise<ViewportStopResult> {
       return client.request('tooling.viewportStop');
+    },
+
+    async computerPreviewStart(params: ComputerPreviewStartParams): Promise<ComputerPreviewResult> {
+      return client.request('tooling.computerPreviewStart', params);
+    },
+
+    async computerPreviewStop(params?: string | { readonly scope?: string; readonly streamId?: string }): Promise<ComputerPreviewResult> {
+      return client.request('tooling.computerPreviewStop', typeof params === 'string' ? { scope: params } : params);
+    },
+
+    async computerPreviewAck(params: { readonly scope: string; readonly streamId: string; readonly seq: number }): Promise<ComputerPreviewResult> {
+      return client.request('tooling.computerPreviewAck', params);
     },
 
     /** PR-3 (§6.5): what the browser left in THIS conversation's runtime

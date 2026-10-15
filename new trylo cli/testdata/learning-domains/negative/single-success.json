@@ -1,0 +1,43 @@
+{
+  "episodes": [
+    {
+      "id": "only-one",
+      "conversationId": "conv-1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "baselinePromptHash": "ph_baseline_role",
+      "candidatePromptHash": "ph_candidate_role",
+      "candidatePatch": [
+        {
+          "op": "replace_section",
+          "section": "phrasing",
+          "fromHash": "p1",
+          "toHash": "p2"
+        }
+      ],
+      "versions": {
+        "model": "grok-4.6",
+        "toolset": "core-tools-1",
+        "codeBaseline": "git:4c3f565",
+        "workflow": "wf:none"
+      },
+      "baselineExternal": {
+        "kind": "test",
+        "result": "fail",
+        "ref": "fail",
+        "selfGenerated": false
+      },
+      "candidateExternal": {
+        "kind": "test",
+        "result": "pass",
+        "ref": "pass",
+        "selfGenerated": false
+      },
+      "weakSignals": [],
+      "privacy": { "rawUserTextStored": false, "allowedFields": ["id"] }
+    }
+  ]
+}

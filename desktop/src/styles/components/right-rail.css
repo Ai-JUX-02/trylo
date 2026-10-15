@@ -9,7 +9,7 @@
 .right-rail {
   display: flex;
   flex-direction: column;
-  width: var(--rail-right-w, 260px);
+  width: clamp(280px, var(--rail-right-w, 360px), 45vw);
   flex: 0 0 auto;
   /* Match the page so the tree reads as a quiet side panel,
      not a second surface competing with the work area. The
@@ -26,7 +26,7 @@
   justify-content: space-between;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
-  min-height: 32px;
+  min-height: 64px;
   flex: 0 0 auto;
 }
 
@@ -34,9 +34,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+  letter-spacing: 0;
   color: var(--fg-muted);
   font-weight: 600;
 }
@@ -70,6 +69,20 @@
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--ink-hover) transparent;
+}
+
+.right-rail__body[hidden] { display: none; }
+.right-rail__tabs { display:flex; gap:16px; padding:0 16px; border-bottom:1px solid var(--border); }
+.right-rail__tabs button { font-size:12px; color:var(--fg-muted); padding:10px 2px; border-bottom:2px solid transparent; }
+.right-rail__tabs button[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--fg); }
+.right-rail__preview { overflow:hidden; }
+.right-rail__preview > .file-peek:not(.file-peek--expanded),
+.right-rail__preview > .git-diff-view { width:100%; height:100%; border-left:0; min-width:0; }
+.right-rail__preview > .file-peek { background:var(--bg); }
+
+@media (max-width:1100px) {
+  .right-rail { position:absolute; inset:0 0 0 auto; z-index:30; width:min(420px, calc(100% - 220px)); box-shadow:-8px 0 28px #00000008; }
+  .app-shell__body > .rail-resizer--right { display:none; }
 }
 
 .right-rail__empty {

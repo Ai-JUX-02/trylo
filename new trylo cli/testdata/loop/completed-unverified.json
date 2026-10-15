@@ -1,0 +1,4 @@
+{
+  "terminal": "completed",
+  "requiredKinds": ["terminal", "observation"]
+}

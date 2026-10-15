@@ -60,7 +60,7 @@ describe('ServiceManager', () => {
     const spawns = h.invokes.filter((i) => i.cmd === 'servicehost_spawn');
     expect(spawns.length).toBe(1);
     expect(spawns[0]?.args).toMatchObject({ sidecarsDir: '/r/sidecars', appDataDir: '/ad' });
-    expect(manager.currentHealth).toBe('starting'); // ready event hasn't fired yet
+    expect(manager.currentHealth).toBe('ready'); // spawn is readiness-bounded
   });
 
   it('coalesces concurrent owners into one spawn', async () => {
@@ -71,12 +71,12 @@ describe('ServiceManager', () => {
     expect(h.invokes.filter((i) => i.cmd === 'servicehost_spawn')).toHaveLength(1);
   });
 
-  it('health flips to ready when the sidecar announces', async () => {
+  it('recovers readiness when a reloaded renderer reuses an announced host', async () => {
     const h = createHarness();
     h.setRunning(true);
     const manager = new ServiceManager(h.deps, FAST);
     await manager.ensureRunning(SPAWN);
-    expect(manager.currentHealth).toBe('starting');
+    expect(manager.currentHealth).toBe('ready');
     h.emit(encodeFrame({ version: 1, type: 'event', topic: 'ready', payload: { version: 'test' } }));
     expect(manager.currentHealth).toBe('ready');
   });

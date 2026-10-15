@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-wp23",
+    "noEmitOnError": false,
+    "declaration": false
+  },
+  "include": [
+    "src/internal/surface/cli/tui/**/*.ts",
+    "src/internal/surface/cli/tool-output.ts",
+    "src/internal/protocol/cli-stream.ts",
+    "src/internal/protocol/envelope.ts"
+  ]
+}

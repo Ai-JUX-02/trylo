@@ -152,6 +152,9 @@ export class ServiceManager {
       appDataDir: options.appDataDir,
       hermesPython: options.hermesPython ?? null,
     });
+    // Rust returns only after readiness, including reuse after a webview
+    // reload. The original ready event belongs to the previous renderer.
+    this.setHealth('ready');
   }
 
   private async status(): Promise<ServiceStatus> {

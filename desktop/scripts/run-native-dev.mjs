@@ -1,0 +1,28 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
+const [executable, ...args] = process.argv.slice(2);
+if (!executable) throw new Error('Cargo did not provide a Desktop executable.');
+const integrity = process.env.TRYLO_DESKTOP_INTEGRITY ?? 'M';
+if (!['M', 'H'].includes(integrity)) {
+  throw new Error('TRYLO_DESKTOP_INTEGRITY must be M or explicitly selected H.');
+}
+const debugExecutable = fileURLToPath(new URL('../src-tauri/target/debug/trylo-desktop.exe', import.meta.url));
+if (integrity === 'H' && resolve(executable).toLowerCase() !== debugExecutable.toLowerCase()) {
+  throw new Error('High development mode is limited to this checkout\'s debug Desktop executable.');
+}
+const prepare = fileURLToPath(new URL('./prepare-native-executable.ps1', import.meta.url));
+const prepared = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass',
+  '-File', prepare, '-ExecutablePath', executable, '-IntegrityLevel', integrity], {
+  stdio: 'inherit', windowsHide: true,
+});
+if (prepared.error) throw prepared.error;
+if (prepared.status !== 0) process.exit(prepared.status ?? 1);
+
+// High requires an explicit environment or checkout-local choice.
+// The preparation helper validates the exact Desktop path.
+// Running here keeps Cargo/Tauri in charge of build and restart lifecycle.
+const app = spawnSync(executable, args, { stdio: 'inherit', windowsHide: false });
+if (app.error) throw app.error;
+process.exit(app.status ?? 1);

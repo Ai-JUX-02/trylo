@@ -7,7 +7,13 @@
    (--success) — the brand is the brand; mixing in a second
    hue for a status the percentage already communicates
    is noise. Mature-IDE convention: VSCode Copilot and
-   Cursor both use a single accent for the gauge. */
+   Cursor both use a single accent for the gauge.
+   NOTE: tokens.css since remapped --brand-100..500 onto
+   neutral ink aliases ("legacy accent aliases keep
+   existing tool/settings surfaces neutral"), so the
+   arc/label now render near-black on the light theme.
+   That remap is deliberate; do not "fix" it back to gold
+   here. */
 
 /* v1.17.3: restored SVG ring gauge. The ring shows context
    usage as a circular arc (0–100%) next to the token label.
@@ -64,8 +70,7 @@
 }
 
 /* v1.16.2.1: ring is now clickable. Hover + cursor cues
-   invite the click; the popover below provides the
-   actual interaction. */
+   invite the click; the action fires directly on click. */
 .context-ring--clickable {
   cursor: pointer;
 }
@@ -73,123 +78,55 @@
   filter: brightness(1.1);
 }
 
-/* v1.16.2.1: popover anchored to the ring. Shows the
-   full context usage (47k / 200k tokens 24%) and a
-   "Compact now" action. Positioned absolute under the
-   ring wrapper, right-aligned so it doesn't push the
-   layout. */
-.context-ring-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  min-width: 240px;
-  padding: 12px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-elevated, rgba(20, 20, 20, 0.96));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  color: var(--text-primary, rgba(255, 255, 255, 0.92));
-  font-size: var(--text-xs, 12px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.context-ring-popover__head {
-  font-weight: 600;
-  font-size: var(--text-sm, 13px);
-  color: var(--brand-200, #E3D493);
-  /* v1.16.2.3: lay the head + the (optional) No-CLI
-     badge out side-by-side. */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-/* v1.16.2.3: small "No live CLI" pill next to the
-   popover head. Always-on when there's no live CLI
-   process so the user knows upfront why their click
-   didn't do anything visible. */
-.context-ring-popover__badge {
+/* v1.17.4: hover host + tooltip pill.
+   The wrapper (not the button) owns the hover listeners —
+   a disabled button fires no mouse events, and the
+   passive ring must still be able to show its hint. The
+   pill is a sibling of the button, positioned against
+   this wrapper, and opens UPWARD: the v1.16.2.5 popover
+   opened downward and kept getting clipped by the
+   composer's bottom edge. */
+.context-ring-wrap {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border: 1px solid var(--danger, #D96666);
-  border-radius: 999px;
-  color: var(--danger, #D96666);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  background: var(--danger-soft, rgba(217, 102, 102, 0.10));
-  cursor: help;
 }
 
-.context-ring-popover__usage {
-  font-variant-numeric: tabular-nums;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.context-ring-popover__pct {
-  font-weight: 600;
-  color: var(--brand-300, #DBC97F);
-  font-size: var(--text-sm, 13px);
-}
-
-.context-ring-popover__model {
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
-  font-size: var(--text-xs, 12px);
-  /* Truncate long model names */
+/* Inverted surface via tokens: a dark pill on the light
+   theme, a light pill on the dark theme — contrast in
+   both without a second hardcoded palette. Visual only
+   (aria-hidden in the component); the button's
+   aria-label carries the same words. */
+.context-ring__tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
+  box-shadow: 0 2px 8px rgba(38, 39, 37, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    visibility var(--duration-fast) var(--ease-out);
 }
 
-.context-ring-popover__action {
-  margin-top: 4px;
-  padding: 6px 10px;
-  border: 1px solid var(--brand-500, #9F9054);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--brand-soft, rgba(219, 201, 127, 0.12));
-  color: var(--brand-200, #E3D493);
-  font-size: var(--text-xs, 12px);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 120ms ease-out;
-}
-.context-ring-popover__action:hover:not(:disabled) {
-  background: var(--brand-soft-strong, rgba(219, 201, 127, 0.22));
-}
-.context-ring-popover__action:disabled {
-  opacity: 0.5;
-  cursor: progress;
+.context-ring__tip--open {
+  opacity: 1;
+  visibility: visible;
 }
 
-/* v1.16.2.2: small "no live CLI" hint that shows under
-   the Compact button when the user clicks in a dev
-   session (no Tauri spawn → no activeProcessId). Tells
-   the user exactly why their click didn't appear to do
-   anything, instead of silently failing. */
-.context-ring-popover__hint {
-  margin-top: 4px;
-  padding: 6px 8px;
-  border: 1px dashed var(--border, rgba(255, 255, 255, 0.18));
-  border-radius: var(--radius-sm, 4px);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
-  font-size: 11px;
-  line-height: 1.4;
-}
-.context-ring-popover__hint code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: rgba(255, 255, 255, 0.06);
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: 11px;
-}
+/* v1.17.4 cleanup: the v1.16.2.5 popover styles that
+   lived here (__head / __badge / __usage / __pct /
+   __model / __action / __hint, ~120 lines) were removed
+   with that design in v1.16.2.6 — the component had
+   stopped rendering every one of those classes (grep:
+   zero references outside this file). The ring is a
+   plain button again; see the component header. */

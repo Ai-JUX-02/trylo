@@ -26,6 +26,7 @@
 @import './styles/components/message.css';
 @import './styles/components/landing-surface.css';
 @import './styles/components/left-rail.css';
+@import './styles/components/profile-card.css';
 @import './styles/components/right-rail.css';
 @import './styles/components/file-peek.css';
 @import './styles/components/preview.css';
@@ -83,3 +84,5 @@
  */
 @import '../../work/src/renderer/artifact-card.css';
 @import '../../work/src/renderer/work-capability.css';
+@import './styles/components/event-flow.css';
+@import './styles/components/tool-preview.css';

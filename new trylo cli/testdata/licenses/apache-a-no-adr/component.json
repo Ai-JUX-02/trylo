@@ -1,0 +1,14 @@
+{
+  "id": "apache-a-no-adr",
+  "name": "external-agent-runtime",
+  "version": "0.0.0",
+  "spdx": "Apache-2.0",
+  "tier": "A",
+  "role": "core-framework",
+  "entersArtifact": true,
+  "hasNotice": true,
+  "noticeRequired": true,
+  "exceptionAdr": false,
+  "expect": "fail",
+  "failReason": "Apache-2.0 at tier A without exception ADR"
+}

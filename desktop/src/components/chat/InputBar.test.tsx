@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { InputBar, type InputBarProps } from './InputBar';
 
@@ -31,17 +31,33 @@ function props(overrides: Partial<InputBarProps> = {}): InputBarProps {
 }
 
 describe('InputBar conversation kind', () => {
+  it('blocks both keyboard and form submission when sending is unavailable', () => {
+    const onSend = vi.fn();
+    const { container } = render(<InputBar {...props({ text: 'pending attachment', canSend: false, onSend })} />);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
+    fireEvent.submit(container.querySelector('form')!);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+  it('retains follow-up sending and one stop action during a run', () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    render(<InputBar {...props({ text: 'change direction', running: true, onSend, onStop })} />);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message' }), { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith('change direction');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(onStop).toHaveBeenCalledOnce();
+  });
   it('keeps Code-specific controls in a Code conversation', () => {
     render(<InputBar {...props()} />);
 
-    expect(screen.getByRole('button', { name: 'Code sub-mode: Agent' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '任务类型: Code' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeTruthy();
   });
 
   it('shows a Work marker without inert Code controls in a Work conversation', () => {
     render(<InputBar {...props({ conversationKind: 'work' })} />);
 
-    expect(screen.getByLabelText('Work conversation')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '任务类型: Work' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Code sub-mode/ })).toBeNull();
     // P2-1 Work Package B: Work gained full attachment capability —
     // the SAME button + AttachmentList as Code (no second copy).
@@ -51,7 +67,7 @@ describe('InputBar conversation kind', () => {
     // page" copy implied Work was an Office generator.
     expect(
       screen.getByRole('textbox', { name: 'Message' }).getAttribute('placeholder'),
-    ).toBe('在当前工作区研究、整理或生成产物…');
+    ).toBe('描述你想完成的工作，或添加资料…');
   });
 
   it('keeps the composer active and explains steering while a run is active', () => {
@@ -67,7 +83,7 @@ describe('InputBar conversation kind', () => {
 
     expect(
       screen.getByRole('textbox', { name: 'Message' }).getAttribute('placeholder'),
-    ).toBe('输入调整方向，Enter 立即引导当前任务…');
+    ).toBe('输入调整方向，Enter 发送后续消息…');
     // run-controls §UI-B: during a live turn the send slot stays the arrow
     // (messages QUEUE by default); the single Stop lives in the header.
     expect(screen.getByRole('button', { name: '发送（可排队或打断）' })).toBeTruthy();
@@ -87,6 +103,7 @@ describe('InputBar conversation kind', () => {
         })}
       />,
     );
+    fireEvent.click(screen.getByRole('button', { name: '学习与协作选项' }));
     expect(screen.getByRole('button', { name: 'User Learning shadow, Evidence 3' })).toBeTruthy();
   });
 
@@ -94,7 +111,7 @@ describe('InputBar conversation kind', () => {
     render(<InputBar {...props({ codeMode: 'cognition' })} />);
     expect(
       screen.getByRole('textbox', { name: 'Message' }).getAttribute('placeholder'),
-    ).toContain('Tell Trylo how you like to work');
+    ).toContain('说说你希望 Trylo 怎样与你合作');
   });
 
   it('shows the tool-profile chip in Work only (which MCP servers this run sees)', () => {

@@ -1,0 +1,1 @@
+{"hint": "keep paths inside the root", "labels": ["containment"], "appliesWhen": {"tools": ["write_file"], "failureFamily": "sandbox_denied"}}

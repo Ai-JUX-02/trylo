@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "required": [
+    "protocolVersion",
+    "eventId",
+    "sequence",
+    "timestamp",
+    "kind",
+    "payload",
+    "producerId",
+    "producerSequence"
+  ],
+  "properties": {
+    "protocolVersion": { "const": "0.0" },
+    "eventId": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "turnId": { "type": "string", "minLength": 1 },
+    "attemptId": { "type": "string", "minLength": 1 },
+    "correlationId": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "minLength": 1 },
+    "payload": { "type": "object" },
+    "producerId": { "type": "string", "minLength": 1 },
+    "producerSequence": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": true
+}

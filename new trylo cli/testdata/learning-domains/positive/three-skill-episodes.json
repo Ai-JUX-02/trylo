@@ -1,0 +1,56 @@
+{
+  "episodes": [
+    {
+      "id": "s1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "trajectory": {
+        "nodeIds": ["repro", "patch", "verify"],
+        "stepCount": 3,
+        "hadFailureRecovery": false,
+        "hadChecks": true
+      },
+      "outcome": "success",
+      "steps": ["reproduce failing test", "patch the production code", "re-run the same test"],
+      "checks": ["unit_test exit 0"]
+    },
+    {
+      "id": "s2",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "trajectory": {
+        "nodeIds": ["repro", "patch", "verify"],
+        "stepCount": 3,
+        "hadFailureRecovery": false,
+        "hadChecks": true
+      },
+      "outcome": "success",
+      "steps": ["reproduce failing test", "patch the production code", "re-run the same test"],
+      "checks": ["unit_test exit 0"]
+    },
+    {
+      "id": "f1",
+      "taskFamily": {
+        "id": "ts-unit-fix",
+        "intentClass": "fix_failing_unit_test",
+        "checkKind": "unit_test"
+      },
+      "trajectory": {
+        "nodeIds": ["repro", "patch", "verify"],
+        "stepCount": 3,
+        "hadFailureRecovery": true,
+        "hadChecks": true
+      },
+      "outcome": "failure",
+      "steps": ["reproduce failing test", "patch the production code", "re-run the same test"],
+      "checks": ["unit_test exit 0"],
+      "failureMode": "patched tests instead of production code"
+    }
+  ]
+}

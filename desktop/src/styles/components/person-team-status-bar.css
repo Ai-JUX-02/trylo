@@ -57,3 +57,5 @@
     font-size: 12px;
   }
 }
+
+.person-team-status-bar { width:calc(100% - 64px); max-width:var(--conversation-width); margin-inline:auto; border:0; padding-inline:0; }

@@ -15,26 +15,23 @@
 // 的事件都要展示". Phase 3 can surface them in a
 // dedicated debug panel.
 
-import type { ChatMessage, ToolMessage, ThinkingMessage, TextMessage, TurnMessage, CompactionMessage, SubagentMessage } from './types';
+import type { ChatMessage, NoticeMessage, ToolMessage, TurnMessage, SubagentMessage } from './types';
+import { turnCompletion } from './types';
 import type {
   LoopEvent,
   ToolUseEvent,
   ToolResultEvent,
-  ThinkingEvent,
-  TextEvent,
   TurnEndEvent,
-  CompactEvent,
-  CompactionTriggerEvent,
   SubagentEvent,
+  RuntimeWarningEvent,
 } from '../../host-adapter/loop-events';
 import { toPersistedToolResultContent } from '../../tooling/tool-result-content';
 import { isTeamSeatId } from '../../surfaces/shared/seats';
-
-let _nextId = 0;
-function nextId(prefix: string): string {
-  _nextId += 1;
-  return `${prefix}-${_nextId}`;
-}
+import { eventMessageId, lastUserIndex } from './message-identity';
+import { applyText, applyThinking } from './stream-message-reducer';
+import { finalizeLatestTurnTimer, freezeTurnTimer, hasAssistantOutputInTurn } from './turn-timer';
+import { applyCompact, applyCompactionTrigger } from './compaction-message-reducer';
+export { finalizeLatestTurnTimer } from './turn-timer';
 
 function toolSummary(e: ToolUseEvent): string {
   const input = e.input;
@@ -50,117 +47,6 @@ function toolSummary(e: ToolUseEvent): string {
   }
 }
 
-/** Streaming snapshots can arrive out of order when a throttled event and a
- * final event cross. Never replace a longer in-place value with a shorter
- * partial snapshot; that was the visible "sentence gets cut off" defect. */
-function mergePartialSnapshot(previous: string, incoming: string, partial: boolean): string {
-  if (!partial || previous.length === 0) return incoming;
-  if (incoming.startsWith(previous)) return incoming;
-  if (previous.startsWith(incoming)) return previous;
-  return incoming.length >= previous.length ? incoming : previous;
-}
-
-/** Avoid painting the first two or three tokens as a standalone thought and
- * replacing them immediately with a full phrase. We still stream once there
- * is a readable clause; short completed blocks are emitted by their final
- * non-partial event, so no content is lost. */
-function isReadablePartial(text: string): boolean {
-  const trimmed = text.trim();
-  if (/[。！？.!?\n]/.test(trimmed)) return true;
-  return trimmed.replace(/\s+/g, '').length >= 18;
-}
-
-function applyThinking(msgs: ChatMessage[], e: ThinkingEvent): ChatMessage[] {
-  if (e.partial === true && !isReadablePartial(e.preview || e.summary)) return msgs;
-  // v1.15.9.e: handle thinking as a STREAM within a
-  // single thinking block, but CREATE A NEW thinking
-  // message when a new thinking block starts.
-  //
-  // "Adjacent" = no tool or text event between the last
-  // message and the new thinking. Mid-stream thinking
-  // deltas are adjacent (they update the last thinking).
-  // A new thinking phase (after tools or text) is not
-  // adjacent (it creates a new thinking).
-  //
-  // This gives the user a fluid flow:
-  //   thinking1 → tool1, tool2 → thinking2 → tool3, tool4
-  // Each "phase" gets its own thinking message. Without
-  // this, the reducer would merge all thinkings in a
-  // turn into a single message and the user would only
-  // see the last thinking's content.
-  //
-  // v1.16.4: first non-empty thinking event for a turn
-  // freezes the user message's `finalElapsedMs` (so the
-  // TurnProgress row transitions from spinning +
-  // counting to "已工作 0:12" forever). The user
-  // message's `turnStartedAt` is the anchor; we compute
-  // elapsed at the moment of first output, never again.
-  const lastUserIdx = lastUserIndex(msgs);
-  // v1.16.4: stamp turnId on every new event from the
-  // current user message's id. Phase boundaries in
-  // MessageList are keyed on this — events arriving in
-  // batch order no longer misplace the thinking block.
-  const turnId = lastUserIdx >= 0 ? msgs[lastUserIdx]?.id : undefined;
-  for (let i = msgs.length - 1; i > lastUserIdx; i--) {
-    const m = msgs[i];
-    if (!m) break;
-    if (m.kind === 'thinking') {
-      // Adjacent thinking found — update it (stream
-      // continuation of the same phase).
-      const updated: ThinkingMessage = {
-        ...m,
-        summary: mergePartialSnapshot(m.summary, e.summary, e.partial === true),
-        preview: mergePartialSnapshot(m.preview, e.preview, e.partial === true),
-        fullLength: Math.max(m.fullLength, e.fullLength),
-        // Always use the latest partial flag from the
-        // translator. While the model is streaming, the
-        // flag is true and the card auto-expands; when
-        // the model is done, the flag becomes false and
-        // the card stays open.
-        partial: e.partial ?? m.partial,
-        createdAt: e.ts,
-      };
-      return [...msgs.slice(0, i), updated, ...msgs.slice(i + 1)];
-    }
-    if (m.kind === 'tool' || m.kind === 'text') {
-      // Hit a non-thinking message — the new thinking is
-      // not adjacent to the previous thinking. It's a
-      // new phase; create a new message below.
-      break;
-    }
-  }
-  // No adjacent thinking, create new (new thinking phase)
-  // v1.16.4: first output for this turn? Freeze the
-  // user message's finalElapsedMs now. The TurnProgress
-  // row will switch from spinner to static on the next
-  // render. The check is "no prior assistant text/
-  // thinking in this turn" — if any of those exist,
-  // we're past the first-output moment.
-  const hasOutputInThisTurn = hasAssistantOutputInTurn(msgs, lastUserIdx);
-  let next = msgs;
-  if (!hasOutputInThisTurn) {
-    next = freezeTurnTimer(next, lastUserIdx, e.ts);
-  }
-  const t: ThinkingMessage = {
-    id: nextId('thinking'),
-    // v1.16.5+ (spec §5.2): a new phase gets a fresh
-    // stable phaseId. Adjacent thinking deltas update the
-    // same card (and keep this id); a new thinking after
-    // tools/text creates a new phase + new id.
-    phaseId: nextId('phase'),
-    kind: 'thinking',
-    role: 'assistant',
-    createdAt: e.ts,
-    summary: e.summary,
-    preview: e.preview,
-    fullLength: e.fullLength,
-    partial: e.partial ?? false,
-    turn: e.turn,
-    turnId,
-  };
-  return [...next, t];
-}
-
 /** v1.16.5+ (spec §5.2): the phaseId a tool belongs to.
  *  A tool inherits the phase of the nearest message that
  *  already carries a phaseId (its thinking, or a sibling
@@ -170,6 +56,7 @@ function applyThinking(msgs: ChatMessage[], e: ThinkingEvent): ChatMessage[] {
 function phaseIdOf(
   msgs: readonly ChatMessage[],
   lastUserIdx: number,
+  event: ToolUseEvent,
 ): string {
   for (let i = msgs.length - 1; i > lastUserIdx; i--) {
     const m = msgs[i];
@@ -184,135 +71,12 @@ function phaseIdOf(
     if (m.kind === 'text' && m.role === 'assistant') break;
     if (m.phaseId !== undefined) return m.phaseId;
   }
-  return nextId('phase');
-}
-
-/** Find the index of the last user message in `msgs`,
- *  or -1 if there is no user message yet. The boundary
- *  is the source of truth for "which turn does an
- *  incoming event belong to?". Used by applyText and
- *  applyThinking to scope in-place updates to the
- *  current turn only — preventing a late event from
- *  a previous spawn from overwriting the new turn. */
-function lastUserIndex(msgs: readonly ChatMessage[]): number {
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i] && msgs[i]!.kind === 'text' && msgs[i]!.role === 'user') {
-      return i;
-    }
-  }
-  return -1;
-}
-
-// v1.16.4: per-turn freeze helpers. Cline's pattern —
-// each user turn has its own `turnStartedAt` and (once
-// the first model output arrives) its own
-// `finalElapsedMs` on the user message itself. There is
-// no top-level "current turn" state to lose or reset.
-// See Cline's RequestStartRow + ClineApiReqInfo.cost
-// (the "done" state). Trylo's analogue is "first
-// non-empty thinking or text event for a turn".
-
-/** Has the model already produced any visible output
- *  (thinking or text) in the current turn? Used to
- *  detect "this is the first output event" — the
- *  moment we freeze the TurnProgress timer. */
-function hasAssistantOutputInTurn(
-  msgs: readonly ChatMessage[],
-  lastUserIdx: number,
-): boolean {
-  for (let i = msgs.length - 1; i > lastUserIdx; i--) {
-    const m = msgs[i];
-    if (!m) continue;
-    if (m.kind === 'thinking' || (m.kind === 'text' && m.role === 'assistant')) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** Compute and stamp `finalElapsedMs` on the user
- *  message that started the current turn. Idempotent
- *  if already set (we don't overwrite a frozen
- *  value). Returns the (possibly unchanged) array.
- *  Pure — no React state. */
-function freezeTurnTimer(
-  msgs: readonly ChatMessage[],
-  lastUserIdx: number,
-  nowTs: number,
-): ChatMessage[] {
-  if (lastUserIdx < 0) return [...msgs];
-  const u = msgs[lastUserIdx];
-  if (!u || u.kind !== 'text' || u.role !== 'user') return [...msgs];
-  if (u.finalElapsedMs !== undefined) return [...msgs];
-  const started = u.turnStartedAt;
-  if (started === undefined) return [...msgs];
-  const elapsed = Math.max(0, nowTs - started);
-  const updated: TextMessage = { ...u, finalElapsedMs: elapsed };
-  const out: ChatMessage[] = [...msgs];
-  out[lastUserIdx] = updated;
-  return out;
-}
-
-export function finalizeLatestTurnTimer(
-  msgs: readonly ChatMessage[],
-  nowTs: number = Date.now(),
-): ChatMessage[] {
-  return freezeTurnTimer(msgs, lastUserIndex(msgs), nowTs);
-}
-
-function applyText(msgs: ChatMessage[], e: TextEvent): ChatMessage[] {
-  // v1.15.8: same turn-scoping as applyThinking. The
-  // previous version updated the very last text bubble,
-  // which meant a late event from spawn 1 would
-  // overwrite spawn 2's reply. We also skip frozen
-  // bubbles (text that was emitted before a tool_use
-  // event, see applyToolUse). If no eligible text
-  // exists in the current turn, we just append.
-  //
-  // v1.16.4: stamp turnId from the current user message
-  // (consistent with applyThinking). The first
-  // non-empty text event also freezes the user
-  // message's `finalElapsedMs` — see applyThinking for
-  // the rationale.
-  const lastUserIdx = lastUserIndex(msgs);
-  const turnId = lastUserIdx >= 0 ? msgs[lastUserIdx]?.id : undefined;
-  const text = e.fullText ?? e.preview;
-  if (!text || !text.trim()) return msgs;
-  for (let i = msgs.length - 1; i > lastUserIdx; i--) {
-    const m = msgs[i];
-    if (m && m.kind === 'text' && m.role === 'assistant' && !m.frozen) {
-      const updated: TextMessage = {
-        ...m,
-        text: mergePartialSnapshot(m.text, text, e.partial === true),
-        partial: e.partial ?? m.partial,
-      };
-      return [...msgs.slice(0, i), updated, ...msgs.slice(i + 1)];
-    }
-  }
-  // No eligible text exists in this turn — append a
-  // fresh bubble. If this is the first assistant output
-  // for the turn, freeze the user message's timer.
-  const hasOutputInThisTurn = hasAssistantOutputInTurn(msgs, lastUserIdx);
-  let next = msgs;
-  if (!hasOutputInThisTurn) {
-    next = freezeTurnTimer(next, lastUserIdx, e.ts);
-  }
-  return [
-    ...next,
-    {
-      id: nextId('text'),
-      kind: 'text',
-      role: 'assistant',
-      createdAt: e.ts,
-      text,
-      partial: e.partial ?? false,
-      turnId,
-    },
-  ];
+  return eventMessageId(msgs, event, 'phase');
 }
 
 function isPersonVisibleParent(msgs: readonly ChatMessage[], parentId: string): boolean {
-  return msgs.some((m) => m.kind === 'subagent' && m.id === parentId);
+  return msgs.slice(lastUserIndex(msgs) + 1).some((m) => m.kind === 'subagent'
+    && (m.subagentId ?? m.id) === parentId);
 }
 
 function applyToolUse(msgs: ChatMessage[], e: ToolUseEvent): ChatMessage[] {
@@ -333,6 +97,9 @@ function applyToolUse(msgs: ChatMessage[], e: ToolUseEvent): ChatMessage[] {
   // is already gone in the user's view.
   const lastUserIdx = lastUserIndex(msgs);
   const turnId = lastUserIdx >= 0 ? msgs[lastUserIdx]?.id : undefined;
+  if (msgs.slice(lastUserIdx + 1).some(message => message.kind === 'tool'
+    && (e.id !== '' ? message.toolCallId === e.id
+      : message.id === eventMessageId(msgs, e, 'tool-')))) return msgs;
   const withFrozenTimer = hasAssistantOutputInTurn(msgs, lastUserIdx)
     ? msgs
     : freezeTurnTimer(msgs, lastUserIdx, e.ts);
@@ -343,13 +110,13 @@ function applyToolUse(msgs: ChatMessage[], e: ToolUseEvent): ChatMessage[] {
     return m;
   });
   const tool: ToolMessage = {
-    id: nextId(`tool-${e.id}`),
+    id: eventMessageId(msgs, e, `tool-${e.id}`),
     // v1.16.5+ (spec §5.2): the Anthropic tool_use block id
     // is the stable toolCallId — the tool_result for the
     // same invocation carries the same id, and command
     // output can be routed to the card via it (§6.4).
     toolCallId: e.id,
-    phaseId: phaseIdOf(frozen, lastUserIdx),
+    phaseId: phaseIdOf(frozen, lastUserIdx, e),
     kind: 'tool',
     role: 'assistant',
     createdAt: e.ts,
@@ -385,9 +152,12 @@ function applyToolResult(msgs: ChatMessage[], e: ToolResultEvent): ChatMessage[]
     ...(outputContent !== undefined ? { outputContent } : {}),
     outputError: e.error,
     durationMs: e.durationMs,
+    completedAt: e.ts,
   });
   let matched = false;
-  const result = msgs.map((m) => {
+  const boundary = lastUserIndex(msgs);
+  const result = msgs.map((m, index) => {
+    if (index <= boundary) return m;
     if (m.kind !== 'tool') return m;
     const idMatch = (m.toolCallId !== undefined && m.toolCallId === e.id)
       || (e.id !== '' && m.id.startsWith(`tool-${e.id}-`));
@@ -401,7 +171,7 @@ function applyToolResult(msgs: ChatMessage[], e: ToolResultEvent): ChatMessage[]
   // Id-less result: safe only when exactly one tool is running.
   if (e.id === '') {
     const runningIdx = result
-      .map((m, i) => (m.kind === 'tool' && m.status === 'running' ? i : -1))
+      .map((m, i) => (i > boundary && m.kind === 'tool' && m.status === 'running' ? i : -1))
       .filter((i) => i >= 0);
     if (runningIdx.length === 1) {
       const idx = runningIdx[0]!;
@@ -422,6 +192,8 @@ function applyToolResult(msgs: ChatMessage[], e: ToolResultEvent): ChatMessage[]
 }
 
 function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
+  const boundary = lastUserIndex(msgs);
+  const turnId = msgs[boundary]?.id;
   // v1.16.0: create or update a `TurnMessage` so the
   // context-window ring in the top bar can read
   // `usage.input_tokens`. Previously turn_end was
@@ -431,8 +203,20 @@ function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
   // TurnMessage is born as 'done' on turn_end, which
   // is enough for the ring. Turn progress (running
   // → done transition) is a Phase 3 affordance.
-  const status: TurnMessage['status'] =
-    e.stopReason === 'max_tokens' ? 'error' : 'done';
+  // Round-3 (P1-11). The old rule was `stopReason === 'max_tokens' ? 'error'
+  // : 'done'`, which made every other failure a success: the acceptance run
+  // recorded `status:"done" stopReason:"tool_use" usage 0/0` for a turn where
+  // the provider refused the request and no tool ever ran.
+  const completion = turnCompletion(e.stopReason);
+  const status: TurnMessage['status'] = completion === 'failed' ? 'error' : 'done';
+  // A turn that produced no output tokens AND left no assistant text delivered
+  // nothing, whatever the stop reason claims. That is the 「本轮未完成」 case,
+  // and it is the one the user cannot see by looking at the status pill.
+  //
+  // Independent of `completion`: a failed turn can also have delivered nothing
+  // (P0-6 — the provider refused, so there was no answer AND no tool), and
+  // that is precisely the case where both signals must be on the record.
+  const incomplete = turnDeliveredNothing(msgs, boundary, e);
   // Look for an existing TurnMessage with the same
   // turn number (e.g. an earlier draft from a partial
   // event). If found, update in place; otherwise
@@ -442,20 +226,25 @@ function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
   // one — otherwise the context ring freezes at a stale value (or
   // drops to 0) and stops tracking later turns.
   const hasUsableUsage = typeof e.usage?.input_tokens === 'number' && e.usage.input_tokens > 0;
-  for (let i = msgs.length - 1; i >= 0; i--) {
+  for (let i = msgs.length - 1; i > boundary; i--) {
     const m = msgs[i];
     if (m && m.kind === 'turn' && m.turn === e.turn) {
+      // Conditional spread, NOT `incomplete` bare: writing `incomplete: false`
+      // would add a key the first application never set, and `applyEvents`
+      // must stay idempotent under replay (events-idempotence.test.ts asserts
+      // a 100-turn serialize/restore/replay round trip is a fixed point).
       const updated: TurnMessage = {
         ...m,
         status,
         stopReason: e.stopReason,
+        ...(incomplete ? { incomplete: true } : {}),
         usage: hasUsableUsage ? e.usage : m.usage,
       };
       return [...msgs.slice(0, i), updated, ...msgs.slice(i + 1)];
     }
   }
   const turn: TurnMessage = {
-    id: nextId(`turn-${e.turn}`),
+    id: eventMessageId(msgs, e, `turn-${e.turn}`),
     kind: 'turn',
     role: 'assistant',
     createdAt: e.ts,
@@ -464,126 +253,48 @@ function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
     agentId: null,
     status,
     stopReason: e.stopReason,
+    ...(incomplete ? { incomplete: true } : {}),
     usage: e.usage,
+    turnId,
   };
   return [...msgs, turn];
 }
 
-// v1.16.0: compaction signal handlers. The CLI does
-// the actual compaction (LLM summarization, see
-// trylo-cli/src/commands/compact/compact.ts); the
-// desktop observes + renders the result. The desktop
-// also writes `/compact` to stdin to trigger manually
-// or auto, but the algorithm is never reimplemented
-// here — we trust the CLI to keep its context sane.
-
-/** Track that a compaction is in flight. We use a
- *  NoticeMessage in the chat stream so the user sees
- *  "Compacting…" in the message flow (not just on the
- *  ring). The entry is replaced with the real
- *  CompactionMessage once the CLI emits the `compact`
- *  event.
+/**
+ * Did this turn deliver anything the user can see?
  *
- *  Audit fix: if a pending notice is already the last
- *  message, REPLACE it instead of appending. The CLI
- *  shouldn't fire two `compaction_trigger` events in a
- *  row, but if it does (or if we see a re-trigger after
- *  a transient failure), the chat stream should show
- *  exactly one pending notice. */
-function applyCompactionTrigger(
-  msgs: ChatMessage[],
-  e: CompactionTriggerEvent,
-): ChatMessage[] {
-  const notice: ChatMessage = {
-    id: nextId('compact-pending'),
-    kind: 'notice',
-    role: 'system',
-    createdAt: e.ts,
-    text: `Compacting context (${formatK(e.preTokens)} → ${formatK(e.postTokens)})…`,
-  };
-  // Replace an existing pending notice if it's the
-  // tail of the stream. Otherwise append fresh.
-  const last = msgs[msgs.length - 1];
-  if (last && last.kind === 'notice' && last.text.startsWith('Compacting context')) {
-    return [...msgs.slice(0, -1), notice];
-  }
-  return [...msgs, notice];
-}
-
-/** Real compaction result. Replaces the pending notice
- *  from applyCompactionTrigger (if any) with the final
- *  CompactionMessage so the chat shows
- *  "180k → 40k" instead of "Compacting…". The
- *  tokensBefore / tokensAfter come from the CLI's
- *  `compact` event.
- *
- *  Audit note: the CLI uses `kind: 'boundary'` as the
- *  canonical "compact happened" event per
- *  __fixtures__/trylo-complex.ts. The `'before'` /
- *  `'after'` sub-kinds in the schema are for
- *  before/after state captures and may not be
- *  emitted as standalone events in practice. We
- *  produce a CompactionMessage for any kind — the
- *  fixture verifies this is the right call. */
-function applyCompact(msgs: ChatMessage[], e: CompactEvent): ChatMessage[] {
-  // Dedupe guard: the events-file tailer polls; a re-delivered (or
-  // CLI-double-emitted) `compact` with IDENTICAL numbers is the same
-  // compaction, not a new one — appending it would stack another
-  // identical pill. A genuine second compaction always reports grown
-  // numbers (its `before` starts where the last `after` left off),
-  // so exact-equality never hides real work.
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i];
-    if (!m) continue;
-    if (
-      m.kind === 'compaction' &&
-      m.tokensBefore === e.tokensBefore &&
-      m.tokensAfter === e.tokensAfter &&
-      m.reason === e.reason
-    ) {
-      return msgs;
+ * The anchor is the visible transcript, not the token counter:
+ *   - an assistant text row means an answer exists (a failure on top of it
+ *     is still signalled by `status: "error"` + the warning notice, so the
+ *     turn is not "nothing delivered");
+ *   - a FAILED turn with no answer delivered nothing — even when tools ran
+ *     (idx22 overwrote files then said nothing) and even when the stream
+ *     never reported usage (resume/model-mismatch failures carry no usage
+ *     frame at all). Tools running is not delivery; the answer is.
+ *   - a completed tool-only turn (no text) still counts as delivered;
+ *   - otherwise 0 output tokens with nothing in the transcript is the
+ *     classic silent failure.
+ */
+function turnDeliveredNothing(
+  msgs: readonly ChatMessage[],
+  boundary: number,
+  e: TurnEndEvent,
+): boolean {
+  let hasText = false;
+  let hasTool = false;
+  for (let i = boundary + 1; i < msgs.length; i++) {
+    const message = msgs[i];
+    if (!message) continue;
+    if (message.kind === 'text' && message.role === 'assistant') {
+      hasText = true;
+      break;
     }
+    if (message.kind === 'tool') hasTool = true;
   }
-  const compaction: CompactionMessage = {
-    id: nextId('compact'),
-    kind: 'compaction',
-    role: 'system',
-    createdAt: e.ts,
-    reason: e.reason,
-    tokensBefore: e.tokensBefore,
-    tokensAfter: e.tokensAfter,
-  };
-  // Replace the pending "Compacting…" notice(s) with the final result.
-  // There should be exactly one notice; if the CLI fired multiple triggers
-  // (or a trigger's `compact` event was lost and a later trigger re-fired),
-  // sweep ALL stale notices so the stream never keeps a phantom
-  // "Compacting…" row. The CompactionMessage lands at the position of the
-  // LAST notice so ordering matches the compaction point.
-  let replaceIdx = -1;
-  const out: ChatMessage[] = [];
-  for (let i = 0; i < msgs.length; i++) {
-    const m = msgs[i];
-    if (!m) continue;
-    if (m.kind === 'notice' && m.text.startsWith('Compacting context')) {
-      replaceIdx = out.length;
-      continue;
-    }
-    out.push(m);
-  }
-  if (replaceIdx === -1) {
-    // No pending notice (CLI emitted `compact` without a
-    // prior trigger — shouldn't happen, but be safe).
-    return [...msgs, compaction];
-  }
-  out.splice(replaceIdx, 0, compaction);
-  return out;
-}
-
-function formatK(n: number): string {
-  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return '—';
-  if (n < 1_000) return String(Math.round(n));
-  if (n < 1_000_000) return `${Math.round(n / 1_000)}k`;
-  return `${Math.round(n / 1_000_000)}M`;
+  if (hasText) return false;
+  if (turnCompletion(e.stopReason) === 'failed') return true;
+  if (hasTool) return false;
+  return e.usage?.output_tokens === 0;
 }
 
 /** §8.1: surface the CLI's `subagent` spawn/end lifecycle as a SubagentMessage.
@@ -602,9 +313,16 @@ function formatK(n: number): string {
 function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
   if (e.agentType === 'managed-work') return msgs;
   if (e.agentType && isTeamSeatId(e.agentType)) return msgs;
+  const boundary = lastUserIndex(msgs);
+  const existingIndex = msgs.findIndex((message, index) => index > boundary
+    && message.kind === 'subagent' && (message.subagentId ?? message.id) === e.id);
   if (e.kind === 'spawn') {
+    if (existingIndex >= 0) return msgs;
     const msg: SubagentMessage = {
-      id: e.id,
+      id: msgs.some(message => message.id === e.id)
+        ? eventMessageId(msgs, e, `subagent-${e.id}`) : e.id,
+      subagentId: e.id,
+      turnId: msgs[boundary]?.id,
       kind: 'subagent',
       role: 'system',
       createdAt: e.ts,
@@ -614,9 +332,10 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
     };
     return [...msgs, msg];
   }
-  const idx = msgs.findIndex((m) => m.kind === 'subagent' && m.id === e.id && m.status === 'running');
+  const idx = existingIndex;
   if (idx < 0) return msgs;
   const existing = msgs[idx] as SubagentMessage;
+  if (existing.status !== 'running') return msgs;
   const updated: SubagentMessage = {
     ...existing,
     status: 'done',
@@ -624,6 +343,32 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
     durationMs: e.durationMs,
   };
   return msgs.map((m, i) => (i === idx ? updated : m));
+}
+
+/**
+ * P08 §5: surface a runtime warning as its own notice row.
+ *
+ * `code` is always shown, because the captured golden warnings carry an
+ * EMPTY message (`{"code":"denied","message":""}`) — the code alone is
+ * what tells the user a tool call was refused.
+ */
+function applyRuntimeWarning(msgs: ChatMessage[], e: RuntimeWarningEvent): ChatMessage[] {
+  const id = e.id ?? eventMessageId(msgs, e, 'warn');
+  if (msgs.some(message => message.id === id)) return msgs;
+  const text = e.message.trim() !== '' ? e.message : `运行时提示：${e.code}`;
+  return [
+    ...msgs,
+    {
+      id,
+      // `system`, never `assistant`: a warning is host evidence about
+      // the run, and dressing it up as a model utterance would make an
+      // unexplained refusal look like the agent's own words.
+      role: 'system',
+      createdAt: e.ts,
+      kind: 'notice',
+      text,
+    } satisfies NoticeMessage,
+  ];
 }
 
 /** Apply a batch of events to the message list. */
@@ -649,6 +394,11 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     // The top-bar context ring reads this to show
     // "47k / 200k". See applyTurnEnd above.
     case 'turn_end':  return applyTurnEnd(msgs, e);
+    // P08 §5: a CLI `warning` becomes a visible notice. It is NOT
+    // dropped (a denied write reaches the UI as a warning and nothing
+    // else) and NOT rendered as assistant text — the model did not say
+    // it, the runtime did.
+    case 'runtime_warning': return applyRuntimeWarning(msgs, e);
     // v1.16.0: compaction is CLI-owned (LLM-based; see
     // trylo-cli/src/commands/compact/compact.ts). The
     // desktop is observer + renderer: a pending notice

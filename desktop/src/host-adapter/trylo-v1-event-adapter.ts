@@ -1,0 +1,467 @@
+// Trylo Desktop — trylo-v1 CLI stream → Desktop LoopEvent adapter.
+//
+// P08 §5. Deliberately a SEPARATE class from `StreamTranslator`: the
+// legacy translator already carries the CC-CLI's raw-Anthropic slow
+// path, its own seq/ts policy and its own throttling. Merging the v1
+// vocabulary into it is how `tool_use` / `tool_result` started
+// masquerading as legacy frames (see `trylo-v1-contract.test.ts`).
+//
+// The three invariants this class owns (spec §4.3):
+//
+//   1. AT MOST ONE authoritative terminal per run. A second
+//      `run_result` is ignored, not merged.
+//   2. A run that ends WITHOUT `run_result` is `unknown` / `failed` /
+//      `cancelled` — never `completed`. Exit code 0 with no terminal
+//      event is `unknown`, because "the process exited cleanly" is not
+//      evidence that the run did what the user asked.
+//   3. Optional tool input is projected when present. Old streams without
+//      it still work; missing duration and tool lists are never guessed.
+
+import type { LoopEvent } from './loop-events';
+import { parseCliV1Event, type CliV1Event, type CliV1Rejected, type CliV1Usage } from './trylo-v1-protocol';
+import { desktopV1Tool } from './trylo-v1-tool';
+import { ThinkScrubber } from './think-scrubber';
+import { thinkingSummary } from './thinking-summary';
+
+/** Why a run ended. `unknown` is the honest answer when we can't tell. */
+export type TryloV1Outcome = 'completed' | 'failed' | 'cancelled' | 'unknown';
+
+export interface TryloV1ExitInfo {
+  /** Process exit code; null when the wait failed / was signalled. */
+  readonly exitCode: number | null;
+  /** stderr lines captured on the separate channel (spec §4.2). */
+  readonly stderr: readonly string[];
+  /** True when THIS app asked for the stop (as opposed to a crash). */
+  readonly cancelled: boolean;
+}
+
+/** Everything the adapter learned, for diagnostics and for the runner. */
+export interface TryloV1RunSummary {
+  readonly sessionId: string | null;
+  readonly turnId: string | null;
+  readonly providerId: string | null;
+  readonly model: string | null;
+  readonly usage: CliV1Usage | null;
+  /** Null until an authoritative `run_result` was consumed. */
+  readonly outcome: TryloV1Outcome | null;
+}
+
+/** How much stderr may become visible terminal detail (P08 §5). */
+const MAX_STDERR_LINES = 5;
+const MAX_STDERR_CHARS = 500;
+
+/**
+ * Turn captured stderr into one human-readable line.
+ *
+ * NOT just the last line: the real pre-run failure writes
+ *   `cannot resume session x: missing_session`
+ *   `if no other trylo process is running, delete the stale .lock …`
+ * and the last line is remediation advice, not the cause. Keeping the
+ * head preserves the root cause; capping keeps a chatty runtime from
+ * dumping a wall of text into the transcript.
+ */
+export function summarizeStderr(stderr: readonly string[]): string {
+  const lines = stderr.map((l) => l.trim()).filter((l) => l !== '');
+  if (lines.length === 0) return '';
+  const joined = lines.slice(0, MAX_STDERR_LINES).join(' | ');
+  return joined.length <= MAX_STDERR_CHARS ? joined : `${joined.slice(0, MAX_STDERR_CHARS)}…`;
+}
+
+export class TryloV1EventAdapter {
+  private seq = 0;
+  private textBuffer = '';
+  /** Round-3 P2: providers that put chain-of-thought in `message_delta`
+   *  leak the literal tag; scrub it before it reaches the transcript. One
+   *  instance per message — see `message_start`. */
+  private textScrubber = new ThinkScrubber();
+  private reasoningBuffer = '';
+  private textBlockId: string | undefined;
+  private reasoningBlockId: string | undefined;
+  private settledToolCallIds = new Set<string>();
+  private reasoningRedacted = false;
+  /** Latest `usage` frame. Not accumulated additively — the v1 stream
+   *  emits running totals and `run_result` carries the final one. */
+  private latestUsage: CliV1Usage | null = null;
+  private outcome: TryloV1Outcome | null = null;
+  private sessionId: string | null = null;
+  private turnId: string | null = null;
+  private providerId: string | null = null;
+  private model: string | null = null;
+  /** toolCallId → emit time, so `durationMs` is measured, not invented. */
+  private toolStartMs = new Map<string, number>();
+  private toolNames = new Map<string, string>();
+  /** Rejected lines, newest last. Surfaced by the runner; never swallowed. */
+  private rejections: CliV1Rejected[] = [];
+
+  private next(): { seq: number; ts: number } {
+    return { seq: this.seq++, ts: Date.now() };
+  }
+
+  /** What the adapter knows about the run so far. */
+  summary(): TryloV1RunSummary {
+    return {
+      sessionId: this.sessionId,
+      turnId: this.turnId,
+      providerId: this.providerId,
+      model: this.model,
+      usage: this.latestUsage,
+      outcome: this.outcome,
+    };
+  }
+
+  /** Lines that failed the wire guard (for diagnostics, spec §5). */
+  rejectedLines(): readonly CliV1Rejected[] {
+    return this.rejections;
+  }
+
+  /**
+   * Emit a HOST-side warning through the same channel as a CLI warning.
+   *
+   * Audit finding: a run whose stdout carried nothing parseable ended
+   * with a generic "no terminal event", because the wire-guard
+   * rejections only ever reached `rejectedLines()` — which has no
+   * production consumer. A protocol mismatch is the real reason such a
+   * run dies, so it has to reach the user.
+   */
+  warn(code: string, message: string): LoopEvent {
+    const { seq, ts } = this.next();
+    return this.warningEvent(seq, ts, code, message);
+  }
+
+  private warningEvent(seq: number, ts: number, code: string, message: string): LoopEvent {
+    const id = this.sessionId && this.turnId
+      ? `warn:${this.sessionId}:${this.turnId}:${seq}`
+      : `warn-${ts}-${seq}`;
+    return { type: 'runtime_warning', id, seq, ts, code, message };
+  }
+
+  /** One sentence describing what the wire guard refused, if anything. */
+  describeRejections(): string {
+    if (this.rejections.length === 0) return '';
+    const reasons = new Map<string, number>();
+    for (const r of this.rejections) {
+      reasons.set(r.reason, (reasons.get(r.reason) ?? 0) + 1);
+    }
+    const parts = [...reasons.entries()].map(([reason, count]) => `${reason}×${count}`);
+    const sample = this.rejections[0]!.raw.slice(0, 120);
+    return `${this.rejections.length} 行输出无法按协议解析（${parts.join(', ')}）。示例：${sample}`;
+  }
+
+  /** True once an authoritative terminal event was produced. */
+  get hasTerminal(): boolean {
+    return this.outcome !== null;
+  }
+
+  /** Feed one raw stdout line. Returns the LoopEvents it projects. */
+  feed(line: string): LoopEvent[] {
+    if (this.hasTerminal) return [];
+    const parsed = parseCliV1Event(line);
+    if (!parsed.ok) {
+      // A blank line is normal framing noise; everything else is a real
+      // protocol problem and must be visible.
+      if (parsed.reason !== 'empty') {
+        this.rejections.push(parsed);
+      }
+      return [];
+    }
+    return this.project(parsed.event);
+  }
+
+  /**
+   * Synthesise the terminal events for a run whose process ended
+   * WITHOUT an authoritative `run_result` (spec §4.3).
+   *
+   * This is the single place that decides "what happened" when the CLI
+   * never said. The rules are deliberately conservative:
+   *
+   *   - we asked for the stop            → cancelled
+   *   - non-zero exit                    → failed
+   *   - exit 0 but no `run_result`       → unknown  (NOT completed)
+   *
+   * The last one matters most: golden trace
+   * `04-prerun-config-failure` exits 52 with an empty stdout, and a
+   * killed run can exit 0 on some platforms. Reporting either as
+   * "completed" would be a lie the UI cannot detect.
+   */
+  finalizeExit(info: TryloV1ExitInfo): LoopEvent[] {
+    if (this.outcome !== null) return [];
+    const outcome: TryloV1Outcome = info.cancelled
+      ? 'cancelled'
+      : (info.exitCode ?? 0) !== 0
+        ? 'failed'
+        : 'unknown';
+    const detail =
+      summarizeStderr(info.stderr) ||
+      (outcome === 'unknown'
+        ? 'The run ended without a terminal event.'
+        : `The run ended without a terminal event (exit ${String(info.exitCode)}).`);
+    // The runner already surfaces rejected wire frames as one specific
+    // protocol diagnostic. Do not append a second generic exit warning.
+    const warnings = outcome === 'cancelled' || this.rejections.length > 0 ? []
+      : [this.warn(outcome === 'failed' ? 'process_failed' : 'missing_terminal', detail)];
+    return [...warnings, ...this.emitTerminal(outcome, detail, 'no_run_result')];
+  }
+
+  private project(event: CliV1Event): LoopEvent[] {
+    const { seq, ts } = this.next();
+    switch (event.type) {
+      case 'run_start':
+        return this.onRunStart(event, seq, ts);
+      case 'message_start':
+        this.textBuffer = '';
+        // A fresh scrubber per message: an unterminated `<think>` in one
+        // message must not blank out the next one's answer.
+        this.textScrubber = new ThinkScrubber();
+        this.textBlockId = `text:${this.sessionId}:${this.turnId}:${seq}`;
+        return [];
+      case 'message_delta':
+        this.textBuffer += this.textScrubber.push(event.text).text;
+        return [
+          {
+            type: 'text', seq, ts, turn: 1, blockId: this.textBlockId,
+            preview: this.textBuffer,
+            fullText: this.textBuffer,
+            partial: true,
+          },
+        ];
+      case 'message_end':
+        return this.onMessageEnd(seq, ts);
+      case 'reasoning_start':
+        this.reasoningBuffer = '';
+        this.reasoningBlockId = `thinking:${this.sessionId}:${this.turnId}:${seq}`;
+        this.reasoningRedacted = event.redacted;
+        return [];
+      case 'reasoning_delta':
+        if (this.reasoningRedacted) return [];
+        this.reasoningBuffer += event.text;
+        return [
+          {
+            type: 'thinking', seq, ts, turn: 1, blockId: this.reasoningBlockId,
+            summary: thinkingSummary(this.reasoningBuffer),
+            preview: this.reasoningBuffer,
+            fullLength: this.reasoningBuffer.length,
+            partial: true,
+          },
+        ];
+      case 'reasoning_end':
+        return this.onReasoningEnd(seq, ts);
+      case 'tool_use': {
+        if (this.toolNames.has(event.toolCallId) || this.settledToolCallIds.has(event.toolCallId)) return [];
+        const tool = desktopV1Tool(event.name, event.input);
+        this.toolStartMs.set(event.toolCallId, ts);
+        this.toolNames.set(event.toolCallId, tool.name);
+        return [
+          {
+            type: 'tool_use', seq, ts, turn: 1,
+            id: event.toolCallId,
+            tool: tool.name,
+            input: tool.input,
+          },
+        ];
+      }
+      case 'tool_result':
+        return this.onToolResult(event, seq, ts);
+      case 'warning':
+        // Never an assistant message: a warning is host evidence about
+        // the run, not something the model said (spec §5).
+        return [
+          this.warningEvent(seq, ts, event.code, event.message),
+        ];
+      case 'usage':
+        this.latestUsage = event.usage;
+        // No event: a usage frame is not a turn boundary. Emitting a
+        // `turn_end` per usage would fragment the transcript.
+        return [];
+      case 'run_result':
+        return this.onRunResult(event, ts);
+      default:
+        return [];
+    }
+  }
+
+  private onRunStart(
+    event: Extract<CliV1Event, { type: 'run_start' }>,
+    seq: number,
+    ts: number,
+  ): LoopEvent[] {
+    this.sessionId = event.sessionId;
+    this.turnId = event.turnId;
+    this.providerId = event.providerId;
+    this.model = event.model;
+    return [
+      {
+        type: 'loop_start', seq, ts,
+        sessionId: event.sessionId,
+        model: event.model,
+        promptSummary: '',
+        // The v1 stream does not declare a tool list. An empty list is
+        // the truth; a plausible-looking one would be a fabrication
+        // that downstream drift detection would then trust.
+        tools: [],
+      },
+      { type: 'turn_start', seq: this.seq++, ts, turn: 1, depth: 0, agentId: null },
+    ];
+  }
+
+  private onMessageEnd(seq: number, ts: number): LoopEvent[] {
+    this.textBuffer += this.textScrubber.flush();
+    const text = this.textBuffer;
+    const blockId = this.textBlockId;
+    this.textBuffer = '';
+    this.textBlockId = undefined;
+    // Empty/tool-only messages create no bubble, including terminal cleanup.
+    if (text.trim() === '') return [];
+    return [{ type: 'text', seq, ts, turn: 1, blockId, preview: text, fullText: text }];
+  }
+
+  private onReasoningEnd(seq: number, ts: number): LoopEvent[] {
+    const blockId = this.reasoningBlockId;
+    if (blockId === undefined && this.reasoningBuffer === '') return [];
+    this.reasoningBlockId = undefined;
+    if (this.reasoningRedacted) {
+      // Redacted reasoning: say that it happened, project no content
+      // (spec §5). An empty preview keeps the card honest.
+      this.reasoningBuffer = '';
+      return [
+        {
+          type: 'thinking', seq, ts, turn: 1, blockId,
+          summary: 'Reasoning was redacted',
+          preview: '',
+          fullLength: 0,
+          partial: false,
+        },
+      ];
+    }
+    if (this.reasoningBuffer.trim() === '') return [];
+    const out: LoopEvent[] = [
+      {
+        type: 'thinking', seq, ts, turn: 1, blockId,
+        summary: thinkingSummary(this.reasoningBuffer),
+        preview: this.reasoningBuffer,
+        fullLength: this.reasoningBuffer.length,
+        partial: false,
+      },
+    ];
+    this.reasoningBuffer = '';
+    return out;
+  }
+
+  private onToolResult(
+    event: Extract<CliV1Event, { type: 'tool_result' }>,
+    seq: number,
+    ts: number,
+  ): LoopEvent[] {
+    if (this.settledToolCallIds.has(event.toolCallId)) return [];
+    this.settledToolCallIds.add(event.toolCallId);
+    const ok = event.status === 'succeeded';
+    const startedAt = this.toolStartMs.get(event.toolCallId);
+    this.toolStartMs.delete(event.toolCallId);
+    const name = this.toolNames.get(event.toolCallId) ?? '';
+    this.toolNames.delete(event.toolCallId);
+    return [
+      {
+        type: 'tool_result', seq, ts, turn: 1,
+        id: event.toolCallId,
+        tool: name,
+        ok,
+        output: event.output,
+        truncated: event.truncated,
+        ...(ok ? {} : { error: event.message || event.output || `tool failed (${event.status})` }),
+        // Measured when we saw the matching tool_use; 0 when we didn't
+        // (a result whose call was never projected must not fake a
+        // duration).
+        durationMs: startedAt === undefined ? 0 : Math.max(0, ts - startedAt),
+      },
+    ];
+  }
+
+  private onRunResult(
+    event: Extract<CliV1Event, { type: 'run_result' }>,
+    ts: number,
+  ): LoopEvent[] {
+    if (this.outcome !== null) {
+      // Second terminal frame: ignored. There is exactly one truth per
+      // run, and the first one to arrive owns it (spec §4.3).
+      return [];
+    }
+    this.sessionId = event.sessionId;
+    this.turnId = event.turnId;
+    this.latestUsage = event.usage;
+    return this.emitTerminal(
+      event.status,
+      event.lastMessage,
+      event.finishReason || event.status,
+      { ts, iterations: event.iterations, durationMs: event.durationMs },
+    );
+  }
+
+  private emitTerminal(
+    outcome: TryloV1Outcome,
+    finalResult: string,
+    reason: string,
+    meta?: { ts: number; iterations: number; durationMs: number },
+  ): LoopEvent[] {
+    this.outcome = outcome;
+    const ts = meta?.ts ?? Date.now();
+    const usage = this.latestUsage;
+    const isError = outcome !== 'completed';
+    // A killed stream may never send its block-end frames. Settle only the
+    // bytes already delivered, preserving block ids and terminal truth.
+    const pendingMessages: LoopEvent[] = [];
+    if (this.textBlockId !== undefined || this.textBuffer !== '') {
+      pendingMessages.push(...this.onMessageEnd(this.seq++, ts));
+    }
+    if (this.reasoningBlockId !== undefined || this.reasoningBuffer !== '') {
+      pendingMessages.push(...this.onReasoningEnd(this.seq++, ts));
+    }
+    // Denial/stop can end a run without tool_result. Settle the host card
+    // from terminal evidence; an empty output never claims execution.
+    const pendingTools: LoopEvent[] = [...this.toolNames].map(([id, tool]) => ({
+      type: 'tool_result', seq: this.seq++, ts, turn: 1, id, tool,
+      ok: false, output: '', truncated: false,
+      error: `Tool did not report completion before the run ended (${outcome}). ${finalResult}`.trim(),
+      durationMs: Math.max(0, ts - (this.toolStartMs.get(id) ?? ts)),
+    }));
+    this.toolNames.clear();
+    this.toolStartMs.clear();
+    return [
+      ...pendingMessages,
+      ...pendingTools,
+      {
+        type: 'turn_end',
+        seq: this.seq++,
+        ts,
+        turn: 1,
+        // P1-11: a non-completed run is `failed`, NOT `tool_use`. The old
+        // encoding made every provider refusal look like a tool-calling turn,
+        // and `applyTurnEnd` only treats `max_tokens` as failure — so a 0-token
+        // failure was recorded as `status: "done"`. Truth beats taxonomy here:
+        // the caller learns the run failed from `failed`, and the transcript
+        // can say so.
+        stopReason: outcome === 'completed' ? 'end_turn' : 'failed',
+        // Omitted rather than zeroed when the stream never reported
+        // usage: a missing value and a literal 0 mean different things
+        // to the context-window ring.
+        ...(usage
+          ? {
+              usage: {
+                input_tokens: usage.inputTokens,
+                output_tokens: usage.outputTokens,
+              },
+            }
+          : {}),
+      },
+      {
+        type: 'loop_end',
+        seq: this.seq++,
+        ts,
+        reason,
+        numTurns: meta?.iterations ?? 0,
+        totalCost: 0,
+        durationMs: meta?.durationMs ?? 0,
+        finalResult,
+        isError,
+      },
+    ];
+  }
+}

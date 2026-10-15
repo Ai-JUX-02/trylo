@@ -1,0 +1,18 @@
+{
+  "id": "integration/p1-2-smuggled-permissions",
+  "attack": "候选只要求 fs.read，admission 却夹带 network/shell 权限请求；子集检查会放行，精确相等必须拒绝",
+  "kind": "smuggled-permissions",
+  "candidateOverrides": {
+    "candidateId": "cand-smuggle",
+    "requiredPermissions": ["fs.read"]
+  },
+  "admission": {
+    "commandId": "cmd-p",
+    "issuedAt": "2026-09-13T00:00:00.000Z",
+    "scope": "docs",
+    "hypothesis": "这个候选能补上能力",
+    "observationRefs": ["obs-1"],
+    "requestedAuthorities": ["fs.read", "network.full", "shell.exec"]
+  },
+  "expect": { "ok": false, "reason": "authority_mismatch" }
+}
