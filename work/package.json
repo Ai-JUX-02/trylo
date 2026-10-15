@@ -2,7 +2,7 @@
   "name": "@trylo/work",
   "version": "0.0.0",
   "private": true,
-  "description": "Trylo Work sub-app — forked from CoWork-OS. Provides the work surface (artifact viewer, document generation, MCP, Skills) for Trylo Desktop. Spawned as a Node sidecar by the Tauri shell.",
+  "description": "Trylo Work prompt, renderer and artifact helpers. Ordinary Work uses the shared CLI supervisor; the CoWork background daemon is an optional experimental adapter.",
   "type": "module",
   "bin": {
     "trylo-workd": "./bin/trylo-workd.mjs"

@@ -54,11 +54,10 @@
       "resources/desktop-services/": "desktop-services/",
       "resources/sidecars/desktop-companion/publish/": "sidecars/desktop-companion/publish/",
       "resources/sidecars/hermes-capabilities/": "sidecars/hermes-capabilities/",
-      "resources/work/": "work/",
-      "resources/workd/": "workd/",
       "resources/cli/": "cli/",
       "resources/runtime/": "runtime/",
-      "resources/cli-legacy/": "cli-legacy/"
+      "resources/cli-legacy/": "cli-legacy/",
+      "resources/distribution.json": "distribution.json"
     }
   }
 }

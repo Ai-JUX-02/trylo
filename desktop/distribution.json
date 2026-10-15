@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "product": "Trylo Desktop",
+  "version": "1.0.1",
+  "distribution": "core",
+  "ordinaryWorkRuntime": "trylo-cli",
+  "components": {
+    "coworkRuntime": {
+      "bundled": false,
+      "requiredForOrdinaryWork": false,
+      "status": "separate-experimental-dependency"
+    }
+  }
+}

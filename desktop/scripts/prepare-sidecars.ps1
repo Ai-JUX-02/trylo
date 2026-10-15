@@ -15,6 +15,8 @@
 # Requires (system PATH): node ≥22, esbuild (devDependency of desktop-services),
 # and dotnet ≥9. HERMES python stays on the user's side (uv / HERMES_PYTHON).
 
+param([switch]$IncludeWorkd)
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path "$PSScriptRoot\..\.."
@@ -27,6 +29,9 @@ if ((Get-Item -LiteralPath $resources).Attributes -band [IO.FileAttributes]::Rep
 $dsRoot = Join-Path $resources "desktop-services"
 $dsDist = Join-Path $dsRoot "dist"
 $sidecarPub = Join-Path $resources "sidecars"
+$backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
+New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot "desktop\distribution.json") -Destination (Join-Path $resources "distribution.json") -Force
 
 Write-Host "prepare-sidecars: npm ci + build service host bundle"
 Push-Location $ds
@@ -93,45 +98,48 @@ Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $nodeTargetDir "node.exe
 Write-Host "prepare-sidecars: pinned node $nodeVersion -> $nodeTargetDir\node.exe"
 
 
-Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
-# Stages resources/workd = built dist/daemon + production node_modules
-# closure + better-sqlite3 probe under the pinned Node ABI. The probe and
-# the inventory below are the release gate: the installed app must run the
-# real daemon with NO npm/build/rebuild on the user machine.
-if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
-  node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
-  if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
+# CoWork is no longer a dependency of ordinary Work. Only stage it explicitly
+# when producing the separate experimental dependency archive.
+if ($IncludeWorkd) {
+  Write-Host "prepare-sidecars: build the managed-work sidecar (audit P0-C §5.2)"
+  # Stages resources/workd = built dist/daemon + production node_modules
+  # closure + better-sqlite3 probe under the pinned Node ABI. The probe and
+  # the inventory below are the release gate: the installed app must run the
+  # real daemon with NO npm/build/rebuild on the user machine.
+  if ($env:TRYLO_WORKD_ARTIFACT_DIR) {
+    node (Join-Path $PSScriptRoot "stage-workd-artifact.mjs")
+    if ($LASTEXITCODE -ne 0) { throw "stage-workd-artifact failed (exit $LASTEXITCODE)" }
+  } else {
+    node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
+    if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
+  }
+
+  # Prune into a fresh candidate; keep the original artifact outside bundle.resources.
+  $slimId = [Guid]::NewGuid().ToString("N")
+  $workCandidate = Join-Path $resources "workd-slim-$slimId"
+  $workTarget = Join-Path $resources "workd"
+  node (Join-Path $PSScriptRoot "slim-workd-artifact.mjs") --source $workTarget --output $workCandidate
+  if ($LASTEXITCODE -ne 0) { throw "Work artifact pruning failed" }
+  $backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
+  New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+  $workBackup = Join-Path $backupRoot "workd-$slimId"
+  Move-Item -LiteralPath $workTarget -Destination $workBackup
+  try { Move-Item -LiteralPath $workCandidate -Destination $workTarget }
+  catch {
+    if (-not (Test-Path -LiteralPath $workTarget)) { Move-Item -LiteralPath $workBackup -Destination $workTarget }
+    throw
+  }
+
+  Write-Host "prepare-sidecars: probe pruned Work native/document dependencies"
+  & (Join-Path $nodeTargetDir "node.exe") (Join-Path $PSScriptRoot "verify-workd-package.mjs") $workTarget
+  if ($LASTEXITCODE -ne 0) { throw "Work package runtime probes failed" }
+
 } else {
-  node (Join-Path $repoRoot "desktop\scripts\build-workd-sidecar.mjs") --rebuild
-  if ($LASTEXITCODE -ne 0) { throw "build-workd-sidecar failed (exit $LASTEXITCODE)" }
+  Write-Host "prepare-sidecars: CoWork excluded from core; ordinary Work uses CLI"
 }
-
-# Prune into a fresh candidate; keep the original artifact outside bundle.resources.
-$slimId = [Guid]::NewGuid().ToString("N")
-$workCandidate = Join-Path $resources "workd-slim-$slimId"
-$workTarget = Join-Path $resources "workd"
-node (Join-Path $PSScriptRoot "slim-workd-artifact.mjs") --source $workTarget --output $workCandidate
-if ($LASTEXITCODE -ne 0) { throw "Work artifact pruning failed" }
-$backupRoot = Join-Path $repoRoot ".local-release\sidecar-backups"
-New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-$workBackup = Join-Path $backupRoot "workd-$slimId"
-Move-Item -LiteralPath $workTarget -Destination $workBackup
-try { Move-Item -LiteralPath $workCandidate -Destination $workTarget }
-catch {
-  if (-not (Test-Path -LiteralPath $workTarget)) { Move-Item -LiteralPath $workBackup -Destination $workTarget }
-  throw
-}
-
-Write-Host "prepare-sidecars: probe pruned Work native/document dependencies"
-& (Join-Path $nodeTargetDir "node.exe") (Join-Path $PSScriptRoot "verify-workd-package.mjs") $workTarget
-if ($LASTEXITCODE -ne 0) { throw "Work package runtime probes failed" }
 
 Write-Host "prepare-sidecars: copy into src-tauri/resources/"
-# `work/bin` is the Work daemon wrapper. `workd_spawn` ALWAYS spawns it —
-# even in `stub` mode, because the stub lives inside the wrapper — so a
-# package without it has no Work pane at all. Only `bin/` is copied: the
-# vendor/CoWork checkout is >1 GB and real mode is staged separately.
-$workBin = Join-Path $repoRoot "work\bin"
+# The optional Work wrapper is staged only for the separate dependency.
 $targets = @(
   @{ src = "$ds\dist";               dst = "$dsDist" },
   @{ src = "$ds\vendor";             dst = "$dsRoot\vendor" },
@@ -148,9 +156,11 @@ $targets = @(
   # `windows-mcp-fork` sibling of dist/host.bundle.mjs.
   @{ src = "$repoRoot\new_tool\computer-control\Windows-MCP\src\windows_mcp"; dst = "$dsRoot\windows-mcp-fork" },
   @{ src = "$sidecars\desktop-companion\publish"; dst = "$sidecarPub\desktop-companion\publish" },
-  @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" },
-  @{ src = "$workBin";               dst = "$resources\work\bin" }
+  @{ src = "$sidecars\hermes-capabilities";      dst = "$sidecarPub\hermes-capabilities" }
 )
+if ($IncludeWorkd) {
+  $targets += @{ src = (Join-Path $repoRoot "work\bin"); dst = "$resources\work\bin" }
+}
 foreach ($t in $targets) {
   if (-not (Test-Path $t.src)) { throw "prepare-sidecars: missing source $($t.src)" }
   # A compressed pet publish must not merge with stale loose .NET runtime DLLs.
@@ -224,7 +234,9 @@ $env:TRYLO_RESOURCE_DIR = $resources
 $env:TRYLO_SIDECARS_DIR = ""
 Push-Location $ds
 try {
-  node scripts/release-inventory.mjs
+  $priorIncludeWorkd = $env:TRYLO_INCLUDE_WORKD
+  $env:TRYLO_INCLUDE_WORKD = if ($IncludeWorkd) { "1" } else { "0" }
+  try { node scripts/release-inventory.mjs } finally { $env:TRYLO_INCLUDE_WORKD = $priorIncludeWorkd }
   if ($LASTEXITCODE -ne 0) {
     throw "release-inventory failed against $resources (exit $LASTEXITCODE)"
   }

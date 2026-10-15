@@ -1,22 +1,21 @@
-Trylo Desktop 1.0.1 — Windows x64 portable preview
-
-Packaging revision 2: Work debug/development files are pruned; the pet uses a
-compressed self-contained .NET bundle with external image assets.
-The native Desktop executable and both CLI runtime payloads are unchanged.
+Trylo Desktop 1.0.1 - Windows x64 core portable preview (packaging revision 3)
 
 Extract the entire ZIP into a folder, then run trylo-desktop.exe.
-Open a real project folder on your computer and configure your model connection in Settings.
+Open a real project folder and configure your own model connection in Settings.
 A working Microsoft WebView2 Runtime is required.
 
-The default backend is the legacy Trylo CLI, using the bundled Node interpreter.
-The embedded machine-local gateway credential was removed. Supply your own connection settings.
+Code and ordinary Work use the bundled legacy Trylo CLI and Node interpreter.
+CoWork/background-work daemon is NOT bundled, NOT required and NOT started by this edition.
+The normal Work interface, document workflow, artifacts, tool profiles and pet remain.
 The new Trylo CLI remains an explicit opt-in.
 
-This is an unsigned preview. Managed Work daemon cold-start probes did not reach readiness
-within 35 seconds. The legacy CLI conversation transport passed a local synthetic-model test.
-Native UI, complete tool availability and real-provider task acceptance are not claimed.
+CoWork is a separate experimental dependency download for maintenance and evaluation.
+It has not passed daemon startup readiness, is not automatically installed or activated,
+and is not required to use ordinary Work. No in-app installer is provided in this edition.
 
-Downloads and checksums:
+This is an unsigned preview. Full native Desktop and real-provider acceptance are not claimed.
+Android/mobile artifacts are distributed separately.
+Keep all runtime license notices provided with this distribution.
+
+Downloads and validation:
 https://github.com/ylz92871-dotcom/trylo/tree/main/result/desktop
-
-Keep the runtime license notices provided with this distribution.

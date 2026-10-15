@@ -30,33 +30,41 @@
     "published": false,
     "detail": "NSIS packaging interrupted; only the complete portable ZIP is distributed"
   },
-  "packagingRevision": 2,
-  "sourceRef": "desktop-v1.0.1-r2",
-  "createdAt": "2026-10-15T17:50:37.245266+00:00",
-  "basedOn": "desktop-v1.0.1",
+  "packagingRevision": 3,
+  "distribution": "core",
+  "sourceRef": "desktop-v1.0.1-r3",
+  "createdAt": "2026-10-15T18:16:32.974216+00:00",
   "nativeDesktopExecutableRebuilt": false,
+  "basedOn": "desktop-v1.0.1-r2",
+  "ordinaryWorkRuntime": "trylo-cli",
   "artifact": {
-    "file": "Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip",
-    "bytes": 367231006,
-    "files": 69694,
-    "sha256": "2686938f08da00f4a7e36ac4eed3fd9b153ab827ff223599a30e0ca7151c3dc3",
-    "seconds": 150.78,
+    "component": "desktop",
+    "file": "Trylo-Desktop-1.0.1-windows-x64-portable-core.zip",
+    "bytes": 219903437,
+    "files": 41228,
+    "sha256": "67188bf9b38c761336450ff77358c7ff3fd68ff26c6798a5ae944a6da80bc796",
+    "seconds": 138.22,
     "compressionLevel": 6,
-    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r2/Trylo-Desktop-1.0.1-windows-x64-portable-r2.zip"
+    "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r3/Trylo-Desktop-1.0.1-windows-x64-portable-core.zip"
   },
   "verification": {
+    "files": 41228,
     "archiveCrc": true,
-    "archiveFiles": 69694,
+    "componentBoundaryVerified": true,
+    "unchangedPayloadFiles": 41226,
     "cliFilesVerified": 2716,
     "cli-legacyFilesVerified": 38284,
-    "unchangedDesktopCliServiceRuntimeFiles": 41199,
-    "unchangedRetainedWorkdFiles": 28464,
-    "workdNativeBindingsVerified": 12,
-    "nativeExeMatchesOriginalBuild": true,
-    "embeddedGatewayCredentialAbsent": true,
-    "workdLegalFilesPreserved": 764,
-    "seconds": 96.57,
-    "legacyCliFromExtractedZip": {
+    "nativeDesktopNodePetMatchR2": true,
+    "coworkRuntimePresent": false,
+    "coreInventory": {
+      "coreInventoryPassed": true,
+      "requiredArtifacts": 16,
+      "missingOptionalDoesNotBlockCore": true,
+      "explicitOptionalMissingRejected": true,
+      "missingPinnedNodeRejected": true,
+      "runtimeRestored": true
+    },
+    "legacyCliFromExtractedCore": {
       "passed": true,
       "provider": "local synthetic Anthropic SSE",
       "noSystemNode": true,
@@ -66,105 +74,40 @@
       "requestCount": 2,
       "exitCode": 0
     },
-    "workdPackageProbes": {
-      "kind": "trylo-workd-package-probes",
-      "node": "v24.14.1",
-      "emptyPath": true,
-      "passed": true,
-      "results": [
-        {
-          "name": "sqlite",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 534
-        },
-        {
-          "name": "sharp",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 1554
-        },
-        {
-          "name": "canvas",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 1733
-        },
-        {
-          "name": "excel",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 10499
-        },
-        {
-          "name": "word",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 2544
-        },
-        {
-          "name": "powerpoint",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 279
-        },
-        {
-          "name": "pdf",
-          "passed": true,
-          "exitCode": 0,
-          "milliseconds": 4063
-        }
-      ],
-      "daemonControlPlaneAcceptance": false
-    },
-    "desktopPetFromExtractedZip": {
-      "passed": true,
-      "fromExtractedArchive": true,
-      "exitCode": 0,
-      "dimensions": [
-        264,
-        272
-      ],
-      "permissionRenderMatchesOriginal": true,
-      "emptyPath": true,
-      "settingsRestored": true,
-      "seconds": 7.01
-    },
-    "desktopPetHoverRender": true,
-    "desktopPetExternalAssetsVerified": 22,
-    "nestedDependencyGuardRegression": {
-      "nestedDependencyEntryGuard": true,
-      "initialRuntimeExit": 1,
-      "fixedRuntimeExit": 0,
-      "distinctNestedVersionsPreserved": true
-    },
-    "workdStartup": {
-      "passed": false,
-      "controlPlaneListening": false,
-      "isolatedUserData": true,
-      "providerCredentialsInherited": false,
-      "noSystemNode": true,
-      "timeoutSeconds": 35,
-      "seconds": 35.87,
-      "managedTaskAcceptance": false
-    },
     "nativeDesktopGuiAcceptance": false,
-    "fullInteractiveTrayAcceptance": false,
     "realProviderAcceptance": false,
     "mobileAssetsChanged": false,
-    "priorSourceRegressionEvidence": {
-      "sourceRef": "desktop-v1.0.1",
-      "desktopFocusedTests": 92,
-      "shadowRunnerTests": 11,
-      "rustResolverTests": 9,
-      "rerunForPackagingRevision": false
+    "normalWorkRoutingUnchanged": true,
+    "productionFrontendDaemonStartupMarkers": 0,
+    "petNativeRenderEvidenceSourceRef": "desktop-v1.0.1-r2",
+    "petPayloadUnchanged": true
+  },
+  "optionalDependencies": {
+    "cowork": {
+      "bundled": false,
+      "requiredForOrdinaryWork": false,
+      "defaultEnabled": false,
+      "appInstallationUi": false,
+      "status": "experimental-startup-unverified",
+      "metadata": "dependencies/cowork-runtime.json",
+      "artifact": {
+        "component": "cowork",
+        "file": "Trylo-CoWork-Runtime-0.5.51-windows-x64-experimental.zip",
+        "bytes": 147329034,
+        "files": 28469,
+        "sha256": "a9e43250f5a32cce2656962d8b66cb61df08c52e348e06cb970188a2e252c12d",
+        "seconds": 151.73,
+        "compressionLevel": 6,
+        "downloadUrl": "https://github.com/ylz92871-dotcom/trylo/releases/download/desktop-v1.0.1-r3/Trylo-CoWork-Runtime-0.5.51-windows-x64-experimental.zip"
+      }
     }
   },
   "sizeComparison": {
-    "beforeBytes": 593012640,
-    "afterBytes": 367231006,
-    "savedBytes": 225781634,
-    "savedPercent": 38.07,
-    "details": "size-comparison.json"
+    "r2Bytes": 367231006,
+    "coreBytes": 219903437,
+    "removedFromMainDownloadBytes": 147327569,
+    "smallerThanR2Percent": 40.12,
+    "initialReleaseBytes": 593012640,
+    "smallerThanInitialPercent": 62.92
   }
 }

@@ -138,5 +138,16 @@
         "files": 28465
       }
     }
+  },
+  "core-r3": {
+    "archiveBytes": 219903437,
+    "files": 41228,
+    "coworkBundled": false
+  },
+  "cowork-dependency": {
+    "archiveBytes": 147329034,
+    "files": 28469,
+    "nodeBundled": false,
+    "status": "experimental-startup-unverified"
   }
 }

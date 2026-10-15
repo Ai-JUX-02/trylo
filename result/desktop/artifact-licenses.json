@@ -5,7 +5,6 @@
     "file": "NODE-v24.14.1-LICENSE.txt",
     "sha256": "4573185d56580da2b890ba34a85a409257640f1c5632eade4300137266194d18"
   },
-  "workdLicenseFile": "WORKD-LICENSE.txt",
   "cliNotices": "cli-legacy/NOTICE.txt and dependency LICENSE files inside the installer",
   "desktopPetDotnet": {
     "version": "9.0.12",
@@ -15,5 +14,11 @@
       "Microsoft.NETCore.App-THIRD-PARTY-NOTICES.TXT",
       "Microsoft.WindowsDesktop.App-LICENSE"
     ]
+  },
+  "optionalCowork": {
+    "archive": "Trylo-CoWork-Runtime-0.5.51-windows-x64-experimental.zip",
+    "licenseFileInArchive": "WORKD-LICENSE.txt",
+    "dependencyNoticesInArchive": "workd/node_modules/**/LICENSE*",
+    "bundledInCore": false
   }
 }

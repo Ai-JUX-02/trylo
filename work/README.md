@@ -1,80 +1,54 @@
 # Trylo Work
 
-The **Work sub-app** of Trylo Desktop.
+Ordinary Work is the document/artifact surface inside Trylo Desktop. It shares the
+CLI execution path with Code. It does not require the CoWork daemon.
 
-This is one of two sub-apps inside the Trylo Tauri shell:
+```text
+Work UI -> sendWorkChat -> ConversationRunSupervisor.runCode -> Trylo CLI
+                                |                              |
+                         work.core.v1 profile          Desktop tool services
+                                |
+                       WorkResultProjector -> artifacts
 
-| Sub-app | Where it lives | What it does |
-|---|---|---|
-| **Code** | `../desktop/` | IDE — Monaco editor, file tree, LSP, agent chat for code work. Uses Trylo's existing `trylo-runner.ts` (CLI). |
-| **Work** | `./` (this folder) | Document / spreadsheet / presentation / web artifacts. Generates `.docx`/`.xlsx`/`.pptx`. The "ChatGPT work mode" feel. |
-
-The two sub-apps are independent at the runtime level — they don't share code or process state. They share:
-- The Tauri shell (window, menu, tray).
-- The design system (`../desktop/src/styles/tokens.css` — Trylo gold/charcoal).
-- The workspace path (whatever folder the user opened in Code mode is also the workspace for Work mode).
-
-## Architecture
-
-```
-Trylo Tauri shell
-├── Code sub-app      ──►  TryloRunner (existing)
-└── Work sub-app      ──►  trylo-workd (this package, Node sidecar)
-                              │
-                              ├─ Control Plane (HTTP/WS)
-                              ├─ agent runtime (Phase 1: from coworker)
-                              ├─ MCP / Skills / Memory (Phase 1)
-                              └─ docx/xlsx/pptx generation (Phase 1)
+Optional experimental package (not in the core download):
+work/bin/trylo-workd.mjs -> workd/dist/daemon/daemon/main.js (CoWork)
 ```
 
-The Work sub-app is a **Node sidecar process** spawned by Tauri. The Tauri webview talks to it over a local HTTP API called the **Control Plane** (designed to be wire-compatible with CoWork-OS's `coworkd` once Phase 1 lands).
+`desktop/src/App.tsx` no longer creates a WorkRuntime/Control Plane client or
+starts workd. The production frontend does not include its startup caller.
+Normal Work still has its chat, attachments, tool profiles, artifact scanning,
+previews and result UI. Do not remove `work/src`: the frontend imports its prompt
+and renderer helpers through the `@trylo/work` alias.
+
+## Core and experimental dependency
+
+| Component | Default desktop download | Role |
+| --- | --- | --- |
+| `work/src` helpers | Compiled frontend helpers | Ordinary Work prompt/artifact UI |
+| Trylo CLI + Node | Included | Code and ordinary Work execution |
+| CoWork daemon + its `node_modules` | Excluded | Optional background-task experiment |
+| `work/bin/trylo-workd.mjs` | Excluded | Compatibility launcher for that experiment |
+
+The default `prepare-sidecars.ps1` does not build or stage CoWork. Use
+`prepare-sidecars.ps1 -IncludeWorkd` only to prepare the separate experimental
+dependency, then `python desktop/scripts/package-portable.py --component cowork`.
+The normal Tauri resource configuration and default portable packager exclude both
+`work/` and `workd/`, even if an older build left them in the staging directory.
+
+The dependency ZIP is a maintenance/evaluation download. Its existing Control Plane
+cold-start probe has not passed. Desktop has no installer or activation UI for it
+in this edition; downloading/extracting it does not enable background tasks.
+Repair and verify that runtime before adding product activation again.
+
+See [optional-runtime boundary](../docs/architecture/OPTIONAL_COWORK_RUNTIME.md) and
+[result/desktop](../result/desktop/) for the separate download and validation.
 
 ## Source layout
 
-```
-work/
-├── README.md                 # this file
-├── STRUCTURE.md              # what's in here now vs what Phase 1 adds
-├── package.json              # @trylo/work package
-├── tsconfig.json             # for Phase 1+ (TS sources)
-├── bin/
-│   └── trylo-workd.mjs       # daemon entry (Phase 0: stub, Phase 1: coworkd wrapper)
-├── src/
-│   ├── daemon/               # Trylo's wrapper around coworkd (Phase 1)
-│   ├── control-plane/        # HTTP/WS API server + client (Phase 1)
-│   ├── renderer/             # React renderer for the work surface (Phase 2)
-│   ├── shared/               # Trylo-specific types (FilePath, WorkspaceRef, ...)
-│   └── host-adapter/         # the bridge Tauri uses to call into the daemon
-├── vendor/
-│   └── cowork-os/            # Phase 1: CoWork-OS source copied in, unmodified
-└── tests/                    # vitest specs (Phase 1+)
-```
-
-## Running independently
-
-Phase 0:
-
-```bash
-cd C:/work/demo-ws/work
-node ./bin/trylo-workd.mjs
-# in another shell:
-curl http://127.0.0.1:47821/health
-curl -X POST -d '{"hello":"world"}' http://127.0.0.1:47821/v1/echo
-```
-
-The daemon listens on `127.0.0.1:47821` by default. Override with env vars:
-
-- `TRYLO_WORKD_PORT` — port (default `47821`)
-- `TRYLO_WORKD_HOST` — bind host (default `127.0.0.1`)
-
-## Why a separate package
-
-Trylo's `desktop/` is a Tauri + Vite frontend. Work's daemon is pure Node + (later) a React renderer. Mixing them in one `package.json` would force the Tauri build to drag in the daemon's deps, and vice versa. Keeping `work/` as a sibling package means:
-
-1. The daemon can be developed and tested without launching Tauri.
-2. The Tauri build stays small.
-3. The fork from CoWork-OS lives in a clearly bounded place (`vendor/cowork-os/`).
-4. Future contributions can target `work/` without touching `desktop/`.
+- `src/renderer`, prompt and artifact helpers: used by ordinary Work.
+- `src/work-runtime.ts`, control-plane adapters and `bin/`: retained experimental compatibility code.
+- `vendor/cowork-os`: reviewed vendor patches and external build inputs for the optional daemon.
+- `tests/`: helper, protocol and compatibility contracts; these do not all represent active product routes.
 
 ## Vendor patches
 
