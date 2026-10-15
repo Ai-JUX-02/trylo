@@ -159,10 +159,10 @@ function probeVersionOnce(executable, timeoutMs, runner) {  return new Promise((
     let out = '';
     child.stdout?.on('data', (chunk) => {
       out += String(chunk);
-      if (out.length > 4096) finish(out.trim());
+      if (out.length > 4096) finish(null);
     });
     child.on('error', () => finish(null));
-    child.on('close', () => finish(out.trim() || null));
+    child.on('close', (code) => finish(code === 0 ? out.trim() || null : null));
   });
 }
 

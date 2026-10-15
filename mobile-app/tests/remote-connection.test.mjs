@@ -104,6 +104,21 @@ test('half-open connections fail a health deadline and reconnect', async t => {
   t.mock.timers.tick(12000); await flush();
   assert.equal(h.states.at(-1), 'reconnecting');
 });
+test('a delayed health snapshot cannot roll back a newer streamed chat event', async t => {
+  let resolveProbe;
+  const events = [];
+  const h = start({
+    snapshot: () => new Promise(resolve => { resolveProbe = resolve; }),
+    onChatEvent: event => events.push(event),
+  });
+  await flush();
+  Socket.all[0].frame({ snapshot: snapshot('initial') });
+  t.mock.timers.tick(25000); await flush();
+  Socket.all[0].frame({ type: 'action_event', action: 'chat', payload: { type: 'text-delta', delta: 'new text' } });
+  resolveProbe(snapshot('old')); await flush();
+  assert.equal(events.length, 1);
+  assert.deepEqual(h.received.map(value => value.conversation[0].text), ['initial']);
+});
 test('offline cache belongs to its paired computer even when session ids match', () => {
   const message = text => [{ id: text, text, role: 'assistant', at: Date.now() }];
   saveRemoteConversation('same-session', 'A', message('from A'), 'pc-A');

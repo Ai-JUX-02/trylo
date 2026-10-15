@@ -89,10 +89,22 @@ test('unresolved Hermes Python degrades without spawning', async () => {
 
 test('unconfigured storage root degrades without spawning', async () => {
   const { calls, spawnFn } = fakeSpawn();
-  const result = await createSkillsClient({ storageRoot: '', spawn: spawnFn }).list();
+  let resolverCalls = 0;
+  const result = await createSkillsClient({ storageRoot: '', spawn: spawnFn, resolver: () => {
+    ++resolverCalls;
+    throw new Error('Python must not be probed without storage');
+  } }).list();
   assert.equal(result.ok, false);
   assert.match(result.error, /storage root is not configured/);
+  assert.equal(resolverCalls, 0);
   assert.deepEqual(calls, []);
+});
+
+test('a failed adapter exit cannot claim success through its JSON payload', async () => {
+  const { spawnFn } = fakeSpawn({ stdout: JSON.stringify({ success: true, skills: [] }), exitCode: 1 });
+  const result = await client({ spawn: spawnFn }).list();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /exited 1/);
 });
 
 test('adapter failure (success:false) is surfaced as an error', async () => {

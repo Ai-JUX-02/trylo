@@ -46,6 +46,10 @@ export function createSkillsClient({
   /** One adapter invocation. Never throws. */
   function call(request) {
     return new Promise((resolve) => {
+      if (!storageRoot) {
+        resolve({ ok: false, error: 'hermes storage root is not configured' });
+        return;
+      }
       let pythonExe;
       try {
         pythonExe = injectedResolver
@@ -53,10 +57,6 @@ export function createSkillsClient({
           : requireLegacyVendor('hermes-python-resolver.js').resolveHermesPython();
       } catch (err) {
         resolve({ ok: false, error: `Hermes Python not found: ${err && err.message ? err.message : err}` });
-        return;
-      }
-      if (!storageRoot) {
-        resolve({ ok: false, error: 'hermes storage root is not configured' });
         return;
       }
 
@@ -93,7 +93,7 @@ export function createSkillsClient({
         resolve(result);
       }
 
-      function parse() {
+      function parse(exitCode) {
         let parsed;
         try {
           parsed = JSON.parse(out);
@@ -107,6 +107,10 @@ export function createSkillsClient({
         }
         if (parsed.success !== true) {
           finish({ ok: false, error: String(parsed.error || 'skills adapter reported failure') });
+          return;
+        }
+        if (exitCode !== 0) {
+          finish({ ok: false, error: `skills adapter exited ${exitCode}: ${errText.slice(0, 200)}` });
           return;
         }
         finish({ ok: true, ...parsed });
@@ -125,7 +129,7 @@ export function createSkillsClient({
           finish({ ok: false, error: `skills adapter exited ${code}: ${errText.slice(0, 200)}` });
           return;
         }
-        parse();
+        parse(code);
       });
 
       try {
