@@ -66,7 +66,8 @@ export type IterationObservation = {
 };
 
 export type IterationBudget = {
-  readonly maxIterations: number;
+  /** Explicit request ceiling; absent leaves ordinary execution uncapped. */
+  readonly maxIterations?: number;
   /** Opt-in: reserve the last provider request for a report, not more actions. */
   readonly finalRequest?: "report_only";
   readonly maxOutputTokens?: number;
@@ -131,8 +132,9 @@ export function evaluateBudget(usage: IterationUsage, budget: IterationBudget): 
   if (contextLimit !== undefined && usage.promptTokens >= contextLimit) {
     return { kind: "context_limit", used: usage.promptTokens, limit: contextLimit };
   }
-  if (usage.iterations >= budget.maxIterations) {
-    return { kind: "iterations_exhausted", used: usage.iterations, limit: budget.maxIterations };
+  const iterationLimit = budget.maxIterations;
+  if (iterationLimit !== undefined && usage.iterations >= iterationLimit) {
+    return { kind: "iterations_exhausted", used: usage.iterations, limit: iterationLimit };
   }
   return { kind: "within_budget" };
 }

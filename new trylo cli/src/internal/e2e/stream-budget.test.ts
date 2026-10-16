@@ -22,7 +22,7 @@ test("network chunk boundaries cannot multiply the retained event count", async 
   assert.ok(deltas.length <= 50, `expected bounded deltas, got ${deltas.length}`);
 });
 
-test("event overflow stops the producer and emits one failed terminal", async () => {
+test("a long reasoning stream completes without a turn-wide event ceiling", async () => {
   let pulled = 0, released = false, signal: AbortSignal | undefined;
   const result = await runTurn({ profile: emptyProfileLoader(), permission: createFakePermission("approved"), tools: createFakeTools([]),
     provider: { async *stream(_request, abort): AsyncIterable<ProviderEvent> {
@@ -35,9 +35,9 @@ test("event overflow stops the producer and emits one failed terminal", async ()
       } finally { released = true; }
     } },
   }, { sessionId: "s", turnId: "t", correlationId: "c", text: "Check overflow." });
-  assert.equal(result.state.terminalReason, "failed");
+  assert.equal(result.state.terminalReason, "completed");
   assert.equal(result.envelopes.filter(e => e.kind === "terminal").length, 1);
-  assert.ok(pulled < 4200, `producer kept running for ${pulled} deltas`);
-  assert.equal(signal?.aborted, true);
+  assert.equal(pulled, 5000);
+  assert.equal(signal?.aborted, false);
   assert.equal(released, true);
 });

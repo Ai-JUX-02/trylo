@@ -35,6 +35,8 @@ export type ExecutionState = {
   readonly approvals: Readonly<Record<string, Approval>>;
   readonly verification: Verification;
   readonly seenEventIds: readonly string[];
+  /** Journal deliveries need a watermark, rather than a turn-wide id array. */
+  readonly lastDeliverySequence?: number;
   readonly lastError?: ExecutionError;
   /**
    * Tool input blocks that started but were never closed by a `tool_call`.

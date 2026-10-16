@@ -1,3 +1,4 @@
+import { autoCompactTokenLimit } from "../compaction/policy.js";
 import { evaluateBudget } from "../domain/iteration.js";
 import { currentPromptBasis, promptContextFor } from "./compact-boundary.js";
 import { decideGap } from "./iteration-gap.js";
@@ -63,6 +64,11 @@ export async function budgetCeiling(engine: Engine, ports: LoopPorts): Promise<b
   // send too; otherwise an oversized prompt bypasses the gate with zero usage.
   const basis = currentPromptBasis(promptContextFor(engine, ports.compaction, ports.tools));
   if (basis !== undefined) engine.promptTokens = basis;
+  const contextLimit = engine.budget.contextTokenLimit;
+  if (basis !== undefined && contextLimit !== undefined && basis >= autoCompactTokenLimit(contextLimit) && basis < contextLimit) {
+    // Resumed history may already need compaction before any tools run.
+    await emitCompactionFor(engine, ports);
+  }
   const verdict = evaluateBudget(
     {
       iterations: engine.iterations,

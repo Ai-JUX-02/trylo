@@ -44,8 +44,6 @@ import { flushProgress, flushStreamItems, preserveOpenBlocks } from "./progress.
 import { applyTurnRepairs } from "./turn-repairs.js";
 import { budgetIteration, type BudgetIteration } from "./budget-final-report.js";
 
-export { DEFAULT_MAX_ITERATIONS } from "./runner-engine.js";
-
 /**
  * How many provider-rejection recoveries one turn may attempt (WP09.3/L06).
  * One, not zero: a refusal a compaction can answer deserves its answer. One,

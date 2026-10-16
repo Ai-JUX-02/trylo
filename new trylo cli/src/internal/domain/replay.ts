@@ -42,6 +42,7 @@ function normalize(state: ExecutionState): unknown {
     approvals: state.approvals,
     verification: state.verification,
     seenEventIds: state.seenEventIds,
+    lastDeliverySequence: state.lastDeliverySequence ?? null,
     lastError: state.lastError ?? null,
   };
 }

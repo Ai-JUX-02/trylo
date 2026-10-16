@@ -100,11 +100,13 @@ export function gapHostFor(engine: Engine, ports: LoopPorts, deps: ViewDeps): Ga
       engine.setAsideInput = [...engine.setAsideInput, ...items];
     },
     forgiveBudget: () => {
+      const limit = engine.budget.maxIterations;
+      if (limit === undefined) return;
       // A steer refunds the steps already spent, out of an allowance no larger
       // than one turn's budget: redirecting a run may double it, never unbind
       // it. The refund is what was actually spent, so a steer at a gap where
       // nothing had been spent yet costs nothing and grants nothing.
-      const allowance = Math.max(0, engine.budget.maxIterations - engine.refunded);
+      const allowance = Math.max(0, limit - engine.refunded);
       const refund = Math.min(engine.iterations, allowance);
       engine.iterations -= refund;
       engine.refunded += refund;

@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_ITERATIONS, runTurn, type LoopPorts, type RunTurnResult } from "../../loop/runner.js";
+import { runTurn, type LoopPorts, type RunTurnResult } from "../../loop/runner.js";
 import type { EnvelopeSink } from "../../loop/journal-emit.js";
 import type { IterationBudget, UsagePricing } from "../../domain/iteration.js";
 import type { TurnHostInput } from "./host.js";
@@ -21,10 +21,10 @@ export function budgetOf(input: TurnHostInput): IterationBudget | undefined {
   ) {
     return undefined;
   }
-  const maxIterations = input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+  const maxIterations = input.maxIterations;
   return {
-    maxIterations,
-    ...(maxIterations > 1 ? { finalRequest: "report_only" as const } : {}),
+    ...(maxIterations === undefined ? {} : { maxIterations }),
+    ...(maxIterations !== undefined && maxIterations > 1 ? { finalRequest: "report_only" as const } : {}),
     ...(input.maxTokens === undefined ? {} : { maxOutputTokens: input.maxTokens }),
     ...(input.contextTokenLimit === undefined ? {} : { contextTokenLimit: input.contextTokenLimit }),
     ...(input.maxBudgetUsd === undefined ? {} : { maxCostUsd: input.maxBudgetUsd }),

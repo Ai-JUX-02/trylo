@@ -33,7 +33,7 @@ function budgetFacts(budget: IterationBudget | undefined): string {
   if (budget === undefined) return "";
   const limits = [
     "Initial execution limits for this whole turn (not permission grants):",
-    `Maximum provider requests: ${budget.maxIterations}`,
+    ...(budget.maxIterations === undefined ? [] : [`Maximum provider requests: ${budget.maxIterations}`]),
     ...(budget.maxOutputTokens === undefined ? [] : [`Maximum total output tokens: ${budget.maxOutputTokens}`]),
     ...(budget.finalRequest === undefined ? [] : ["The last provider request is reserved for the final report; no tool actions are available in that request."]),
     "These limits cover the whole turn, including retries and final delivery. Reserve capacity for every requested artifact and its validation. After required checks pass, finish missing requested artifacts before exploratory probes or discretionary cleanup. The execution loop still enforces the limits.",

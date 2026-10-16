@@ -35,15 +35,14 @@ function probe(overrides: Partial<CompactionProbe> = {}): CompactionProbe {
   return { ...base, ...overrides };
 }
 
-test("an estimate below the limit holds", () => {
-  const decision = shouldCompact(probe({ estimatedPromptTokens: 999 }));
+test("an estimate below the auto-compaction threshold holds", () => {
+  const decision = shouldCompact(probe({ estimatedPromptTokens: 899 }));
   assert.deepEqual(decision, { outcome: "hold", reason: "within_limit" });
 });
 
-test("an estimate exactly at the limit compacts", () => {
-  // Inclusive, and deliberately the case most easy to get wrong: at exactly the
-  // limit the *next* request does not fit, so waiting would overflow.
-  const decision = shouldCompact(probe({ estimatedPromptTokens: 1_000 }));
+test("an estimate exactly at ninety percent compacts", () => {
+  // Compact before the hard ceiling so the next request has room to grow.
+  const decision = shouldCompact(probe({ estimatedPromptTokens: 900 }));
   assert.deepEqual(decision, { outcome: "compact", reason: "estimated_tokens_reached_limit" });
 });
 
@@ -59,8 +58,8 @@ test("an empty prompt view never compacts", () => {
 });
 
 test("the decision ignores nothing but the probe: same probe, same answer", () => {
-  const first = shouldCompact(probe({ estimatedPromptTokens: 1_000 }));
-  const second = shouldCompact(probe({ estimatedPromptTokens: 1_000 }));
+  const first = shouldCompact(probe({ estimatedPromptTokens: 900 }));
+  const second = shouldCompact(probe({ estimatedPromptTokens: 900 }));
   assert.deepEqual(first, second);
 });
 

@@ -292,8 +292,9 @@ async function applyToState(
   engine: Engine,
   input: ReduceInput,
 ): Promise<ReadonlyArray<EffectCommand> | undefined> {
-  engine.journal.recordInput(input);
-  const result = reduce(engine.state, input);
+  const delivered = engine.journal.recordInput(input);
+  const result = reduce(engine.state, delivered);
+  engine.state = result.state;
   if (!result.ok) {
     emitRaw(engine, "error", {
       code: result.error.code,
@@ -301,7 +302,6 @@ async function applyToState(
     });
     return undefined;
   }
-  engine.state = result.state;
   if (
     engine.state.currentAttemptId !== undefined &&
     engine.state.currentAttemptId !== engine.boundAttempt

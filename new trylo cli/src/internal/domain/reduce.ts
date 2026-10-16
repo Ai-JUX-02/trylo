@@ -49,6 +49,37 @@ export type { ReduceErr, ReduceOk, ReduceResult } from "./reduce-helpers.js";
  */
 
 export function reduce(state: ExecutionState, input: ReduceInput): ReduceResult {
+  const position = input.deliverySequence;
+  if (position === undefined) {
+    if (state.lastDeliverySequence !== undefined) {
+      return invalidDelivery(state, input);
+    }
+    return reduceInput(state, input);
+  }
+  if (!Number.isSafeInteger(position) || position < 1 || state.seenEventIds.length > 0) {
+    return invalidDelivery(state, input);
+  }
+  const previous = state.lastDeliverySequence ?? 0;
+  if (position <= previous) {
+    return { ok: true, state, commands: [], events: [], duplicate: true };
+  }
+  if (position !== previous + 1) {
+    return invalidDelivery(state, input);
+  }
+  const result = reduceInput(state, input);
+  // Even a domain refusal consumes a delivered position. Its commands remain
+  // refused, while the next cancellation or transport fact can still arrive.
+  return {
+    ...result,
+    state: { ...result.state, seenEventIds: [], lastDeliverySequence: position },
+  };
+}
+
+function invalidDelivery(state: ExecutionState, input: ReduceInput): ReduceResult {
+  return fail(state, { code: "invalid_input", message: "invalid_input_delivery", event: input.type });
+}
+
+function reduceInput(state: ExecutionState, input: ReduceInput): ReduceResult {
   if (state.seenEventIds.includes(input.eventId)) {
     return { ok: true, state, commands: [], events: [], duplicate: true };
   }

@@ -3,6 +3,8 @@ import type { VerificationStatus } from "../contract/execution.js";
 
 type Base = {
   readonly eventId: string;
+  /** Dense dispatch position owned by the execution journal; absent in legacy journals. */
+  readonly deliverySequence?: number;
 };
 
 export type ReduceInput =

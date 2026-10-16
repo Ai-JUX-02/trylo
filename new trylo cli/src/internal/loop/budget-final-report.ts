@@ -25,7 +25,8 @@ export type BudgetIteration = {
  * A steer can refund iterations in the existing gap, so select again each time.
  */
 export function budgetIteration(engine: Engine, ports: LoopPorts): BudgetIteration {
-  if (engine.budget.finalRequest !== "report_only" || engine.iterations + 1 < engine.budget.maxIterations) {
+  const limit = engine.budget.maxIterations;
+  if (engine.budget.finalRequest !== "report_only" || limit === undefined || engine.iterations + 1 < limit) {
     return { purpose: "work", ports };
   }
   return { purpose: "final_report", ports: { ...ports, tools: REPORT_TOOLS } };

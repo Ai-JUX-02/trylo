@@ -54,7 +54,7 @@ test("five layers resolve with correct precedence and layer attribution", () => 
   assert.deepEqual(view["maxTokens"], { value: 512, layer: "cli_flag" });
   // packaged defaults survive where nothing overrode them
   assert.deepEqual(view["format"], { value: "text", layer: "packaged_default" });
-  assert.deepEqual(view["maxIterations"], { value: 32, layer: "packaged_default" });
+  assert.equal(view["maxIterations"], undefined);
 });
 
 test("adversarial #8: a missing user file still succeeds and falls through to packaged", () => {

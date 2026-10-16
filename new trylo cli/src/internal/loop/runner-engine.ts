@@ -33,13 +33,6 @@ import { pairCancelledToolCalls } from "./transcript-append.js";
  * thirty-line object literal in its middle.
  */
 
-/**
- * The library default, kept in step with `PACKAGED_DEFAULTS.maxIterations`: a
- * caller that builds a turn without a budget gets the same ceiling the CLI
- * resolves from its own settings.
- */
-export const DEFAULT_MAX_ITERATIONS = 32;
-
 export type Engine = {
   state: ExecutionState;
   seq: number;
@@ -162,7 +155,7 @@ export async function assembleEngine(
     abort,
     sawText: false,
     model: request.model ?? "default",
-    budget: request.budget ?? { maxIterations: DEFAULT_MAX_ITERATIONS },
+    budget: request.budget ?? {},
     iterations: 0,
     refunded: 0,
     usage: emptyUsage("snapshot"),

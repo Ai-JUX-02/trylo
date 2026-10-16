@@ -11,7 +11,7 @@ export type JournalSnapshot = {
 
 export type ExecutionJournal = {
   append(event: UnsequencedEvent): Envelope;
-  recordInput(input: ReduceInput): void;
+  recordInput(input: ReduceInput): ReduceInput;
   events(): readonly Envelope[];
   inputs(): readonly ReduceInput[];
   snapshot(): JournalSnapshot;
@@ -21,13 +21,23 @@ export type ExecutionJournal = {
 export function createExecutionJournal(): ExecutionJournal {
   const events: Envelope[] = [];
   const inputs: ReduceInput[] = [];
+  // The journal already retains every input. This index gives repeated ids
+  // their original position without a second, capped reducer history.
+  const deliveries = new Map<string, number>();
   let sequencer: AttemptSequencer | undefined;
   return {
     bindAttempt(attemptId) {
       sequencer = createAttemptSequencer(attemptId);
     },
     recordInput(input) {
-      inputs.push(input);
+      let deliverySequence = deliveries.get(input.eventId);
+      if (deliverySequence === undefined) {
+        deliverySequence = deliveries.size + 1;
+        deliveries.set(input.eventId, deliverySequence);
+      }
+      const delivered = { ...input, deliverySequence };
+      inputs.push(delivered);
+      return delivered;
     },
     append(event) {
       const envelope =

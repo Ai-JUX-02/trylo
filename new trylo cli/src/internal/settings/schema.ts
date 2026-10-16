@@ -92,21 +92,14 @@ export const SETTINGS_SCHEMA: Readonly<Record<string, KeySpec>> = {
  * `contextTokenLimit` is intentionally omitted: it is optional, and leaving it
  * unset is meaningful (the provider decides), which a packaged number would hide.
  *
- * `maxIterations` is 32 rather than the 8 this shipped with, because 8 is a
- * *chat* budget and this is a coding CLI. One ordinary edit — explore, read the
- * files, write, run the tests, read what failed, fix, answer — is six beats
- * before the first mistake, and a real model makes a mistake: an observed run
- * of the fixed acceptance task spent its eighth iteration on a retry and was cut
- * off with `iterations_exhausted` while the work was still on track. The ceiling
- * is a runaway guard, not a work budget, so it has to sit far enough above a
- * normal task that reaching it still means something is wrong.
+ * Request-count and cumulative output budgets are opt-in, like the reference
+ * execution policy. Model/provider generation limits remain authoritative;
+ * packaged defaults must not turn a normal coding task into a budgeted run.
  */
 export const PACKAGED_DEFAULTS: SettingsValues = {
   provider: "fixture",
   format: "text",
   endpoint: "",
-  maxIterations: 32,
-  maxTokens: 65536,
 };
 
 const SECRET_KEY_EXACT: ReadonlySet<string> = new Set(["apiKey", "token", "authorization"]);

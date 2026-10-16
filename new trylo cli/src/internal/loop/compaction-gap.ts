@@ -7,6 +7,7 @@ import type { CompactionEvent, CompactionInput, CompactionWiring } from "./compa
 import { transcriptToMessages } from "./transcript-messages.js";
 import { promptViewMessages } from "./prompt-view.js";
 import { requestMessages } from "./request.js";
+import { autoCompactTokenLimit } from "../compaction/policy.js";
 export { promptViewMessages, summaryMessage, coveredExchangeTail } from "./prompt-view.js";
 
 /**
@@ -115,7 +116,7 @@ export async function runCompactionFor(
   // request that carried the *old* view, and the whole point of the window is
   // that the next request no longer does.
   const projectedPromptTokens = localViewBasis(input);
-  ledger.attempted = projectedPromptTokens >= contextTokenLimit;
+  ledger.attempted = projectedPromptTokens >= autoCompactTokenLimit(contextTokenLimit);
   return {
     events: stored.events.map(event => ({ ...event, payload: { ...event.payload,
       tokensBefore: estimated, tokensAfter: projectedPromptTokens } })),
