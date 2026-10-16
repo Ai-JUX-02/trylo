@@ -241,7 +241,18 @@ function translateInto(state: BlockState, envelope: Envelope, events: CliStreamE
     case "usage":
       events.push({ type: "usage", usage: usageFrom(envelope.payload) });
       break;
+    case "compact":
+      events.push({ type: "compact", status: "completed", reason: "auto",
+        ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}),
+        ...(typeof envelope.payload.tokensAfter === "number" ? { tokensAfter: envelope.payload.tokensAfter } : {}) });
+      break;
     case "observation":
+      if (text(envelope.payload, "component") === "compaction") {
+        events.push({ type: "compact", status: text(envelope.payload, "status") === "started" ? "started" : "failed",
+          reason: text(envelope.payload, "reason") || "auto",
+          ...(typeof envelope.payload.tokensBefore === "number" ? { tokensBefore: envelope.payload.tokensBefore } : {}) });
+        break;
+      }
       // Remembering a successful approval is a fact, not a warning.
       if (text(envelope.payload, "component") === "permission_grant") break;
       // A successful pre-write snapshot is journal evidence, not a warning.

@@ -65,7 +65,11 @@ export async function emitCompactionFor(
   ports: LoopPorts,
   options?: { readonly force?: boolean },
 ): Promise<CompactionGapOutcome> {
-  const outcome = await runCompactionFor(promptContextFor(engine, ports.compaction, ports.tools), options);
+  const outcome = await runCompactionFor(promptContextFor(engine, ports.compaction, ports.tools), {
+    ...options, signal: engine.abort.signal, onStart: tokensBefore => emitRaw(engine, "observation", {
+      component: "compaction", status: "started", tokensBefore,
+    }),
+  });
   // The next-request ceiling uses the current view, including native fields,
   // even when the last stream omitted usage or summary authoring was refused.
   if (outcome.projectedPromptTokens !== undefined) engine.promptTokens = outcome.projectedPromptTokens;

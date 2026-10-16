@@ -101,7 +101,9 @@ function step0_repositoryBaseline() {
   }
 
   // R2: Hard check — source must be tracked by git
-  const gitLsFiles = runCmd("git", ["ls-files", "--", root], { capture: true });
+  // Check product source, not the research/document archive. Quoted long
+  // paths there can exceed spawnSync's output buffer and mimic no Git baseline.
+  const gitLsFiles = runCmd("git", ["ls-files", "--", join(root, "src")], { capture: true });
   const trackedCount = gitLsFiles.code === 0
     ? gitLsFiles.stdout.trim().split("\n").filter((l) => l.length > 0).length
     : 0;

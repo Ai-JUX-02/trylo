@@ -4,6 +4,7 @@ import type { ToolCallRequest, ToolPort, ToolOutcome } from "../ports/tools.js";
 import { executeToolSafely } from "./tool-boundary.js";
 import { emitFileWriteRecord } from "./tool-effects.js";
 import { cutToBytes } from "../protocol/text-cut.js";
+import type { ImageReference } from "../protocol/image-reference.js";
 
 /**
  * Running one approved tool call.
@@ -44,6 +45,7 @@ export type ToolResultRecord = {
   readonly output: string;
   readonly truncated: boolean;
   readonly outcome: ToolResultOutcome;
+  readonly images?: ReadonlyArray<ImageReference>;
 };
 
 export type ToolExecutionHost = {
@@ -216,6 +218,7 @@ export async function settleToolOutcome(
     output: bounded.output,
     truncated: bounded.truncated,
     outcome: toolResultOutcome(outcome),
+    ...(outcome.outcome === "result" && outcome.images !== undefined ? { images: outcome.images } : {}),
   });
   if (outcome.outcome === "result") {
     // Only a reported success may claim bytes landed on disk.

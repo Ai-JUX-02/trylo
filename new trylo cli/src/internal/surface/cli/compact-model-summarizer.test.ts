@@ -56,6 +56,20 @@ function textEvents(text: string): ReadonlyArray<ProviderEvent> {
   ];
 }
 
+test("summary authoring receives the turn's cancellation rather than an unrelated signal", async () => {
+  const provider = scriptedProvider(textEvents("safe summary"));
+  const cancel = new AbortController();
+  await createModelSummarizer({ provider: provider.port, model: "fixture" })(ITEMS, undefined, cancel.signal);
+  assert.equal(provider.captured[0]?.signal, cancel.signal);
+});
+
+test("an already cancelled summary sends no provider request", async () => {
+  const provider = scriptedProvider(textEvents("unused"));
+  const cancel = new AbortController(); cancel.abort();
+  await createModelSummarizer({ provider: provider.port, model: "fixture" })(ITEMS, undefined, cancel.signal);
+  assert.equal(provider.captured.length, 0);
+});
+
 test("a valid model summary is handed through untouched, on a tool-free request", async () => {
   const { port, captured } = scriptedProvider(textEvents("the model said: session about pkg metadata"));
   const summarize = createModelSummarizer({ provider: port, model: "compact-model" });

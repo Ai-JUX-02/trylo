@@ -16,6 +16,12 @@ export async function ensureV1Connection(settings: SettingsForCodeRun, provider:
     }
     return env;
   }
+  // The builtin provider cannot be removed, and this exact environment is
+  // handed to the run process. Asking two additional CLI processes whether
+  // they can see a key we just supplied adds a full cold start twice per
+  // turn. The run still resolves its config and validates the connection;
+  // CLI-owned credentials and named provider bindings must be probed below.
+  if (provider.providerId === 'openai-compatible' && env.TRYLO_OPENAI_API_KEY) return env;
   const probeArgs = { cliPath: settings.cliPath, nodeProgram: settings.cliNodeProgram, env, cwd: settings.cwd };
   const providers = await readCliProviders(probeArgs);
   if (!providers.ok) throw new Error(`无法读取新 CLI 的 provider 列表（${providers.reason}：${providers.detail}）。`);

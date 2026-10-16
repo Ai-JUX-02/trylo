@@ -15,37 +15,61 @@ import { CodeReasoningTranscript } from './CodeReasoningTranscript'
 import type { ThinkingMessage, ToolMessage } from './types'
 
 describe('approved event flow disclosure', () => {
-  it('keeps delivered reasoning readable after a mixed tool phase finishes', () => {
+  it('compacts a delivered mixed phase after completion and can reopen the original reasoning', () => {
     vi.useFakeTimers();
     try {
       const note = { ...thinking(), preview: '先核对文件内容，再验证修改结果。' };
       const view = render(<CodeReasoningTranscript entries={[note, tool({ status: 'running' })]} active turnId="u1" phaseId="p1" />);
       view.rerender(<CodeReasoningTranscript entries={[note, tool({ status: 'done' })]} active={false} turnId="u1" phaseId="p1" />);
       act(() => { vi.advanceTimersByTime(1000); });
-      expect(view.container.querySelector('.code-reasoning__head')).toHaveAttribute('aria-expanded', 'true');
+      expect(view.container.querySelector('.code-reasoning__head')).toHaveAttribute('aria-expanded', 'false');
+      expect(view.container.querySelector('.disclosure')).not.toHaveClass('disclosure--open');
+      fireEvent.click(view.container.querySelector('.code-reasoning__head')!);
       expect(view.container.querySelector('.disclosure')).toHaveClass('disclosure--open');
       expect(view.getByText(note.preview)).toBeVisible();
     } finally { vi.useRealTimers(); }
   });
 
-  it('shows saved reasoning on history load and still respects a manual collapse', () => {
+  it('loads saved reasoning compactly and respects a manual collapse across updates', () => {
     const entries = [thinking(), tool({ status: 'done' })];
     const view = render(<CodeReasoningTranscript entries={entries} active={false} turnId="u1" phaseId="p1" />);
     const head = view.container.querySelector('.code-reasoning__head')!;
+    expect(head).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(head);
     expect(head).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(head);
     view.rerender(<CodeReasoningTranscript entries={[...entries, { ...thinking(), id: 'th2' }]} active={false} turnId="u1" phaseId="p1" />);
     expect(head).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('shows a reasoning-only entry in full without another disclosure', () => {
+  it('offers one disclosure for a saved reasoning-only entry without removing its full text', () => {
     const raw = '原始思考保留标点和换行。\n第二段也原样保留。';
     const view = render(<CodeReasoningTranscript entries={[
       { ...thinking(), summary: 'An internal reasoning summary.', preview: raw, fullLength: raw.length },
     ]} active={false} turnId="u1" phaseId="p1" />);
-    expect(view.container.querySelector('.code-reasoning__head')).toBeNull();
+    const head = view.container.querySelector('.code-reasoning__head')!;
+    expect(head).toHaveAttribute('aria-expanded', 'false');
+    expect(head).toHaveTextContent('思考过程');
+    expect(view.container.querySelector('.disclosure')).not.toHaveClass('disclosure--open');
+    fireEvent.click(head);
     expect(view.container.querySelector('.disclosure')).toHaveClass('disclosure--open');
     expect(view.container.querySelector('.code-reasoning__passage-text')?.textContent).toBe(raw);
+  });
+
+  it('streams raw reasoning openly then compacts it after the phase ends', () => {
+    vi.useFakeTimers();
+    try {
+      const note = { ...thinking(), partial: true, preview: '第一段原始思考。' };
+      const view = render(<CodeReasoningTranscript entries={[note]} active turnId="u1" phaseId="p1" />);
+      const head = view.container.querySelector('.code-reasoning__head')!;
+      expect(head).toHaveAttribute('aria-expanded', 'true');
+      view.rerender(<CodeReasoningTranscript entries={[{ ...note, preview: '第一段原始思考。第二段。' }]} active turnId="u1" phaseId="p1" />);
+      expect(view.container.querySelector('.code-reasoning__passage-text')).toHaveTextContent('第一段原始思考。第二段。');
+      expect(head).toHaveAttribute('aria-expanded', 'true');
+      view.rerender(<CodeReasoningTranscript entries={[{ ...note, partial: false }]} active={false} turnId="u1" phaseId="p1" />);
+      act(() => { vi.advanceTimersByTime(500); });
+      expect(head).toHaveAttribute('aria-expanded', 'false');
+    } finally { vi.useRealTimers(); }
   });
 
   it('uses the real finding after the last action and preserves the original note text', () => {

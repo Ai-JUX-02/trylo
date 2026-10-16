@@ -224,10 +224,12 @@ async function runReadOnly(
     };
   }
 
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timer = new Promise<void>((resolve) => {
-    setTimeout(resolve, timeoutMs);
+    timeoutId = setTimeout(resolve, timeoutMs);
   });
   await Promise.race([done, timer]);
+  clearTimeout(timeoutId);
   if (exitCode === null) {
     await hostAdapter.process.stop(handle.id).catch(() => undefined);
     return { ok: false, code: 'timeout', detail: `no exit within ${timeoutMs}ms` };

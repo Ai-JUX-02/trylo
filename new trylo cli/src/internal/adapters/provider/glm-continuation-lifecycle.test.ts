@@ -20,6 +20,13 @@ function finish(capture: GlmToolContinuation | undefined, reasoning: string) {
   capture.commit();
 }
 
+test("native Chinese reasoning uses the same UTF-8 context estimate as visible messages", () => {
+  const continuation = createGlmToolContinuation(endpoint, model);
+  const reasoning = "思考预算".repeat(1_000);
+  finish(continuation.begin(request), reasoning);
+  assert.equal(continuation.persistence!.estimateOverheadTokens!([message]), Math.ceil(Buffer.byteLength(reasoning, "utf8") / 4));
+});
+
 test("reused tool ids preserve distinct native reasoning in complete ordered history", () => {
   const c = createGlmToolContinuation(endpoint, model), first = { ...message }, second = { ...message };
   finish(c.begin(request), "FIRST"); finish(c.begin(request), "SECOND");
@@ -55,6 +62,25 @@ test("native overhead uses exactly the fields which will be replayed", () => {
   assert.equal(c.persistence!.estimateOverheadTokens!([message]), 3);
   assert.equal(c.persistence!.estimateOverheadTokens!([{ ...message, content: "Changed." }]), 0);
   assert.equal(c.persistence!.estimateOverheadTokens!([message, { ...message }]), 0);
+});
+
+test("completed final-answer native context is preserved without inventing a tool call", () => {
+  const c = createGlmToolContinuation(endpoint, model), capture = c.begin(request)!;
+  capture.observe({ type: "reasoning_delta", blockId: "r", text: "FINAL_NATIVE", redacted: false });
+  capture.observe({ type: "text_delta", blockId: "b", text: "Final answer." });
+  capture.observe({ type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false });
+  capture.commit();
+  const final: ProviderMessage = { role: "assistant", content: "Final answer." };
+  const checkpoint = c.persistence!.capture(request.continuationScope!)!;
+  assert.ok(checkpoint);
+  const next = c.begin({ ...request, messages: [final] })!;
+  assert.equal(next.fieldsFor(final).reasoning_content, "FINAL_NATIVE");
+  const restored = createGlmToolContinuation(endpoint, model);
+  restored.persistence!.restore({ sessionId: "s", turnId: "next", records: [{ formatVersion: "1", sequence: 0,
+    type: "envelope", sessionId: "s", turnId: "t", at: "2026-10-16T00:00:00Z",
+    payload: { envelope: { kind: "stream_end" }, providerContinuation: checkpoint } }] });
+  assert.equal(restored.begin({ ...request, continuationScope: JSON.stringify(["s", "next"]), messages: [final] })!
+    .fieldsFor(final).reasoning_content, "FINAL_NATIVE");
 });
 
 test("native cache eviction keeps the 32-response bound without partially replaying duplicate groups", () => {

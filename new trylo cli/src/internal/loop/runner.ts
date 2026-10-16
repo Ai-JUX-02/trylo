@@ -3,7 +3,7 @@ import type { Message } from "../contract/execution.js";
 import type { VerificationStatus } from "../contract/execution.js";
 import type { ReduceInput } from "../domain/input.js";
 import { decideIterationEnd, streamCostUsd, type IterationBudget, type UsagePricing } from "../domain/iteration.js";
-import { budgetCeiling, outputBudgetSpent } from "./budget-gate.js";
+import { budgetCeiling, outputBudgetSpent, requestFitsContext } from "./budget-gate.js";
 import type { ExecutionState } from "../domain/state.js";
 import type { CompactRecordDraft, CompactWindow } from "../ports/compaction.js";
 import type { PermissionPort } from "../ports/permission.js";
@@ -391,30 +391,32 @@ async function runOneIteration(
     engine.iterations,
     ports.tools,
   );
+  const request = buildRequest({
+    attemptId: engine.state.currentAttemptId,
+    model: engine.model,
+    continuationScope: providerContinuationScope(engine.state.sessionId, engine.state.turnId),
+    ...(purpose === "final_report" ? { finalReport: "budget_limit" as const } : {}),
+    tools: ports.tools,
+    prompt: promptContextFor(engine, ports.compaction, ports.tools),
+    // The budget lives on the engine; the request states it so the adapter
+    // actually sends it (D5: --max-tokens never reached the wire before).
+    ...(engine.budget.maxOutputTokens === undefined
+      ? {}
+      : { maxOutputTokens: engine.budget.maxOutputTokens - engine.usage.outputTokens }),
+    ...(teaching.slot === undefined ? {} : { slot: teaching.slot.message }),
+    ...(teaching.toolGapSlot === undefined ? {} : { toolGapSlot: teaching.toolGapSlot }),
+    // WP18.3: caller prompt and schema ride the same way — stated on the
+    // request so the adapter sends them, absent when never asked for.
+    ...(engine.systemPrompt === undefined ? {} : { systemPrompt: engine.systemPrompt }),
+    ...(engine.systemPromptAppend === undefined ? {} : { systemPromptAppend: engine.systemPromptAppend }),
+    ...(engine.responseSchema === undefined ? {} : { responseSchema: engine.responseSchema }),
+  });
+  if (!await requestFitsContext(engine, ports, request)) return { finished: false, method: undefined, toolGap: undefined };
   const streamedInputs = new Set<string>();
   const observation = await consumeProviderStream({
-    port: ports.provider,
-    request: buildRequest({
-      attemptId: engine.state.currentAttemptId,
-      model: engine.model,
-      continuationScope: providerContinuationScope(engine.state.sessionId, engine.state.turnId),
-      ...(purpose === "final_report" ? { finalReport: "budget_limit" as const } : {}),
-      tools: ports.tools,
-      prompt: promptContextFor(engine, ports.compaction, ports.tools),
-      // The budget lives on the engine; the request states it so the adapter
-      // actually sends it (D5: --max-tokens never reached the wire before).
-      ...(engine.budget.maxOutputTokens === undefined
-        ? {}
-        : { maxOutputTokens: engine.budget.maxOutputTokens - engine.usage.outputTokens }),
-      ...(teaching.slot === undefined ? {} : { slot: teaching.slot.message }),
-      ...(teaching.toolGapSlot === undefined ? {} : { toolGapSlot: teaching.toolGapSlot }),
-      // WP18.3: caller prompt and schema ride the same way — stated on the
-      // request so the adapter sends them, absent when never asked for.
-      ...(engine.systemPrompt === undefined ? {} : { systemPrompt: engine.systemPrompt }),
-      ...(engine.systemPromptAppend === undefined ? {} : { systemPromptAppend: engine.systemPromptAppend }),
-      ...(engine.responseSchema === undefined ? {} : { responseSchema: engine.responseSchema }),
-    }),
+    port: ports.provider, request,
     signal: engine.abort.signal,
+    onWarning: warning => emitRaw(engine, "observation", { component: "provider", degraded: true, code: warning.code, message: warning.message }),
     startSequence: nextTranscriptSequence(engine.transcript),
     nextEventId: () => nextId(engine),
     // One normalizer per turn, built from the catalog this turn will actually
@@ -429,6 +431,7 @@ async function runOneIteration(
       // requests remain one scheduling batch until the provider has finished.
       await applyStreamInputs(engine, ports, [input]);
       streamedInputs.add(input.eventId);
+      if (currentPhase(engine) === "terminal") engine.abort.abort();
     },
     ...(teaching.channel === undefined ? {} : { channel: teaching.channel }),
     ...(teaching.feedbackChannel === undefined ? {} : { feedbackChannel: teaching.feedbackChannel }),

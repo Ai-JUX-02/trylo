@@ -26,7 +26,7 @@ import type { FilePath } from '../../host-adapter/types';
 import type { TryloHandlerContext } from '../../host-adapter/trylo-message-types';
 import type { TryloSession } from '../../host-adapter/trylo-api';
 import type { CodeMode, TopLevelMode } from '../../host-adapter/types';
-import { latestContextTokens, type ChatMessage } from './types';
+import { latestContextTokens, latestContextWindow, type ChatMessage } from './types';
 import type { Attachment, FailedAttachment } from '../../host-adapter/attachment-utils';
 import {
   workAttachmentToView,
@@ -211,6 +211,10 @@ export interface ChatPanelProps {
   readonly onSelectProfile?: (id: string) => void;
   readonly onCompact: () => void;
   readonly compacting: boolean;
+  readonly compactAvailable?: boolean;
+  readonly onWorkCompact?: () => void;
+  readonly workCompactAvailable?: boolean;
+  readonly requestContextOnly?: boolean;
   readonly activeProcessId: string | null;
   readonly attachments: readonly Attachment[];
   readonly onAddAttachment: () => void;
@@ -294,6 +298,8 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
           model={props.model}
           onCompact={props.onCompact}
           compacting={props.compacting}
+          compactAvailable={props.compactAvailable}
+          contextUnknown={props.requestContextOnly && props.messages.length > 0 && props.contextUsed === 0}
           activeProcessId={props.activeProcessId}
           attachments={props.attachments}
           {...(props.onSelectPool
@@ -386,8 +392,8 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
   // Uses the shared `latestContextTokens` so a Work compaction also
   // drops the ring immediately (turn usage OR compaction tokensAfter).
   const workContextUsed = useMemo<number>(
-    () => latestContextTokens(props.workMessages),
-    [props.workMessages],
+    () => latestContextTokens(props.workMessages, { allowLegacyUsage: !props.requestContextOnly }),
+    [props.workMessages, props.requestContextOnly],
   );
   return (
     <AgentConversationSurface
@@ -442,10 +448,12 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
           onPermissionLevelChange={props.onPermissionLevelChange}
           // Code-only controls stay inert in Work mode.
           contextUsed={workContextUsed}
-          contextWindow={props.contextWindow}
+          contextWindow={latestContextWindow(props.workMessages) ?? props.contextWindow}
           model={props.model}
-          compacting={false}
-          onCompact={() => undefined}
+          compacting={props.workMessages.some(message => message.kind === 'notice' && message.text.startsWith('Compacting context'))}
+          compactAvailable={props.workCompactAvailable ?? false}
+          contextUnknown={props.requestContextOnly && props.workMessages.length > 0 && workContextUsed === 0}
+          onCompact={props.onWorkCompact ?? (() => undefined)}
           activeProcessId={null}
           // Tool-profile chip: which MCP servers THIS Work run sees.
           toolProfileId={props.toolProfileId}

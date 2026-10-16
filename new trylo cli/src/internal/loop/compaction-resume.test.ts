@@ -250,7 +250,9 @@ test("a resumed turn that compacts again starts after the window it resumed unde
   ];
   const placed = windowOnJournal(draft?.payload as CompactWindow, written);
   assert.equal(placed?.replacedFromSequence, 5);
-  assert.equal(placed?.replacedToSequence, 10);
+  // The resumed oversized view is now compacted before its first send, so
+  // the later tool result is still live outside this window.
+  assert.equal(placed?.replacedToSequence, 9);
 });
 
 test("a turn with no resumed window compacts from the start, as it always did", async () => {

@@ -97,7 +97,7 @@ export type CompactionWiringInput = {
    * =model` passes the model author from `wiring.ts` — authoring may await the
    * provider there, which is why the seam accepts a promise.
    */
-  readonly summarize?: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string) => string | Promise<string>;
+  readonly summarize?: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => string | Promise<string>;
 };
 
 /**

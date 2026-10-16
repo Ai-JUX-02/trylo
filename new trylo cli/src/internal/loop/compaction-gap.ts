@@ -1,12 +1,13 @@
 import type {
   CompactRecordDraft,
-  CompactWindow,
 } from "../ports/compaction.js";
-import type { ProviderMessage } from "../ports/provider.js";
-import type { Transcript, TranscriptItem } from "../protocol/transcript.js";
+import type { Transcript } from "../protocol/transcript.js";
 import { journalView, type CompactionEntry, type CompactionLedger } from "./compact-ledger.js";
 import type { CompactionEvent, CompactionInput, CompactionWiring } from "./compact-boundary.js";
 import { transcriptToMessages } from "./transcript-messages.js";
+import { promptViewMessages } from "./prompt-view.js";
+import { requestMessages } from "./request.js";
+export { promptViewMessages, summaryMessage, coveredExchangeTail } from "./prompt-view.js";
 
 /**
  * The mechanics of one pass over the iteration gap (WP09).
@@ -55,7 +56,7 @@ export type CompactionGapOutcome = {
  */
 export async function runCompactionFor(
   input: CompactionInput,
-  options?: { readonly force?: boolean },
+  options?: { readonly force?: boolean; readonly onStart?: (tokens: number) => void; readonly signal?: AbortSignal },
 ): Promise<CompactionGapOutcome> {
   const { wiring, ledger, sessionId, contextTokenLimit } = input;
   if (wiring === undefined || (ledger.attempted && options?.force !== true)) {
@@ -72,7 +73,7 @@ export async function runCompactionFor(
     ledger.attempted = true;
     return { events: [degradation(projected.code)], storedWindow: false, projectedPromptTokens: undefined };
   }
-  const estimated = requestTokenBasis(input, projected.view.items);
+  const estimated = requestTokenBasis(input);
   if (options?.force !== true) {
     const decision = wiring.port.shouldCompact({
       view: projected.view,
@@ -87,7 +88,9 @@ export async function runCompactionFor(
   // exist yet. A wiring that returns a promise asks the provider here — at the
   // gap, where no stream is in flight and no envelope ordering can be broken.
   ledger.attempted = true;
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary);
+  options?.onStart?.(estimated);
+  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal);
+  if (options?.signal?.aborted) return { events: [degradation("cancelled")], storedWindow: false, projectedPromptTokens: estimated };
   const drafted = wiring.port.compact({
     records,
     sessionId,
@@ -111,13 +114,11 @@ export async function runCompactionFor(
   // The post-window basis is local on purpose: the server report describes the
   // request that carried the *old* view, and the whole point of the window is
   // that the next request no longer does.
-  const projectedPromptTokens = localViewBasis(
-    input,
-    input.transcript.slice(input.ledger.replacedPrefix),
-  );
+  const projectedPromptTokens = localViewBasis(input);
   ledger.attempted = projectedPromptTokens >= contextTokenLimit;
   return {
-    events: stored.events,
+    events: stored.events.map(event => ({ ...event, payload: { ...event.payload,
+      tokensBefore: estimated, tokensAfter: projectedPromptTokens } })),
     storedWindow: true,
     projectedPromptTokens,
   };
@@ -138,13 +139,12 @@ export async function runCompactionFor(
  */
 function requestTokenBasis(
   input: CompactionInput,
-  items: ReadonlyArray<TranscriptItem>,
 ): number {
   const wiring = input.wiring;
   if (wiring === undefined) {
     return 0;
   }
-  const local = localViewBasis(input, items);
+  const local = localViewBasis(input);
   const reported = input.reported;
   if (
     reported !== undefined &&
@@ -181,7 +181,7 @@ export function currentPromptBasis(input: CompactionInput): number | undefined {
   if (!projected.ok) {
     return undefined;
   }
-  return requestTokenBasis(input, projected.view.items);
+  return requestTokenBasis(input);
 }
 
 /**
@@ -192,7 +192,6 @@ export function currentPromptBasis(input: CompactionInput): number | undefined {
  */
 function localViewBasis(
   input: CompactionInput,
-  items: ReadonlyArray<TranscriptItem>,
 ): number {
   const wiring = input.wiring;
   if (wiring === undefined) {
@@ -202,101 +201,12 @@ function localViewBasis(
     input.tools !== undefined && wiring.estimateOverheadTokens !== undefined
       ? wiring.estimateOverheadTokens(input.tools)
       : 0;
-  const liveCount = input.transcript.length - input.ledger.replacedPrefix;
-  return (
-    wiring.estimatePromptTokens([
-      ...input.seedMessages,
-      ...summaryMessage(input.ledger.window),
-      // Use the request's same contiguous exchange view, including any
-      // covered prefix before its live results, so the ceiling is not bypassed.
-      ...transcriptToMessages([
-        ...coveredExchangeTail(input.transcript, liveCount),
-        ...items,
-      ]),
-    ]) + overhead
-  );
-}
-
-/**
- * The window as the model sees it.
- *
- * `system` is the only role that can carry a statement about the conversation
- * itself: the summary is neither something the user said nor something the
- * assistant said, and putting it in either mouth would fabricate a turn.
- */
-export function summaryMessage(window: CompactWindow | undefined): ReadonlyArray<ProviderMessage> {
-  if (window === undefined) {
-    return [];
-  }
-  return [{ role: "system", content: `[compacted history ${window.windowId}] ${window.summary}` }];
-}
-
-/**
- * The newest action-result exchange, when a window has covered it (WP09.1).
- *
- * A window may stand in for the newest `tool_result` — the bounds are the
- * port's business — but the model must never lose the *live* fact of what its
- * last action produced: a task that cannot read its own freshest outcome
- * re-issues the action and drifts (WP09.1: never cut the pairing of action
- * and result; the same re-injection idea as Codex's
- * `insert_initial_context_before_last_real_user_or_summary`). One assistant
- * response can call several tools. Keep that response's text, every paired
- * call and its results together; a suffix of the batch can orphan results
- * and invalidate provider-owned native continuation matching.
- *
- * Return only the covered prefix of the newest exchange, to prepend to the
- * live items before one transcript projection. An already-live exchange
- * returns nothing, so neither calls nor results are duplicated.
- */
-export function coveredExchangeTail(
-  transcript: Transcript,
-  liveCount: number,
-): Transcript {
-  const last = transcript[transcript.length - 1];
-  if (last === undefined) return [];
-  const liveStart = transcript.length - liveCount;
-  const firstLive = transcript[liveStart];
-  if (last.kind !== "tool_result" && firstLive?.kind !== "tool_result") {
-    // A resumed turn may have appended a new user input after a partial
-    // window. Its leading live assistant blocks still need their prefix.
-    const start = firstLive?.kind === "assistant_text" || firstLive?.kind === "assistant_reasoning" || firstLive?.kind === "tool_call"
-      ? assistantResponseStart(transcript, liveStart) : liveStart;
-    return transcript.slice(start, liveStart);
-  }
-  const pending = new Set<string>();
-  let beforeResults = transcript.length - 1;
-  if (firstLive?.kind === "tool_result") {
-    beforeResults = liveStart;
-    while (transcript[beforeResults + 1]?.kind === "tool_result") beforeResults += 1;
-  }
-  while (beforeResults >= 0) {
-    const item = transcript[beforeResults];
-    if (item?.kind !== "tool_result") break;
-    pending.add(item.toolCallId);
-    beforeResults -= 1;
-  }
-  let start = beforeResults + 1;
-  for (let index = beforeResults; index >= 0; index -= 1) {
-    const candidate = transcript[index];
-    if (candidate?.kind === "user" || candidate?.kind === "system") break;
-    if (candidate?.kind === "tool_call" && pending.delete(candidate.toolCallId)) {
-      start = index;
-      if (pending.size === 0) break;
-    }
-  }
-  start = assistantResponseStart(transcript, start);
-  return transcript.slice(start, Math.max(start, liveStart));
-}
-
-/** Block close order is not fixed: retain the contiguous assistant response. */
-function assistantResponseStart(transcript: Transcript, from: number): number {
-  let start = from;
-  while (start > 0) {
-    const previous = transcript[start - 1];
-    if (previous?.kind !== "assistant_text" && previous?.kind !== "assistant_reasoning" && previous?.kind !== "tool_call") break;
-    start -= 1;
-  }
-  return start;
+  const messages = requestMessages(promptViewMessages({ ...input, toolResultProjection: "microcompact" }), input.seedMessages.length, {
+    ...(input.tools === undefined ? {} : { tools: input.tools }),
+    ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
+    ...(input.systemPromptAppend === undefined ? {} : { systemPromptAppend: input.systemPromptAppend }),
+  });
+  return wiring.estimatePromptTokens(messages) + overhead;
 }
 
 /**

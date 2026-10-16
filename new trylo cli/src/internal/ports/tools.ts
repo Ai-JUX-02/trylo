@@ -1,4 +1,5 @@
 import type { JsonObject } from "../protocol/envelope.js";
+import type { ImageReference } from "../protocol/image-reference.js";
 
 /**
  * What the loop is allowed to know about a tool before calling it.
@@ -58,6 +59,7 @@ export type ToolOutcome =
       readonly value: JsonObject;
       readonly output: string;
       readonly truncated: boolean;
+      readonly images?: ReadonlyArray<ImageReference>;
     }
   | { readonly outcome: "error"; readonly code: string; readonly message: string }
   | { readonly outcome: "cancelled" }

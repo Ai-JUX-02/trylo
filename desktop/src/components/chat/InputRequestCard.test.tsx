@@ -49,7 +49,7 @@ describe('InputRequestCard (M4-E)', () => {
 
   it('Submit is disabled until every question is answered', () => {
     render(<InputRequestCard message={requestMessage()} onRespond={vi.fn()} />);
-    const submit = screen.getByText('Submit') as HTMLButtonElement;
+    const submit = screen.getByText('提交回答') as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fireEvent.click(screen.getByLabelText(/Report/));
     expect(submit.disabled).toBe(false);
@@ -59,7 +59,7 @@ describe('InputRequestCard (M4-E)', () => {
     const onRespond = vi.fn();
     render(<InputRequestCard message={requestMessage()} onRespond={onRespond} />);
     fireEvent.click(screen.getByLabelText(/No file/));
-    fireEvent.click(screen.getByText('Submit'));
+    fireEvent.click(screen.getByText('提交回答'));
     expect(onRespond).toHaveBeenCalledWith('ir-1', 'submitted', {
       outcome: { optionLabel: 'No file' },
     });
@@ -68,7 +68,7 @@ describe('InputRequestCard (M4-E)', () => {
   it('Dismiss responds with status=dismissed', () => {
     const onRespond = vi.fn();
     render(<InputRequestCard message={requestMessage()} onRespond={onRespond} />);
-    fireEvent.click(screen.getByText('Dismiss'));
+    fireEvent.click(screen.getByText('跳过'));
     expect(onRespond).toHaveBeenCalledWith('ir-1', 'dismissed', undefined);
   });
 
@@ -81,29 +81,29 @@ describe('InputRequestCard (M4-E)', () => {
         })}
       />,
     );
-    expect(screen.getByText('Submitted')).toBeTruthy();
+    expect(screen.getByText('已回答')).toBeTruthy();
     expect(screen.getByText('Report')).toBeTruthy();
-    expect(screen.queryByText('Submit')).toBeNull();
-    expect(screen.queryByText('Dismiss')).toBeNull();
+    expect(screen.queryByText('提交回答')).toBeNull();
+    expect(screen.queryByText('跳过')).toBeNull();
   });
 
   it('dismissed renders a read-only state', () => {
     render(<InputRequestCard message={requestMessage({ status: 'dismissed' })} />);
-    expect(screen.getByText('Dismissed')).toBeTruthy();
-    expect(screen.queryByText('Submit')).toBeNull();
+    expect(screen.getByText('已跳过')).toBeTruthy();
+    expect(screen.queryByText('提交回答')).toBeNull();
   });
 
   it('"Other" reveals a free-text box and is not submittable until text is entered', () => {
     const onRespond = vi.fn();
     render(<InputRequestCard message={requestMessage()} onRespond={onRespond} />);
-    const submit = screen.getByText('Submit') as HTMLButtonElement;
+    const submit = screen.getByText('提交回答') as HTMLButtonElement;
     // Without any selection Submit is disabled.
     expect(submit.disabled).toBe(true);
     // Picking "Other" alone does NOT yet count as an answer.
-    fireEvent.click(screen.getByLabelText(/Other/));
+    fireEvent.click(screen.getByLabelText(/其他/));
     expect(submit.disabled).toBe(true);
     // Typing custom text satisfies the question.
-    fireEvent.change(screen.getByLabelText(/What should the task deliver\? — other/), {
+    fireEvent.change(screen.getByLabelText(/What should the task deliver\? — 自定义回答/), {
       target: { value: 'A short email' },
     });
     expect(submit.disabled).toBe(false);

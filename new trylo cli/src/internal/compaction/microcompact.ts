@@ -12,9 +12,9 @@ import type { TranscriptItem } from "../protocol/transcript.js";
  * stays answered. The journal is untouched; a stub is a view fact, not a
  * rewritten record.
  *
- * The newest tool result in the view is never elided: it is the outcome the
- * model just asked for, and eliding it would leave the model acting on a
- * result it cannot read. Older oversized ones keep a bounded head and tail —
+ * Every result in the newest unconsumed batch is kept: parallel siblings
+ * are all outcomes the model just asked for. After an assistant response
+ * consumes that batch it becomes eligible too. Older oversized results keep a bounded head and tail —
  * usually the part that matters — with the elided size stated in the middle.
  */
 
@@ -29,7 +29,6 @@ const STUB_TAIL_CHARS = 200;
 export function elideOversizedToolResults(
   items: ReadonlyArray<TranscriptItem>,
 ): ReadonlyArray<TranscriptItem> {
-  // The newest tool result is found from the end, whatever else the view holds.
   let newestIndex = -1;
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const candidate = items[index];
@@ -37,10 +36,14 @@ export function elideOversizedToolResults(
       newestIndex = index;
       break;
     }
+    // A later assistant response has already consumed the preceding results.
+    if (candidate?.kind === "assistant_text" || candidate?.kind === "assistant_reasoning" || candidate?.kind === "tool_call") break;
   }
+  let batchStart = newestIndex;
+  while (batchStart > 0 && items[batchStart - 1]?.kind === "tool_result") batchStart -= 1;
   let changed = false;
   const out = items.map((one, index) => {
-    if (index === newestIndex || one.kind !== "tool_result") {
+    if ((newestIndex >= 0 && index >= batchStart && index <= newestIndex) || one.kind !== "tool_result") {
       return one;
     }
     if (one.output.length <= MICROCOMPACT_TOOL_RESULT_MAX_CHARS) {

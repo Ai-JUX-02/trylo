@@ -148,6 +148,7 @@ export type StreamContext = {
   readonly onPartial?: (partials: StreamPartials) => Promise<void>;
   /** Observe durable input while the connection is still open. Effects stay deferred. */
   readonly onInput?: (input: ReduceInput) => Promise<void>;
+  readonly onWarning?: (warning: Extract<ProviderEvent, { type: "warning" }>) => void;
 };
 
 /** The one method this loop calls on a stripper; each channel owns its own take. */
@@ -211,6 +212,7 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       break;
     }
     const event = step.value;
+    if (event.type === "warning") context.onWarning?.(event);
     // One raw event may become several, or none: a channel rewrites text into
     // the part meant for a reader and holds back the part meant for the board.
     // Non-text events come back exactly as they went in.
@@ -247,7 +249,7 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       await context.onStreamStart?.();
     }
     // Nothing after a terminal signal may be treated as model output.
-    if (isTerminalEvent(event)) {
+    if (isTerminalEvent(event) || context.signal.aborted) {
       break;
     }
   }

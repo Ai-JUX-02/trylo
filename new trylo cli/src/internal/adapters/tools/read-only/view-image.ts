@@ -1,4 +1,5 @@
 import type { JsonObject } from "../../../protocol/envelope.js";
+import { createHash } from "node:crypto";
 import type { ToolCallRequest, ToolOutcome } from "../../../ports/tools.js";
 import {
   checkImageBytes,
@@ -23,11 +24,10 @@ export type ViewImageConfig = {
  * environment, model-capability and detail gating, invalid-image rejection
  * before bytes travel further) and the legacy `FileReadTool` image branch
  * (MIME allowlist, size budget, dimension metadata). The Trylo shape differs
- * in one deliberate place: the text `output` the model reads now carries only
- * the redacted summary, while the full data URL travels in the structured
- * `value` for the request layer to attach to the wire. Stuffing megabytes of
- * base64 into the replayed transcript would tax every later turn for a fact
- * the wire needs exactly once.
+ * in one deliberate place: output/value carry metadata only. Byte-free images
+ * references reach the request composition, which revalidates the file before
+ * attaching it. Tool values also enter durable envelopes, so a data URL must
+ * never be put there even when the transcript itself only stores a summary.
  */
 export async function executeViewImage(
   config: ViewImageConfig,
@@ -85,12 +85,13 @@ export async function executeViewImage(
     detail: attachment.detail,
     ...(attachment.width === undefined ? {} : { width: attachment.width }),
     ...(attachment.height === undefined ? {} : { height: attachment.height }),
-    dataUrl: `data:${attachment.mediaType};base64,${attachment.dataBase64}`,
   };
   return {
     outcome: "result",
     value,
     output: `${summary} path=${JSON.stringify(requested)}`,
     truncated: false,
+    images: [{ path: requested, sha256: createHash("sha256").update(bytes).digest("hex"),
+      bytes: bytes.length, detail: detail.detail }],
   };
 }

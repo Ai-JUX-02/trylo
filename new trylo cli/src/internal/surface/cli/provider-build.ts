@@ -6,6 +6,8 @@ import { isKeyedProviderKind, isProviderKind, type ProviderKind } from "../../ad
 import type { WarmRegistry } from "../../adapters/provider/warm.js";
 import type { ProviderCapabilities } from "../../adapters/provider/capabilities.js";
 import type { WiringFailure, WiringInput } from "./wiring.js";
+import { withImageReferences } from "../../adapters/media/image-reference-provider.js";
+import { workspaceIdentity } from "./wiring-catalog.js";
 
 /**
  * Which adapter a run builds, and whether it may reuse one.
@@ -63,7 +65,7 @@ function preflight(input: WiringInput, kind: ProviderKind): WiringFailure | unde
   return undefined;
 }
 
-function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
+function constructTransport(input: WiringInput, kind: ProviderKind): ProviderPort {
   if (kind === "fixture") {
     return createFixtureProvider(DEFAULT_FIXTURE_SCRIPT);
   }
@@ -89,6 +91,10 @@ function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
     ...(input.apiKey === undefined ? {} : { apiKey: input.apiKey }),
     ...(input.tokenManager === undefined ? {} : { tokenManager: input.tokenManager }),
   });
+}
+
+function construct(input: WiringInput, kind: ProviderKind): ProviderPort {
+  return withImageReferences(constructTransport(input, kind), input.workspaceRoot);
 }
 
 /**
@@ -127,6 +133,7 @@ export function buildProvider(input: WiringInput): ProviderPort | WiringFailure 
       model: input.model,
       endpoint: input.endpoint,
       accountId: input.accountId ?? "",
+      workspaceId: workspaceIdentity(input.workspaceRoot),
       ...(input.reasoningSummary === undefined ? {} : { reasoningSummary: input.reasoningSummary }),
       ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     },

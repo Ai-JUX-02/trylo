@@ -8,7 +8,9 @@ const MAX_ENTRIES = 32;
 type Entry = { readonly key: string; readonly reasoning: string };
 
 function assistantKey(text: string, calls: ReadonlyArray<ProviderOutboundToolCall>): string {
-  return createHash("sha256").update(JSON.stringify([text, calls])).digest("hex");
+  const original = calls.map(call => ({ toolCallId: call.toolCallId, name: call.name,
+    arguments: call.originalArguments ?? call.arguments }));
+  return createHash("sha256").update(JSON.stringify([text, original])).digest("hex");
 }
 
 /** Tool ids may repeat across responses/turns. Keep each occurrence, then pair
@@ -21,8 +23,8 @@ export function createGlmContinuationCache() {
   function matching(messages: ReadonlyArray<ProviderMessage>): ReadonlyMap<ProviderMessage, string> {
     const groups = new Map<string, ProviderMessage[]>(), matched = new Map<ProviderMessage, string>();
     for (const message of messages) {
-      if (message.role !== "assistant" || message.toolCalls === undefined) continue;
-      const key = assistantKey(message.content, message.toolCalls);
+      if (message.role !== "assistant") continue;
+      const key = assistantKey(message.content, message.toolCalls ?? []);
       const group = groups.get(key) ?? [];
       group.push(message); groups.set(key, group);
     }
@@ -47,7 +49,7 @@ export function createGlmContinuationCache() {
     matching,
     estimateOverheadTokens(messages: ReadonlyArray<ProviderMessage>) {
       let tokens = 0;
-      for (const reasoning of matching(messages).values()) tokens += Math.ceil(reasoning.length / CHARS_PER_TOKEN);
+      for (const reasoning of matching(messages).values()) tokens += Math.ceil(Buffer.byteLength(reasoning, "utf8") / CHARS_PER_TOKEN);
       return tokens;
     },
   };

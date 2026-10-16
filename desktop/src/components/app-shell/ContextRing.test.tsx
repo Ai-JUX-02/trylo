@@ -61,13 +61,28 @@ describe('ContextRing', () => {
     expect(onCompact).toHaveBeenCalledTimes(1);
   });
 
-  it('briefly shows "✓ Sent" after click then reverts', () => {
+  it('keeps the measured reading until an actual compaction result arrives', () => {
     const onCompact = vi.fn();
     render(Ring({ used: 47_231, total: 200_000, onCompact }));
     const btn = screen.getByRole('button');
     expect(btn.textContent).not.toContain('✓');
     fireEvent.click(btn);
-    expect(btn.textContent).toContain('✓ Sent');
+    expect(btn.textContent).not.toContain('✓ Sent');
+    expect(btn.textContent).toContain('47k');
+  });
+
+  it('shows busy only from runtime evidence and blocks duplicate clicks', () => {
+    const onCompact = vi.fn();
+    render(Ring({ used: 47000, total: 200000, onCompact, busy: true }));
+    const button = screen.getByRole('button');
+    expect(button).toBeDisabled(); expect(button.textContent).toContain('正在压缩');
+    fireEvent.click(button); expect(onCompact).not.toHaveBeenCalled();
+  });
+
+  it('represents an old unmeasured total as unknown rather than claiming a full or empty window', () => {
+    render(Ring({ used: 0, total: 200000, unknown: true }));
+    expect(screen.getByRole('button').textContent).toContain('暂无读数');
+    expect(screen.getByRole('button').textContent).not.toContain('0%');
   });
 
   it('uses brand-300 stroke color in safe/warm/hot tiers', () => {

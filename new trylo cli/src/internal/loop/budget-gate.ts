@@ -6,6 +6,7 @@ import { nextId } from "./journal-emit.js";
 import type { Engine } from "./runner-engine.js";
 import { dispatch } from "./runner-effects.js";
 import type { LoopPorts } from "./runner.js";
+import type { ProviderRequest } from "../ports/provider.js";
 
 /**
  * The budget gate: where a turn's ceilings are enforced.
@@ -40,12 +41,28 @@ import type { LoopPorts } from "./runner.js";
  */
 const MAX_GAP_RESCUES_PER_TURN = 2;
 
+/** Check the assembled request too: transient learning/report instructions are
+ * added after the gap's history projection. They cannot bypass the hard cap.
+ */
+export async function requestFitsContext(engine: Engine, ports: LoopPorts, request: ProviderRequest): Promise<boolean> {
+  const wiring = ports.compaction, limit = engine.budget.contextTokenLimit;
+  if (wiring === undefined || limit === undefined) return true;
+  const tokens = wiring.estimatePromptTokens(request.messages) + (wiring.estimateOverheadTokens?.(ports.tools) ?? 0);
+  if (tokens < limit) return true;
+  await dispatch(engine, ports, { type: "budget_exhausted", eventId: nextId(engine), reason: "context_limit", used: tokens, limit });
+  return false;
+}
+
 function mayRescue(engine: Engine, ports: LoopPorts): boolean {
   return ports.compaction !== undefined && engine.gapCompactions < MAX_GAP_RESCUES_PER_TURN;
 }
 
 /** Whether this iteration's budget is spent; true means the loop must stop. */
 export async function budgetCeiling(engine: Engine, ports: LoopPorts): Promise<boolean> {
+  // A fresh/resumed turn has no server report yet. Measure before its first
+  // send too; otherwise an oversized prompt bypasses the gate with zero usage.
+  const basis = currentPromptBasis(promptContextFor(engine, ports.compaction, ports.tools));
+  if (basis !== undefined) engine.promptTokens = basis;
   const verdict = evaluateBudget(
     {
       iterations: engine.iterations,
@@ -57,28 +74,6 @@ export async function budgetCeiling(engine: Engine, ports: LoopPorts): Promise<b
   );
   if (verdict.kind === "within_budget") {
     return false;
-  }
-  if (verdict.kind === "context_limit") {
-    // The verdict came from the last stream's report, but a window stored
-    // since — at the gap the same iteration settled — may already have
-    // replaced the history that made it over. The ceiling is a fact about the
-    // *next* request, so it is re-asked against the current view before
-    // anything is done about it; an unreadable projection keeps the verdict.
-    const current = currentPromptBasis(promptContextFor(engine, ports.compaction, ports.tools));
-    if (current !== undefined) {
-      const refreshed = evaluateBudget(
-        {
-          iterations: engine.iterations,
-          outputTokens: engine.usage.outputTokens,
-          promptTokens: current,
-          costUsd: engine.costUsd,
-        },
-        engine.budget,
-      );
-      if (refreshed.kind === "within_budget") {
-        return false;
-      }
-    }
   }
   const gap = decideGap(verdict, mayRescue(engine, ports));
   if (gap.kind === "compact_then_continue") {

@@ -17,7 +17,7 @@
 // Unknown / malformed lines are REJECTED with a reason, not dropped —
 // a silent drop is how a real protocol drift becomes an invisible bug.
 
-/** The 12 event types the CLI stream may emit (spec §3.2). */
+/** Additive V1 vocabulary; compact carries real maintenance/gap outcomes. */
 export const CLI_V1_EVENT_TYPES = [
   'run_start',
   'message_start',
@@ -30,6 +30,7 @@ export const CLI_V1_EVENT_TYPES = [
   'tool_result',
   'warning',
   'usage',
+  'compact',
   'run_result',
 ] as const;
 
@@ -55,6 +56,8 @@ export type CliV1Event =
       readonly turnId: string;
       readonly providerId: string;
       readonly model: string;
+      readonly operation?: 'compact';
+      readonly contextWindow?: number;
     }
   | { readonly type: 'message_start' }
   | { readonly type: 'message_delta'; readonly text: string }
@@ -77,6 +80,8 @@ export type CliV1Event =
     }
   | { readonly type: 'warning'; readonly code: string; readonly message: string }
   | { readonly type: 'usage'; readonly usage: CliV1Usage }
+  | { readonly type: 'compact'; readonly status: 'started' | 'completed' | 'failed';
+      readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }
   | {
       readonly type: 'run_result';
       readonly status: CliV1RunStatus;
@@ -154,7 +159,8 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         isNonEmptyString(raw.sessionId) &&
         isNonEmptyString(raw.turnId) &&
         isNonEmptyString(raw.providerId) &&
-        typeof raw.model === 'string'
+        typeof raw.model === 'string' && (raw.operation === undefined || raw.operation === 'compact')
+        && (raw.contextWindow === undefined || (typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow) && raw.contextWindow > 0))
       );
     case 'message_start':
     case 'message_end':
@@ -186,6 +192,10 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
       return isNonEmptyString(raw.code) && typeof raw.message === 'string';
     case 'usage':
       return isUsage(raw.usage);
+    case 'compact':
+      return ['started', 'completed', 'failed'].includes(String(raw.status)) && typeof raw.reason === 'string'
+        && (raw.tokensBefore === undefined || (typeof raw.tokensBefore === 'number' && Number.isFinite(raw.tokensBefore) && raw.tokensBefore >= 0))
+        && (raw.tokensAfter === undefined || (typeof raw.tokensAfter === 'number' && Number.isFinite(raw.tokensAfter) && raw.tokensAfter >= 0));
     case 'run_result':
       return (
         isRunStatus(raw.status) &&

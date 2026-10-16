@@ -209,5 +209,6 @@ test("the json projection emits one line per event and nothing that is not JSON"
     const parsed: unknown = JSON.parse(line);
     assert.equal(typeof parsed === "object" && parsed !== null, true);
   }
-  assert.equal(CLI_STREAM_EVENT_TYPES.length, 12, "the closed set is a contract; update this count deliberately");
+  assert.equal(CLI_STREAM_EVENT_TYPES.length, 13, "the closed set includes the existing compact lifecycle event");
+  assert.ok(CLI_STREAM_EVENT_TYPES.includes("compact"));
 });

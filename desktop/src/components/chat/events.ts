@@ -239,6 +239,9 @@ function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
         stopReason: e.stopReason,
         ...(incomplete ? { incomplete: true } : {}),
         usage: hasUsableUsage ? e.usage : m.usage,
+        ...(e.contextTokens === undefined ? {} : { contextTokens: e.contextTokens }),
+        ...(e.contextWindow === undefined ? {} : { contextWindow: e.contextWindow }),
+        ...(e.usageScope === undefined ? {} : { usageScope: e.usageScope }),
       };
       return [...msgs.slice(0, i), updated, ...msgs.slice(i + 1)];
     }
@@ -255,6 +258,9 @@ function applyTurnEnd(msgs: ChatMessage[], e: TurnEndEvent): ChatMessage[] {
     stopReason: e.stopReason,
     ...(incomplete ? { incomplete: true } : {}),
     usage: e.usage,
+    ...(e.contextTokens === undefined ? {} : { contextTokens: e.contextTokens }),
+    ...(e.contextWindow === undefined ? {} : { contextWindow: e.contextWindow }),
+    ...(e.usageScope === undefined ? {} : { usageScope: e.usageScope }),
     turnId,
   };
   return [...msgs, turn];
@@ -412,6 +418,14 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     // desktop is observer + renderer: a pending notice
     // during the run, the final "180k → 40k" pill after.
     case 'compaction_trigger': return applyCompactionTrigger(msgs, e);
+    case 'context_usage': {
+      const index = lastUserIndex(msgs);
+      const id = `${msgs[index]?.id ?? 'run'}:context-usage`;
+      const current = msgs.find(message => message.id === id);
+      if (current && current.createdAt > e.ts) return msgs;
+      return [...msgs.filter(message => message.id !== id), { id, kind: 'notice', role: 'system', text: '',
+        createdAt: e.ts, turnId: msgs[index]?.id, contextTokens: e.tokens, contextWindow: e.contextWindow }];
+    }
     case 'compact':            return applyCompact(msgs, e);
     // v1.15.7: drop all the bookkeeping / lifecycle /
     // metadata events. Phase 3 can re-introduce them

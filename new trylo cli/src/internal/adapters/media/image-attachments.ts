@@ -1,4 +1,14 @@
 import type { ImageDetail, ProviderImageAttachment } from "../../ports/media.js";
+import type { ProviderEvent, ProviderRequest } from "../../ports/provider.js";
+
+/** A bare transport has no filesystem authority. Unresolved references must
+ * fail visibly rather than becoming a successful text-only request.
+ */
+export function unresolvedImageReference(request: ProviderRequest): Extract<ProviderEvent, { type: "error" }> | undefined {
+  return request.messages.some(message => (message.imageReferences?.length ?? 0) > 0)
+    ? { type: "error", class: "invalid_request", phase: "before_headers", retryable: false, message: "image_reference_unresolved" }
+    : undefined;
+}
 
 /**
  * Provider wire serialization for image attachments (WP19.1: C25, C26).

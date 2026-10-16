@@ -38,7 +38,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { PanelRight } from 'lucide-react'
-import { createTryloContext, hostAdapter, sendPromptToProcess } from './host-adapter'
+import { createTryloContext, hostAdapter } from './host-adapter'
 import { isTauri } from './host-adapter/tauri-detect'
 import type { FilePath, CodeMode, TopLevelMode } from './host-adapter/types'
 // v1.16.6 (M4-A runtime ownership): the ConversationRunSupervisor
@@ -89,6 +89,7 @@ import {
   beginConversationTurn,
   isUserMessage,
   latestContextTokens,
+  latestContextWindow,
   type ChatMessage,
   type SentAttachment,
 } from './components/chat/types'
@@ -3395,7 +3396,7 @@ function App(): ReactElement {
   // 2026-09-04: moved into `latestContextTokens` — it now also
   // honors a compaction's `tokensAfter`, so the ring drops the
   // moment the CLI emits `compact` instead of lagging one turn.
-  const currentContextTokens = useMemo<number>(() => latestContextTokens(messages), [messages])
+  const currentContextTokens = useMemo<number>(() => latestContextTokens(messages, { allowLegacyUsage: settings.cliRuntimeProtocol !== 'trylo-v1' }), [messages, settings.cliRuntimeProtocol])
 
   // v1.16.0: the model's context window. Driven by the effective
   // model (pool override || apiModel); defaults to 200k for unknown
@@ -3420,51 +3421,17 @@ function App(): ReactElement {
     : settings.poolModel.trim()
       ? settings.poolModel
       : settings.apiModel
-  const contextWindow = useMemo(() => contextWindowFor(effectiveModel), [effectiveModel])
+  const contextWindow = useMemo(() => latestContextWindow(messages) ?? contextWindowFor(effectiveModel), [messages, effectiveModel])
 
-  // v1.16.0: percentage of context used, in [0, 1].
-  // The Compact button uses this to decide when to
-  // show (>= 0.85 — the "hot" tier) and the auto-
-  // trigger watches for >= 0.95 (the "danger" tier).
-  const contextPct = useMemo<number>(
-    () => (contextWindow > 0 ? currentContextTokens / contextWindow : 0),
-    [currentContextTokens, contextWindow],
-  )
-
-  // v1.16.0: is a compaction in flight? Derived from
-  // the message stream — the latest message is a
-  // pending "Compacting…" notice. Resolves to false
-  // when the CLI emits the `compact` event and we
-  // swap the notice for a CompactionMessage. Keeps
-  // the desktop out of the business of tracking its
-  // own busy state; the CLI is the source of truth.
+  // Only actual runtime start/result events own the compaction indicator.
   const compacting = useMemo<boolean>(() => {
-    const last = messages[messages.length - 1]
-    return !!(last && last.kind === 'notice' && last.text.startsWith('Compacting context'))
+    return messages.some(message => message.kind === 'notice' && message.text.startsWith('Compacting context'))
   }, [messages])
 
-  // The stream-json CLI stays alive between turns so
-  // /compact and the next prompt can reuse this handle.
-
-  // v1.16.2.1: the ring itself is the entry point — the
-  // user clicks the ring to open a popover with usage
-  // + a "Compact now" action. No separate "should the
-  // button show" check needed; the ring is always
-  // visible and the popover always works (busy shows
-  // "Compacting…"). The CLI auto-compacts on its own
-  // when its in-process threshold hits — manual
-  // compression is the user's escape hatch.
-
-  // v1.16.0: write `/compact` to the active CLI's
-  // stdin. The CLI parses it as a slash command, runs
-  // compactConversation (LLM summarisation), and emits
-  // the `compaction_trigger` + `compact` events. The
-  // desktop's reducer renders the result. See
-  // trylo-cli/src/commands/compact/compact.ts.
+  // V1 reopens its durable session for maintenance after the agent process exits.
   const onCompact = useCallback((): void => {
-    if (!activeProcessId) return
-    void sendPromptToProcess(activeProcessId, '/compact')
-  }, [activeProcessId])
+    if (codeSessionId) void supervisor.compactCode(currentWorkspaceKey, codeSessionId)
+  }, [codeSessionId, currentWorkspaceKey, supervisor])
 
   const onApplyPlan = useCallback((): void => {
     setCodeMode('agent')
@@ -3720,20 +3687,7 @@ function App(): ReactElement {
   // would re-create the callback on every event and
   // churn InputBar's memo for no benefit.
 
-  // v1.16.0: auto-trigger at >= 95% (danger tier).
-  // The user gets 5 seconds of warning before the
-  // desktop fires `/compact` for them. The compaction
-  // empties the danger state; if they keep adding turns
-  // and hit 95% again, this fires again.
-  useEffect(() => {
-    if (!activeProcessId) return
-    if (compacting) return
-    if (contextPct < 0.95) return
-    const handle = window.setTimeout(() => {
-      void sendPromptToProcess(activeProcessId, '/compact')
-    }, 5_000)
-    return () => window.clearTimeout(handle)
-  }, [activeProcessId, compacting, contextPct])
+  // Automatic compaction uses the CLI request budget, never a UI percentage.
 
   // v1.15.8: stop button. v1 just clears UI state — the
   // underlying CLI process keeps running until the Rust
@@ -5800,6 +5754,10 @@ function App(): ReactElement {
               // v1.16.2.1: ring is the compact trigger; the
               // popover inside the ring handles the action.
               onCompact={onCompact}
+              compactAvailable={!!codeSessionId && supervisor.canCompactCode(currentWorkspaceKey, codeSessionId)}
+              requestContextOnly={settings.cliRuntimeProtocol === 'trylo-v1'}
+              onWorkCompact={() => { if (workSessionId) void supervisor.compactCode(currentWorkspaceKey, workSessionId) }}
+              workCompactAvailable={!!workSessionId && supervisor.canCompactCode(currentWorkspaceKey, workSessionId)}
               compacting={compacting}
               // v1.16.2.2: forwarded so the ring's popover can
               // show a "no live CLI" hint in dev mode.

@@ -536,6 +536,7 @@ function MessageImpl(props: MessageProps): ReactElement {
       );
     }
     case 'notice':
+      if (!m.text.trim()) return <></>;
       // Bookkeeping events that events.ts still routes here
       // render as a small status line.
       return (

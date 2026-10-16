@@ -211,8 +211,16 @@ export class ConversationRunSupervisor {
     });
   }
 
-  /** Redirect an in-flight Code turn. Unlike runCode this keeps the current
-   * runId, process and Git baseline; it only injects another user frame. */
+  /** Manual compaction stays bound to the controller that owns the journal. */
+  canCompactCode(projectKey: string, conversationId: string): boolean {
+    return this.controllers.get(controllerKey(projectKey, conversationId))?.canCompact() ?? false;
+  }
+
+  compactCode(projectKey: string, conversationId: string): Promise<boolean> {
+    return this.controllers.get(controllerKey(projectKey, conversationId))?.compact() ?? Promise.resolve(false);
+  }
+
+  /** Redirect an in-flight turn without replacing its runId or process. */
   steerCode(
     projectKey: string,
     conversationId: string,

@@ -149,7 +149,10 @@ export function createFakeCompaction(options: FakeCompactionOptions = {}): FakeC
     summarizeInputs,
     wiring: {
       port,
-      estimatePromptTokens: () => (stored ? afterCompaction : estimated),
+      // These scenarios model growth after the first response. A fresh short
+      // input is below the ceiling; use real estimates to test oversized input.
+      estimatePromptTokens: messages => stored ? afterCompaction
+        : messages.some(message => message.role === "assistant" || message.role === "tool") ? estimated : 0,
       summarize(items) {
         summarizeInputs.push(items);
         return summary;

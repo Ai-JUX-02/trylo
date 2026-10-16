@@ -1,6 +1,7 @@
 import type { JsonObject } from "../protocol/envelope.js";
 import type { ProviderImageAttachment } from "./media.js";
 import type { SessionRecord } from "./session.js";
+import type { ImageReference } from "../protocol/image-reference.js";
 
 /**
  * Provider-neutral streaming contract.
@@ -28,6 +29,8 @@ export type ProviderOutboundToolCall = {
   readonly toolCallId: string;
   readonly name: string;
   readonly arguments: JsonObject;
+  /** Immutable original call identity; execution arguments may be normalized. */
+  readonly originalArguments?: JsonObject;
 };
 
 export type ProviderMessage = {
@@ -46,6 +49,8 @@ export type ProviderMessage = {
    * catalog narrows it today.
    */
   readonly attachments?: ReadonlyArray<ProviderImageAttachment>;
+  /** Byte-free references resolved at the composition boundary before send. */
+  readonly imageReferences?: ReadonlyArray<ImageReference>;
   /** Required when role is "tool": which call this result answers. */
   readonly toolCallId?: string;
   /** Assistant messages that requested tools carry them here. */

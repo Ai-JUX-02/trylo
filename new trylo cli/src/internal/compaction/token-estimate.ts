@@ -24,7 +24,7 @@ export const CHARS_PER_TOKEN = 4;
 
 /** The bytes of a message that reach the wire beyond its bare text. */
 function messageBytes(message: ProviderMessage): number {
-  let bytes = message.content.length;
+  let bytes = Buffer.byteLength(message.content, "utf8");
   for (const call of message.toolCalls ?? []) {
     bytes += outboundCallBytes(call);
   }
@@ -33,13 +33,14 @@ function messageBytes(message: ProviderMessage): number {
     // not an assumed one (WP19 attachments travel inline).
     bytes += attachment.dataBase64.length;
   }
+  for (const image of message.imageReferences ?? []) bytes += 4 * Math.ceil(image.bytes / 3);
   return bytes;
 }
 
 function outboundCallBytes(call: ProviderOutboundToolCall): number {
-  let bytes = call.toolCallId.length + call.name.length;
+  let bytes = Buffer.byteLength(call.toolCallId + call.name, "utf8");
   try {
-    bytes += JSON.stringify(call.arguments).length;
+    bytes += Buffer.byteLength(JSON.stringify(call.originalArguments ?? call.arguments), "utf8");
   } catch {
     // An unserializable argument object still existed; counting the id and
     // name keeps the estimate monotonic instead of pretending it was empty.
@@ -71,9 +72,9 @@ export function estimateMessagesTokens(messages: ReadonlyArray<ProviderMessage>)
 export function estimateToolSpecsTokens(specs: ReadonlyArray<ProviderToolSpec>): number {
   let tokens = 0;
   for (const spec of specs) {
-    let bytes = spec.name.length + spec.description.length;
+    let bytes = Buffer.byteLength(spec.name + spec.description, "utf8");
     try {
-      bytes += JSON.stringify(spec.parameters).length;
+      bytes += Buffer.byteLength(JSON.stringify(spec.parameters), "utf8");
     } catch {
       // Same monotonicity rule as call arguments above.
     }

@@ -8,6 +8,8 @@ Trylo 是一个个人学习智能体项目，包含原生桌面、新版 TypeScr
 
 Windows Desktop preview: [download and checksums](result/desktop/).
 
+当前源码默认 `trylo-v1`。10 月 16 日同步了上下文、工具历史、原生续接、长流终态以及 Desktop 启动和展示修复。见[上下文与预算](docs/architecture/context-and-budgets.md)和[源码验证快照](docs/release/CURRENT_SOURCE_CHECKPOINT.md)。下载产物仍按其原发行记录区分。
+
 ## 从哪里看
 
 | 目录 | 主要职责 |

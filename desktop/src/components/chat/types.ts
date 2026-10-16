@@ -102,6 +102,9 @@ export interface TextMessage extends MessageBase {
 }
 
 export interface NoticeMessage extends MessageBase {
+  readonly contextWindow?: number;
+  /** Hidden measurement, distinct from cumulative billing on a turn. */
+  readonly contextTokens?: number;
   readonly kind: 'notice';
   readonly text: string;
 }
@@ -179,6 +182,9 @@ export interface ThinkingMessage extends MessageBase {
  * they are.
  */
 export interface TurnMessage extends MessageBase {
+  readonly contextWindow?: number;
+  readonly contextTokens?: number;
+  readonly usageScope?: 'run';
   readonly kind: 'turn';
   readonly turn: number;
   readonly depth: number;
@@ -224,6 +230,7 @@ export function turnCompletion(stopReason: TurnMessage['stopReason']): TurnCompl
  * Context compaction. The "180k → 40k" pill.
  */
 export interface CompactionMessage extends MessageBase {
+  readonly requestContext?: boolean;
   readonly kind: 'compaction';
   readonly reason: string;
   /** Optional: unknown when the CLI couldn't provide the counts
@@ -533,19 +540,28 @@ export function beginConversationTurn(
  * A compaction between turns therefore drops the ring immediately
  * (180k → 40k), and the next turn_end simply refreshes the same number.
  */
-export function latestContextTokens(messages: readonly ChatMessage[]): number {
+export function latestContextTokens(messages: readonly ChatMessage[], options: { allowLegacyUsage?: boolean } = {}): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (!m) continue;
+    if ((m.kind === 'turn' || m.kind === 'notice') && typeof m.contextTokens === 'number') return m.contextTokens;
     // Skip turn evidence without a usable reading: the CLI omits
     // input_tokens when a response carries no usage (e.g. some
     // OpenAI-format providers). Returning undefined here would
     // freeze/reset the ring at a stale value — fall through to
     // the last good reading instead.
-    if (m.kind === 'turn' && m.usage && typeof m.usage.input_tokens === 'number' && m.usage.input_tokens > 0) {
+    if (options.allowLegacyUsage !== false && m.kind === 'turn' && m.usageScope !== 'run' && m.usage && typeof m.usage.input_tokens === 'number' && m.usage.input_tokens > 0) {
       return m.usage.input_tokens;
     }
-    if (m.kind === 'compaction') return m.tokensAfter ?? 0;
+    if (m.kind === 'compaction' && (options.allowLegacyUsage !== false || m.requestContext) && typeof m.tokensAfter === 'number') return m.tokensAfter;
   }
   return 0;
+}
+
+/** The capacity attached to the latest actual reading; never reuse an older model's limit. */
+export function latestContextWindow(messages: readonly ChatMessage[]): number | undefined {
+  for (const message of [...messages].reverse()) {
+    if ((message.kind === 'notice' || message.kind === 'turn') && message.contextTokens !== undefined) return message.contextWindow;
+  }
+  return undefined;
 }

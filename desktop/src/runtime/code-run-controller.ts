@@ -278,6 +278,7 @@ export class CodeRunController {
    * there the CLI is a resident process and owns its own context.
    */
   private cliSession: CliSessionBinding = { state: 'none' };
+  private compactRequest: CodeRunRequest | null = null;
 
   constructor(options: CodeRunControllerOptions) {
     this.projectKey = options.projectKey;
@@ -428,6 +429,8 @@ export class CodeRunController {
   }
 
   async run(request: CodeRunRequest): Promise<void> {
+    if (request.prompt.trim() !== '/compact') this.compactRequest = { ...request, priorMessages: [],
+      lifecycleObserver: undefined, onRuntimeAcquired: undefined };
     const protocol: CliRuntimeProtocol = request.settings.cliRuntimeProtocol ?? 'legacy-stream-json';
     // A one-shot run acquires ownership before asynchronous authentication.
     // Stop or a newer send can invalidate it without a late probe reviving it.
@@ -515,42 +518,40 @@ export class CodeRunController {
         apiModel: request.settings.apiModel,
         apiFormat: request.settings.apiFormat,
       });
+      // Runtime identity and credential visibility are independent read-only
+      // checks. Await both before sending a prompt, without adding their cold
+      // process startup times together. The guard memoizes runtime identity.
+      const checkRuntime = async (): Promise<void> => {
+        const guard = await verifyCliRuntime({
+          protocol,
+          entryScript: request.settings.cliPath,
+          ...(request.settings.cliNodeProgram
+            ? { nodeProgram: request.settings.cliNodeProgram }
+            : {}),
+        });
+        if (!guard.ok) throw new Error(guard.message);
+      };
       if (protocol === 'trylo-v1') {
+        const [connectionEnv] = await Promise.all([
+          ensureV1Connection(request.settings, providerArgs),
+          checkRuntime(),
+        ]);
         v1SpawnEnv = { ...effectiveSpawnEnv(request.surface, request.toolRuntime, request.teamMode),
-          ...await ensureV1Connection(request.settings, providerArgs) };
+          ...connectionEnv };
         if (usesV1ApprovalTransport(request.permissionLevel) && !this.permissions) {
           throw new TryloV1UnsupportedError('trylo-v1: Desktop approval registry is unavailable.');
         }
+      } else {
+        await checkRuntime();
       }
-    } catch (error) {
-      if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
-      this.failStartup(scope, error);
-      throw error;
-    }
-    if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
-
-    // Round-3 P1-10: ask the binary what it is BEFORE handing it a prompt.
-    // A legacy protocol paired with the new CLI (or vice versa) used to die
-    // at spawn with `unknown command`, after the composer had already gone
-    // busy. A PROVEN mismatch (or a missing entry) fails here instead, with
-    // the reason on the notice; doubt (timeout/unrecognized) still proceeds
-    // — the spawn stays the final arbiter. Memoized per entry, so the steady
-    // state costs nothing.
-    try {
-      const guard = await verifyCliRuntime({
-        protocol,
-        entryScript: request.settings.cliPath,
-        ...(request.settings.cliNodeProgram
-          ? { nodeProgram: request.settings.cliNodeProgram }
-          : {}),
-      });
-      if (!guard.ok) throw new Error(guard.message);
     } catch (error) {
       if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
       if (!this.busy) return;
       this.failStartup(scope, error);
       throw error;
     }
+    if (protocol === 'trylo-v1' && startupGeneration !== this.generation) return;
+
     // A stop (or a newer run) while the guard was in flight supersedes this
     // run the same way it supersedes an in-flight spawn: generation moved,
     // so return quietly without ever spawning (no orphan to stop later).
@@ -1191,9 +1192,24 @@ export class CodeRunController {
     }
   }
 
+  /** Compaction can reopen only this controller's established, idle session. */
+  canCompact(): boolean {
+    return !this.busy && this.compactRequest !== null && (this.compactRequest.settings.cliRuntimeProtocol === 'trylo-v1'
+      ? this.cliSession.state === 'established' && this.processId === null : this.processId !== null && this.bindingState === 'idle');
+  }
+
+  async compact(): Promise<boolean> {
+    if (!this.canCompact() || !this.compactRequest) return false;
+    try {
+      await this.run({ ...this.compactRequest, prompt: '/compact' });
+      return true;
+    } catch { return false; } // run() owns the scoped, visible startup failure.
+  }
+
   /** Tear down this controller's handles without stopping the
    *  child process (workspace close / conversation delete). */
   dispose(): void {
+    this.compactRequest = null;
     // P2-1: a disposed mid-run conversation must not stay `collecting`
     // forever — cancel its projection (spec §6.5). No-op when already final.
     this.fireTerminalForActive('cancelled');

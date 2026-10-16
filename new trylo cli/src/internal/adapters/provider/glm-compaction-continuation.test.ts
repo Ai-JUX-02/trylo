@@ -45,7 +45,7 @@ for (const count of [1, 2]) for (const text of ["", "Checking both tool outputs.
     assert.deepEqual(assistant.tool_calls?.map(call => call.id), Array.from({ length: count }, (_,i) => `call-${i}`));
     assert.deepEqual(messages.filter(message => message.role === "tool").map(message => message.tool_call_id), assistant.tool_calls?.map(call => call.id));
     assert.equal(messages.some(message => message.content.includes("SUMMARY-MARKER")), true);
-    assert.equal(messages.some(message => message.content === "Run synthetic tools."), false, "the old user text is replaced");
+    assert.equal(messages.some(message => message.content === "Run synthetic tools."), true, "original user instructions survive the lossy summary");
   });
 }
 
@@ -63,10 +63,11 @@ test("a window cutting a tool exchange restores its missing prefix once, before 
     ledger.replacedPrefix = replacedPrefix;
     ledger.window = { windowId: "w1", replacedFromSequence: 0, replacedToSequence: replacedPrefix, summary: "Summary", formatVersion: "1" };
     const messages = promptMessages({ transcript, seedMessages: [], ledger });
-    assert.deepEqual(messages.map(message => message.role), ["system", "assistant", "tool", "tool"]);
-    assert.equal(messages[1]!.content, "Checking.");
-    assert.deepEqual(messages[1]!.toolCalls?.map(call => call.toolCallId), ["a", "b"]);
-    assert.deepEqual(messages.slice(2).map(message => message.toolCallId), ["a", "b"]);
+    assert.deepEqual(messages.map(message => message.role), ["system", "user", "assistant", "tool", "tool"]);
+    assert.equal(messages[1]!.content, "Old user input");
+    assert.equal(messages[2]!.content, "Checking.");
+    assert.deepEqual(messages[2]!.toolCalls?.map(call => call.toolCallId), ["a", "b"]);
+    assert.deepEqual(messages.slice(3).map(message => message.toolCallId), ["a", "b"]);
   }
 });
 
@@ -98,10 +99,11 @@ test("resuming with a partial window preserves call pairing before the new user 
     ledger.replacedPrefix = replacedPrefix;
     ledger.window = { windowId: "w1", replacedFromSequence: 0, replacedToSequence: replacedPrefix, summary: "Summary", formatVersion: "1" };
     const messages = promptMessages({ transcript, seedMessages: [], ledger });
-    assert.deepEqual(messages.map(message => message.role), ["system", "assistant", "tool", "tool", "user"]);
-    assert.equal(messages[1]!.content, "Checking.");
-    assert.deepEqual(messages[1]!.toolCalls?.map(call => call.toolCallId), ["a", "b"]);
-    assert.deepEqual(messages.slice(2, 4).map(message => message.toolCallId), ["a", "b"]);
+    assert.deepEqual(messages.map(message => message.role), ["system", "user", "assistant", "tool", "tool", "user"]);
+    assert.equal(messages[1]!.content, "Old input");
+    assert.equal(messages[2]!.content, "Checking.");
+    assert.deepEqual(messages[2]!.toolCalls?.map(call => call.toolCallId), ["a", "b"]);
+    assert.deepEqual(messages.slice(3, 5).map(message => message.toolCallId), ["a", "b"]);
     assert.equal(messages.at(-1)!.content, "Resume");
   }
 });

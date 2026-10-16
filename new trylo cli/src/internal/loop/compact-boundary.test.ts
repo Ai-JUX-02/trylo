@@ -150,10 +150,11 @@ test("over the estimated limit one window is stored and the next request drops t
   // its own, because the model keeps seeing the original unless the read-time
   // filter ran. The latest assistant/tool exchange remains intact beside the
   // summary; its assistant text is part of the same live action, while the
-  // older user input is replaced. This also preserves native continuations.
+  // original user instructions remain verbatim outside the lossy summary.
+  // This also preserves native continuations.
   const second = messageText(provider.requests[1]);
   assert.equal(second.includes(ORIGINAL), true);
-  assert.equal(second.includes(REQUEST.text), false);
+  assert.equal(second.includes(REQUEST.text), true);
   assert.equal(second.includes(TOOL_OUTPUT), true, "the newest tool result stays live under the window");
   assert.equal(second.includes("SUMMARY-MARKER"), true);
 
@@ -310,7 +311,7 @@ test("a summary carrying an absolute path is refused and replaces nothing", asyn
   assert.equal(provider.requests.length, 1);
 
   const refusal = result.envelopes.find(
-    (envelope) => envelope.kind === "observation" && envelope.payload["component"] === "compaction",
+    (envelope) => envelope.kind === "observation" && envelope.payload["component"] === "compaction" && envelope.payload["degraded"] === true,
   );
   assert.notEqual(refusal, undefined);
   assert.equal(refusal?.payload["reason"], "summary_unsafe");

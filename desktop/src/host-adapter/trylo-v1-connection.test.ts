@@ -29,12 +29,31 @@ it('a logged-in family cannot authorize a missing named binding', async () => {
   await expect(ensureV1Connection(settings, { providerId: 'amd' })).rejects.toThrow(/未登录/);
 });
 
-it('uses an ephemeral builtin key for both the probe and run without resolving an undeclared model', async () => {
+it('hands an explicit builtin key straight to the run without spawning status commands', async () => {
   const env = { TRYLO_OPENAI_API_KEY: 'test-only-key' };
   await expect(ensureV1Connection({ ...settings, apiKey: ' test-only-key ' }, { providerId: 'openai-compatible' })).resolves.toEqual(env);
-  expect(h.status).toHaveBeenCalledWith(expect.objectContaining({ env }));
+  expect(h.providers).not.toHaveBeenCalled();
+  expect(h.status).not.toHaveBeenCalled();
   expect(h.credential).not.toHaveBeenCalled();
   expect(v1CredentialEnv('amd', 'test-only-key')).toEqual({});
+});
+
+it('still probes CLI-owned builtin credentials on every send', async () => {
+  await ensureV1Connection(settings, { providerId: 'openai-compatible' });
+  h.status.mockResolvedValue({ ok: true, providers: [{ providerId: 'openai-compatible', loggedIn: false, layer: 'none' }] });
+  await expect(ensureV1Connection(settings, { providerId: 'openai-compatible' })).rejects.toThrow(/未登录/);
+  expect(h.providers).toHaveBeenCalledTimes(2);
+  expect(h.status).toHaveBeenCalledTimes(2);
+});
+
+it('a whitespace key does not bypass the CLI credential check', async () => {
+  h.status.mockResolvedValue({ ok: true, providers: [{ providerId: 'openai-compatible', loggedIn: false, layer: 'none' }] });
+  await expect(ensureV1Connection({ ...settings, apiKey: '  ' }, { providerId: 'openai-compatible' })).rejects.toThrow(/未登录/);
+});
+
+it('a Desktop key cannot authorize a named provider with a missing account', async () => {
+  h.credential.mockResolvedValue({ ok: true, loggedIn: false, layer: 'none' });
+  await expect(ensureV1Connection({ ...settings, apiKey: 'test-only-key' }, { providerId: 'amd' })).rejects.toThrow(/未登录/);
 });
 
 it('unknown providers fail before a task can run', async () => {

@@ -32,8 +32,8 @@ import { test } from "node:test";
 
 const cli = fileURLToPath(new URL("./main.js", import.meta.url));
 
-/** Long enough to exceed the ceiling, with room for the resulting summary. */
-const LONG_TEXT = "x".repeat(20000);
+/** User instructions remain live; the provider report triggers compaction. */
+const LONG_TEXT = "x".repeat(2000);
 const CEILING = 4096;
 
 type Captured = {
@@ -56,7 +56,7 @@ function sse(res: ServerResponse, frames: readonly unknown[]): void {
   res.end();
 }
 
-/** Small usage on purpose: the ceiling must come from the estimate, not here. */
+/** Later requests report a small view after the stored window. */
 const USAGE = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
 
 function toolCallFrames(): ReadonlyArray<unknown> {
@@ -77,7 +77,7 @@ function toolCallFrames(): ReadonlyArray<unknown> {
         },
       ],
     },
-    { choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: USAGE },
+    { choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: { ...USAGE, prompt_tokens: CEILING + 1000, total_tokens: CEILING + 1005 } },
   ];
 }
 
@@ -282,9 +282,10 @@ test("反方 #26 — a resumed run sends the stored window, not the replayed tra
     const messages = resumed[0]?.messages ?? [];
 
     // The digest, plus what genuinely happened after the window: the assistant's
-    // closing line and this turn's own. Nothing the summary replaced is replayed.
+    // closing line and this turn's own. Original user constraints also stay live.
     // (The tool list rides first, with the seed ahead of all history.)
-    assert.deepEqual(messages.filter(message => message.role !== "system").map(message => message.role), ["assistant", "user"]);
+    assert.deepEqual(messages.filter(message => message.role !== "system").map(message => message.role), ["user", "assistant", "user"]);
+    assert.equal(messages.some(message => message.role === "user" && message.content === LONG_TEXT), true);
     const system = messages.filter(message => message.role === "system");
     assert.equal(system.filter(message => message.content.startsWith("You are Trylo, a coding agent")).length, 1);
     assert.equal(system.filter(message => message.content.includes("Available tools this run")).length, 1);

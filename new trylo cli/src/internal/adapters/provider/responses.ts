@@ -11,7 +11,7 @@ import {
 } from "./openai-compatible.js";
 import { responsesStructuredFields } from "./structured-output.js";
 import { translateResponsesBody } from "./responses-stream.js";
-import { responsesContentOf } from "../media/image-attachments.js";
+import { responsesContentOf, unresolvedImageReference } from "../media/image-attachments.js";
 
 /**
  * Responses wire adapter over Node's built-in fetch (WP18.2: C68, C71).
@@ -210,6 +210,8 @@ async function acquireResponsesResponse(
 export function createResponsesProvider(config: ResponsesConfig): ProviderPort {
   return {
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
+      const unresolved = unresolvedImageReference(request);
+      if (unresolved !== undefined) { yield unresolved; return; }
       const credential = readResponsesCredential(config);
       if (!credential.ok) {
         yield {

@@ -30,8 +30,11 @@
 .code-reasoning__takeover-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg); }
 .code-reasoning__head:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
 .code-reasoning--thinking { margin: 4px 0 6px; }
-.code-reasoning--thinking .code-reasoning__head { width: fit-content; max-width: 100%; gap: 4px; padding: 4px 0; }
-.code-reasoning--thinking .code-reasoning__summary { color: var(--process-meta); font-size: 12px; font-weight: 400; }
+.code-reasoning--thinking .code-reasoning__head { width: fit-content; max-width: 100%; flex-wrap: nowrap; gap: 4px; padding: 4px 0; }
+.code-reasoning--thinking .code-reasoning__summary { flex: 0 0 auto; color: var(--process-meta); font-size: 12px; font-weight: 400; }
+.code-reasoning__excerpt { min-width: 0; max-width: 60ch; color: var(--reasoning-ink); font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.code-reasoning--thinking .code-reasoning__excerpt { margin-left: 8px; }
+.code-reasoning--thinking .code-reasoning__passage-label { display: none; }
 .code-reasoning--thinking .code-reasoning__transcript { margin: 0; }
 .code-reasoning--thinking .code-reasoning__note { margin: 12px 0 14px; padding: 0; }
 @keyframes transcript-spin { to { transform: rotate(360deg); } }

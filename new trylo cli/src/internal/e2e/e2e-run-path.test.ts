@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { compareTraces, normalizeJson } from "./golden-trace.js";
 import { GOLDEN_RUN_TRACE } from "./golden-run-trace.js";
+import { createNdjsonSessionStore } from "../adapters/session-store/ndjson.js";
+import { compactSession } from "../surface/cli/compact-session.js";
 
 /**
  * W1 End-to-end Whole Machine Path (WP 2026-09-17 地基收口 W1):
@@ -113,13 +115,28 @@ function journalRows(homeDir: string): Array<Record<string, unknown>> {
   return rows;
 }
 
-test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+自检 → 检查点快照 → 压缩窗口 → 会话持久化", () => {
+/** Use the same production compaction operation as the REPL on the CLI's
+ * durable session. Automatic budget compaction is covered by socket tests;
+ * this whole-machine fixture must not require discarding user constraints.
+ */
+async function compactFixture(fx: Fixture, sessionId: string): Promise<void> {
+  const store = createNdjsonSessionStore({ path: join(fx.home, "sessions", `${sessionId}.ndjson`) });
+  try {
+    assert.equal((await store.attach()).ok, true);
+    const read = await store.readRecords();
+    assert.equal(read.ok, true);
+    if (!read.ok) return;
+    const compacted = await compactSession({ now: () => Date.now() }, sessionId, read.view.records, store);
+    assert.equal(compacted.ok, true);
+    assert.ok(compacted.ok && compacted.wrote);
+  } finally { await store.release(); }
+}
+
+test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+自检 → 检查点快照 → 压缩窗口 → 会话持久化", async () => {
   const fx = createFixture(4096);
   try {
     const sessionId = "ses-e2e-w1";
-    // The long input exceeds the ceiling; its summary and the two-tool table
-    // fit beneath it, so the real hard gate permits the verification read.
-    const taskPrompt = "execute groundwork mutation task: " + "x".repeat(20000);
+    const taskPrompt = "execute groundwork mutation task and verify the written file";
     const res = runCli(fx, [
       "run",
       taskPrompt,
@@ -133,6 +150,7 @@ test("W1 端到端整机路径：用户任务 → fixture-write → 工具写+�
     ]);
 
     assert.equal(res.status, 0, `CLI failed with exit code ${res.status}: ${res.stderr}`);
+    await compactFixture(fx, sessionId);
 
     // 1. Tool execution wrote file and verified content
     const writtenFile = join(fx.workspace, "fixture-output.txt");
@@ -229,12 +247,11 @@ test("W1 崩溃恢复：通过 checkpoint restore 恢复损坏的工作区", () 
   }
 });
 
-test("W1 会话续跑（resume）：从压缩窗口继续对话并到达终态", () => {
+test("W1 会话续跑（resume）：从压缩窗口继续对话并到达终态", async () => {
   const fx = createFixture(4096);
   try {
     const sessionId = "ses-e2e-resume";
-    // First turn produces compaction
-    const initialPrompt = "initial turn to create session and compaction: " + "x".repeat(20000);
+    const initialPrompt = "initial turn to create a durable session";
     const firstRes = runCli(fx, [
       "run",
       initialPrompt,
@@ -247,6 +264,7 @@ test("W1 会话续跑（resume）：从压缩窗口继续对话并到达终态",
       "stream-json",
     ]);
     assert.equal(firstRes.status, 0, firstRes.stderr);
+    await compactFixture(fx, sessionId);
 
     // Second turn resumes the session
     const resumeRes = runCli(fx, [

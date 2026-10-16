@@ -7,7 +7,7 @@ import type {
 } from "../../ports/provider.js";
 import { translateBody } from "./openai-stream.js";
 import { chatStructuredFields } from "./structured-output.js";
-import { chatContentOf } from "../media/image-attachments.js";
+import { chatContentOf, unresolvedImageReference } from "../media/image-attachments.js";
 import { chatSystemMessages } from "./chat-system-messages.js";
 import { createGlmToolContinuation, type GlmToolContinuation } from "./glm-tool-continuation.js";
 import { httpFailureMessage } from "./http-failure-message.js";
@@ -252,6 +252,8 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): 
   return {
     ...(continuations.persistence === undefined ? {} : { continuation: continuations.persistence }),
     async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
+      const unresolved = unresolvedImageReference(request);
+      if (unresolved !== undefined) { yield unresolved; return; }
       const credential = readCredential(config);
       if (!credential.ok) {
         yield {
@@ -295,6 +297,10 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): 
         model: config.model,
         warnings: [],
       };
+      if (continuation !== undefined && continuation.missingMessages > 0) yield {
+        type: "warning", code: "native_continuation_unavailable",
+        message: `Original native context is unavailable for ${continuation.missingMessages} historical assistant messages; continuing with visible history.`,
+      };
       for await (const event of translateBody(body, signal)) {
         continuation?.observe(event);
         // The loop stops pulling at finish. Retain a complete native response
@@ -335,7 +341,9 @@ function buildBody(config: OpenAiCompatibleConfig, request: ProviderRequest, con
             tool_calls: message.toolCalls.map((call) => ({
               id: call.toolCallId,
               type: "function",
-              function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+              function: { name: call.name, arguments: JSON.stringify(
+                continuation === undefined ? call.arguments : call.originalArguments ?? call.arguments,
+              ) },
             })),
           }
         : {}),

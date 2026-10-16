@@ -87,9 +87,9 @@ test("elision keeps head and tail and names the missing size", () => {
   const items: TranscriptItem[] = [
     userItem(0, "run it"),
     toolResult(1, "call-1", `HEAD-MARKER${"m".repeat(60_000)}TAIL-MARKER`),
-    // A newer small result makes the oversized one elidable: the newest tool
-    // result in the view is exempt by design.
-    toolResult(2, "call-2", "fresh"),
+    // The model consumed the earlier result and requested another tool.
+    { kind: "tool_call", sequence: 2, toolCallId: "call-2", name: "echo", arguments: {} },
+    toolResult(3, "call-2", "fresh"),
   ];
   const elided = elideOversizedToolResults(items)[1];
   assert.ok(elided !== undefined && elided.kind === "tool_result");
@@ -110,4 +110,18 @@ test("results within the cap and non-tool items pass through untouched", () => {
   ];
   const out = elideOversizedToolResults(items);
   assert.deepEqual(out, items);
+});
+
+test("every result of the newest parallel tool response survives until the model consumes it", () => {
+  const items: TranscriptItem[] = [
+    userItem(0, "Compare both files"),
+    { kind: "tool_call", sequence: 1, toolCallId: "a", name: "echo", arguments: {} },
+    { kind: "tool_call", sequence: 2, toolCallId: "b", name: "echo", arguments: {} },
+    toolResult(3, "a", OVERSIZED), toolResult(4, "b", OVERSIZED),
+  ];
+  const fresh = elideOversizedToolResults(items);
+  assert.deepEqual(fresh, items, "parallel siblings are all fresh, not only the last result");
+  const consumed: TranscriptItem[] = [...items, { kind: "assistant_text", sequence: 5, blockId: "answer", text: "Both checked." }];
+  assert.equal(elideOversizedToolResults(consumed).filter(i => i.kind === "tool_result" && i.output === OVERSIZED).length, 0,
+    "a completed assistant response makes the whole batch eligible for elision");
 });

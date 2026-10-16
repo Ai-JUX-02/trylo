@@ -11,6 +11,7 @@ export const GOLDEN_RUN_TRACE: ReadonlyArray<Record<string, unknown>> = [
     sessionId: "<ID>",
     turnId: "<ID>",
     providerId: "fixture-write",
+    contextWindow: 4096,
   },
   {
     type: "tool_use",

@@ -271,7 +271,7 @@ test("a hostile summary stores no window and leaves the original text on the rec
     const provider = scriptedProvider(2);
     const result = await runTurn(
       portsOf(provider, {
-        estimatePromptTokens: () => 9_000,
+        estimatePromptTokens: messages => messages.some(message => message.role === "assistant") ? 9_000 : 100,
         nowMs: 0,
         summarize: () => "wrote C:\\Users\\me\\notes.txt",
       }),
@@ -353,16 +353,15 @@ test("a resume over the stored window sends the summary and not the replaced tex
     const digests = messages.filter((m) => m.content.includes("[compacted history "));
     assert.equal(digests.length, 1);
     assert.equal(digests[0]?.role, "system");
-    // Exactly: the tool list, the system digest, plus this turn's own user
-    // line. No replayed user turn, no replayed assistant turn, no replayed
-    // tool result.
+    // Original user instructions stay outside the digest. Historical assistant
+    // and tool items remain covered rather than being replayed wholesale.
     assert.deepEqual(
       messages.map((m) => m.role),
-      ["system", "system", "user"],
+      ["system", "system", "user", "user"],
     );
     assert.equal(messages[0]?.content.includes("Available tools this run"), true);
-    assert.equal(messages[2]?.content, "continue");
-    assert.equal(messages.length <= 3 + 1, true);
+    assert.equal(messages[2]?.content, REQUEST.text);
+    assert.equal(messages[3]?.content, "continue");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

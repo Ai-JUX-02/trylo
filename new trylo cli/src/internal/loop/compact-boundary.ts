@@ -1,14 +1,13 @@
 import type {
   CompactionPort,
 } from "../ports/compaction.js";
-import type { ProviderMessage } from "../ports/provider.js";
+import type { ProviderMessage, SystemPromptDirective } from "../ports/provider.js";
 import type { ToolPort } from "../ports/tools.js";
 import type { JsonObject } from "../protocol/envelope.js";
 import type { EventKind } from "../protocol/kinds.js";
 import type { Transcript, TranscriptItem } from "../protocol/transcript.js";
 import type { CompactionLedger } from "./compact-ledger.js";
-import { transcriptToMessages } from "./transcript-messages.js";
-import { coveredExchangeTail, summaryMessage } from "./compaction-gap.js";
+import { promptViewMessages } from "./prompt-view.js";
 
 /**
  * The ledger half of the compaction vocabulary is defined in `compact-ledger.ts`
@@ -73,7 +72,7 @@ export type CompactionWiring = {
    * holds no stream mid-flight. A synchronous wiring (the shipped extractive
    * default) stays exactly as fast as it was.
    */
-  readonly summarize: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string) => string | Promise<string>;
+  readonly summarize: (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => string | Promise<string>;
   /**
    * The tokens the tool table adds to every request (`tools` on the wire).
    *
@@ -93,6 +92,9 @@ export type PromptContext = {
   readonly seedMessages: ReadonlyArray<ProviderMessage>;
   readonly transcript: Transcript;
   readonly ledger: CompactionLedger;
+  readonly toolResultProjection?: "microcompact";
+  readonly systemPrompt?: SystemPromptDirective;
+  readonly systemPromptAppend?: string;
 };
 
 export type CompactionInput = PromptContext & {
@@ -146,6 +148,8 @@ export function promptContextFor(
     readonly budget: { readonly contextTokenLimit?: number };
     /** The last request's server-reported size, when one has reported. */
     readonly promptReport?: ReportedRequestBasis;
+    readonly systemPrompt?: SystemPromptDirective;
+    readonly systemPromptAppend?: string;
   },
   wiring: CompactionWiring | undefined,
   tools?: ToolPort,
@@ -159,6 +163,9 @@ export function promptContextFor(
     contextTokenLimit: source.budget.contextTokenLimit,
     tools,
     reported: source.promptReport,
+    ...(source.systemPrompt === undefined ? {} : { systemPrompt: source.systemPrompt }),
+    ...(source.systemPromptAppend === undefined ? {} : { systemPromptAppend: source.systemPromptAppend }),
+    ...(wiring === undefined ? {} : { toolResultProjection: "microcompact" as const }),
   };
 }
 
@@ -172,19 +179,5 @@ export function promptContextFor(
  * past.
  */
 export function promptMessages(context: PromptContext): ReadonlyArray<ProviderMessage> {
-  const window = context.ledger.window;
-  if (window === undefined) {
-    return [...context.seedMessages, ...transcriptToMessages(context.transcript)];
-  }
-  const liveCount = context.transcript.length - context.ledger.replacedPrefix;
-  return [
-    ...context.seedMessages,
-    ...summaryMessage(window),
-    // Project once so a window crossing an assistant/tool exchange cannot
-    // put live results before their covered calls or split one assistant batch.
-    ...transcriptToMessages([
-      ...coveredExchangeTail(context.transcript, liveCount),
-      ...context.transcript.slice(context.ledger.replacedPrefix),
-    ]),
-  ];
+  return promptViewMessages(context);
 }

@@ -122,6 +122,7 @@ vi.mock('./cli-runtime-guard', () => ({
 const { CodeRunController } = await import('./code-run-controller');
 const { CodePermissionRegistry } = await import('./code-permission-registry');
 const { buildStopTaskRequest } = await import('../host-adapter/control-protocol');
+const { verifyCliRuntime } = await import('./cli-runtime-guard');
 
 const CWD = 'C:/trylo-workspace/workspace' as FilePath;
 const CLI_PATH = 'C:/trylo-workspace/new trylo cli/dist/cmd/trylo/main.js' as FilePath;
@@ -163,6 +164,7 @@ function request(
 }
 
 beforeEach(() => {
+  vi.mocked(verifyCliRuntime).mockReset().mockResolvedValue({ ok: true });
   m.legacyCallbacks.onEvents = null;
   m.prewarmCallbacks.onEvents = null;
   m.auth.providerCalls = 0;
@@ -365,6 +367,37 @@ describe('CodeRunController — provider/auth gate (P08 §3.4, audit P1)', () =>
     expect(m.auth.providerCalls).toBe(0);
     expect(m.auth.statusCalls).toBe(0);
     expect(m.calls.startTryloV1).toBe(1);
+  });
+
+  it('overlaps runtime verification with credential checks but waits for both before spawning', async () => {
+    let releaseAuth!: () => void;
+    let releaseRuntime!: () => void;
+    m.auth.wait = new Promise<void>(resolve => { releaseAuth = resolve; });
+    const authStarted = new Promise<void>(resolve => { m.auth.started = resolve; });
+    const runtimeWait = new Promise<void>(resolve => { releaseRuntime = resolve; });
+    vi.mocked(verifyCliRuntime).mockImplementationOnce(async () => { await runtimeWait; return { ok: true }; });
+    m.auth.providers = { ok: true, providers: [{ id: 'fixture', auth: 'none' }] };
+    const c = controller();
+    const run = c.run(request('trylo-v1', 'hi', { providerId: 'fixture' }));
+    await authStarted;
+    expect(verifyCliRuntime).toHaveBeenCalledTimes(1);
+    expect(m.calls.startTryloV1).toBe(0);
+    releaseAuth();
+    await vi.waitFor(() => expect(m.auth.providerCalls).toBe(1));
+    expect(m.calls.startTryloV1).toBe(0);
+    releaseRuntime();
+    await run;
+    expect(m.calls.startTryloV1).toBe(1);
+  });
+
+  it('still blocks a mismatched runtime when an explicit key skips auth subprocesses', async () => {
+    vi.mocked(verifyCliRuntime).mockResolvedValueOnce({ ok: false, message: 'runtime mismatch' });
+    const c = controller();
+    await expect(c.run(request('trylo-v1', 'hi', { apiFormat: 'openai', apiKey: 'test-only-key' })))
+      .rejects.toThrow('runtime mismatch');
+    expect(m.auth.providerCalls).toBe(0);
+    expect(m.calls.startTryloV1).toBe(0);
+    expect(c.getViewState()).toMatchObject({ running: false, error: true });
   });
 
   it('refuses an Anthropic-only connection instead of silently running fixture', async () => {

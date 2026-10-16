@@ -47,8 +47,8 @@ async function* decodeBody(
           yield event;
         }
       }
-      // Flush short visible fragments before awaiting the next network chunk.
-      yield { type: "flush_deltas" };
+      // Chunk boundaries are not semantic flush points. The coalescer delivers
+      // the first delta immediately, then bounds later fragments by content.
     }
   } catch {
     bodyClosed = true;

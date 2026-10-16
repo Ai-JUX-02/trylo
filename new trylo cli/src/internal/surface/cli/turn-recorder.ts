@@ -18,6 +18,7 @@ type RecorderCursor = {
   readonly envelopes: Map<number, string>;
   /** Highest ordinal written or resumed; nothing durable appears below it. */
   highItem: number;
+  highEnvelope: number;
   effectState: EffectState;
   readonly scope: string;
   continuation: ProviderContinuationPort | undefined;
@@ -132,7 +133,7 @@ function seedCursor(resumed: Transcript, scope: string): RecorderCursor {
     items.set(item.sequence, digestOf(item));
     if (item.sequence > highItem) highItem = item.sequence;
   }
-  return { items, envelopes: new Map(), highItem, effectState: "open", scope, continuation: undefined };
+  return { items, envelopes: new Map(), highItem, highEnvelope: -1, effectState: "open", scope, continuation: undefined };
 }
 
 /**
@@ -175,8 +176,7 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
   }
   for (const envelope of facts.envelopes) {
     const digest = digestOf(envelope);
-    const high = cursor.envelopes.size === 0 ? -1 : Math.max(...cursor.envelopes.keys());
-    const verdict = classify(cursor.envelopes, high, envelope.sequence, digest);
+    const verdict = classify(cursor.envelopes, cursor.highEnvelope, envelope.sequence, digest);
     if (verdict === "skip") continue;
     if (verdict === "conflict") return { ok: false, code: "progress_sequence_conflict:envelope" };
     // The private native checkpoint shares the completion fact's durable ack.
@@ -187,6 +187,7 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
     }, envelope.timestamp);
     if (!result.ok) return result;
     cursor.envelopes.set(envelope.sequence, digest);
+    if (envelope.sequence > cursor.highEnvelope) cursor.highEnvelope = envelope.sequence;
   }
   return { ok: true };
 }

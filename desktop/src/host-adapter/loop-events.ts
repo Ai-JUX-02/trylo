@@ -41,6 +41,7 @@ export type LoopEventType =
   | 'subagent'
   // Context compaction (3)
   | 'compaction_trigger'
+  | 'context_usage'
   | 'compact'
   // User/host actions (5)
   | 'slash_command'
@@ -109,6 +110,9 @@ export interface TurnStartEvent extends BaseEvent {
 }
 
 export interface TurnEndEvent extends BaseEvent {
+  readonly contextWindow?: number;
+  readonly contextTokens?: number;
+  readonly usageScope?: 'run';
   readonly type: 'turn_end';
   readonly turn: number;
   /**
@@ -264,7 +268,15 @@ export interface CompactionTriggerEvent extends BaseEvent {
   readonly postTokens: number;
 }
 
+export interface ContextUsageEvent extends BaseEvent {
+  readonly contextWindow?: number;
+  readonly type: 'context_usage';
+  readonly tokens: number;
+}
+
 export interface CompactEvent extends BaseEvent {
+  readonly requestContext?: boolean;
+  readonly status?: 'failed';
   readonly type: 'compact';
   readonly kind: 'boundary' | 'before' | 'after';
   /** Optional: the CLI omits these when the token counts are unknown
@@ -333,6 +345,7 @@ type StrictLoopEvent =
   | ToolResultEvent
   | SubagentEvent
   | CompactionTriggerEvent
+  | ContextUsageEvent
   | CompactEvent
   | AbortedEvent
   | TodoUpdatedEvent

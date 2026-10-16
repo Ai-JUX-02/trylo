@@ -28,8 +28,8 @@ import { test } from "node:test";
 
 const cli = fileURLToPath(new URL("./main.js", import.meta.url));
 
-/** 与 `resume-window.test.ts` 同一形状：足够长的消息把估计 token 推过小上限。 */
-const LONG_TEXT = "x".repeat(20000);
+/** Input remains verbatim after compaction; provider usage drives the gap. */
+const LONG_TEXT = "x".repeat(2000);
 const CEILING = 4096;
 
 /** 模型摘要的固定回声；通过 validateSummary（无路径、无凭据形状、短）。 */
@@ -74,7 +74,7 @@ function toolCallFrames(): ReadonlyArray<unknown> {
         },
       ],
     },
-    { choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: USAGE },
+    { choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: { ...USAGE, prompt_tokens: CEILING + 1000, total_tokens: CEILING + 1005 } },
   ];
 }
 

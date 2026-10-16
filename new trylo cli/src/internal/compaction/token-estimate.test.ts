@@ -119,3 +119,17 @@ test("estimateToolSpecsTokens prices the tool table beside the messages", () => 
   assert.equal(estimateToolSpecsTokens(specs), expected);
   assert.equal(estimateToolSpecsTokens([]), 0);
 });
+
+test("non-ASCII user text is estimated in UTF-8 bytes, including surrogate pairs", () => {
+  const content = "中文🙂".repeat(1_000);
+  assert.equal(estimateMessageTokens({ role: "user", content }), Math.ceil(Buffer.byteLength(content, "utf8") / 4));
+});
+
+test("non-ASCII tool arguments and schema descriptions use the same byte rule", () => {
+  const arguments_ = { text: "工具结果".repeat(1_000) };
+  const call = { toolCallId: "c", name: "echo", arguments: arguments_ };
+  assert.equal(estimateMessageTokens({ role: "assistant", content: "", toolCalls: [call] }),
+    Math.ceil(Buffer.byteLength("cecho" + JSON.stringify(arguments_), "utf8") / 4));
+  const spec = { name: "echo", description: "中文说明", parameters: { description: "输入参数" } };
+  assert.equal(estimateToolSpecsTokens([spec]), Math.ceil(Buffer.byteLength(spec.name + spec.description + JSON.stringify(spec.parameters), "utf8") / 4));
+});

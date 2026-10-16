@@ -25,6 +25,7 @@ export function appendToolResult(
       output: item.output,
       truncated: item.truncated,
       outcome: item.outcome,
+      ...(item.images === undefined ? {} : { images: item.images }),
     },
   ];
 }

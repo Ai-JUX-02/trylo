@@ -138,21 +138,20 @@ function phaseTitle(entries: readonly CodeProcessEntry[], active: boolean): stri
     if (active) return '正在推进任务';
     if (lastTool) return phaseToolLabel(lastTool, false);
   }
-  return active ? '正在思考' : '思考';
+  return active ? '正在思考' : '思考过程';
 }
 
 function CodeReasoningTranscriptImpl(
   props: CodeReasoningTranscriptProps,
 ): ReactElement {
-  // Tool groups retain their live/history disclosure behavior. Reasoning-only
-  // segments below always show their full text without an additional toggle.
+  // One disclosure owns both raw reasoning and tools. Streaming opens by default;
+  // completed history is compact, while a user's explicit choice always wins.
   const errorVisible = props.entries.some(entry => entry.kind === 'tool' && entry.status === 'error');
-  const hasReasoning = props.entries.some(entry => entry.kind === 'thinking' && (entry.preview.trim() || entry.summary.trim()));
-  const [expanded, setExpanded] = useState(props.active || errorVisible || hasReasoning);
+  const [expanded, setExpanded] = useState(props.active || errorVisible);
   const wasActive = useRef(props.active);
   const userExpanded = useRef<boolean | null>(null);
   useEffect(() => {
-    if (errorVisible || hasReasoning) {
+    if (errorVisible) {
       if (userExpanded.current === null) setExpanded(true);
       return;
     }
@@ -163,13 +162,12 @@ function CodeReasoningTranscriptImpl(
     }
     if (!wasActive.current) return;
     wasActive.current = false;
-    // Compact tool-only phases. Delivered reasoning stays readable after the
-    // answer starts; only the user's own toggle may hide it.
+    // Give the terminal event time to settle before compacting the completed phase.
     const timer = window.setTimeout(() => {
       if (userExpanded.current === null) setExpanded(false);
     }, 420);
     return () => window.clearTimeout(timer);
-  }, [props.active, errorVisible, hasReasoning]);
+  }, [props.active, errorVisible]);
 
   const tools = props.entries.filter((entry): entry is ToolMessage => entry.kind === 'tool');
   const toolCount = tools.length;
@@ -178,6 +176,9 @@ function CodeReasoningTranscriptImpl(
   const interrupted = !props.active && tools.some(entry => entry.status === 'interrupted');
   const unfinished = !props.active && hasRunningTool;
   const title = useMemo(() => phaseTitle(props.entries, props.active), [props.active, props.entries]);
+  const reasoningExcerpt = toolCount === 0 ? compactPhaseLabel(props.entries
+    .filter((entry): entry is ThinkingMessage => entry.kind === 'thinking')
+    .map(entry => entry.summary.trim() || entry.preview.trim()).find(Boolean) ?? '') : '';
   // A finished process is neutral; error/interruption remain explicit.
   const hasError = errorVisible;
   const takeoverLabel = useMemo(() => takeoverBadgeLabel(props.entries), [props.entries]);
@@ -189,7 +190,7 @@ function CodeReasoningTranscriptImpl(
       data-turn-id={props.turnId}
       data-phase-id={props.phaseId}
     >
-      {toolCount > 0 && <button
+      <button
         type="button"
         className="code-reasoning__head"
         onClick={() => { userExpanded.current = !expanded; setExpanded(!expanded); }}
@@ -202,6 +203,7 @@ function CodeReasoningTranscriptImpl(
               : props.active ? <Loader size={15} strokeWidth={1.8} className="code-reasoning__state--running" /> : <PhaseIcon size={15} strokeWidth={1.8} />}
         </span>}
         <span className="code-reasoning__summary">{interrupted ? '本次执行已中断' : unfinished ? '操作尚未完成' : title}</span>
+        {!expanded && reasoningExcerpt ? <span className="code-reasoning__excerpt">{reasoningExcerpt}</span> : null}
         {takeoverLabel !== null && (
           <span
             className="code-reasoning__takeover-badge"
@@ -218,9 +220,9 @@ function CodeReasoningTranscriptImpl(
           className={`disclosure-chevron${expanded ? ' disclosure-chevron--open' : ''}`}
           aria-hidden="true"
         />
-      </button>}
+      </button>
 
-      <div className={`disclosure${toolCount === 0 || expanded ? ' disclosure--open' : ''}`}>
+      <div className={`disclosure${expanded ? ' disclosure--open' : ''}`} aria-hidden={!expanded}>
         <div className="disclosure__inner">
           <div className="code-reasoning__transcript" aria-label="按时间顺序的执行过程">
             {props.entries.map((entry) => {

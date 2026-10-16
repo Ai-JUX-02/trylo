@@ -62,9 +62,9 @@ export type ModelSummarizerInput = {
 
 export function createModelSummarizer(
   input: ModelSummarizerInput,
-): (items: ReadonlyArray<TranscriptItem>, previousSummary?: string) => Promise<string> {
-  return async (items, previousSummary) => {
-    const authored = await requestSummary(input, items, previousSummary);
+): (items: ReadonlyArray<TranscriptItem>, previousSummary?: string, signal?: AbortSignal) => Promise<string> {
+  return async (items, previousSummary, signal) => {
+    const authored = await requestSummary(input, items, previousSummary, signal);
     return validateSummary(authored).ok ? authored : summarizeTranscript(items,
       previousSummary === undefined ? {} : { previousSummary });
   };
@@ -79,6 +79,7 @@ async function requestSummary(
   input: ModelSummarizerInput,
   items: ReadonlyArray<TranscriptItem>,
   previousSummary: string | undefined,
+  signal?: AbortSignal,
 ): Promise<string> {
   const request: ProviderRequest = {
     attemptId: SUMMARIZER_ATTEMPT_ID,
@@ -93,9 +94,9 @@ async function requestSummary(
     tools: [],
     maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
   };
-  const controller = new AbortController();
+  if (signal?.aborted) return "";
   let text = "";
-  for await (const event of input.provider.stream(request, controller.signal)) {
+  for await (const event of input.provider.stream(request, signal ?? new AbortController().signal)) {
     if (event.type === "text_delta") {
       text += event.text;
       continue;

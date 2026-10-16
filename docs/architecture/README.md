@@ -1,5 +1,7 @@
 # Trylo 产品源码架构
 
+> 2026-10-16：当前源码默认 trylo-v1。新增[逐请求上下文、工具历史与预算边界](context-and-budgets.md)，说明请求所有权、并行结果保护、思考续接和验证范围。发行状态见[当前源码快照](../release/CURRENT_SOURCE_CHECKPOINT.md)。
+
 > Current source decision (2026-10-15): main working-tree fixes are synchronized, trylo-v1 is the default, and legacy CLI source/engine staging are excluded. [Synchronization record](../release/MAIN_SOURCE_SYNC_2026_10_15.md). Earlier R3 artifact notes describe their historical download, not this source default.
 > 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](../release/SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
 > R3 发布边界：普通 Work 使用 CLI；CoWork 后台已从默认主包移出，仅保留独立实验依赖。[当前组件边界](OPTIONAL_COWORK_RUNTIME.md)。以下保留原架构方案记录。

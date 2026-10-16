@@ -24,6 +24,10 @@ export function applyCompactionTrigger(messages: ChatMessage[], event: Compactio
 
 export function applyCompact(messages: ChatMessage[], event: CompactEvent): ChatMessage[] {
   const boundary = lastUserIndex(messages);
+  if (event.status === 'failed') return [...messages.filter((message, index) => index <= boundary || !isPending(message)), {
+    id: eventMessageId(messages, event, 'compact-failed'), kind: 'notice', role: 'system', createdAt: event.ts,
+    text: `上下文压缩未完成：${event.reason}`, turnId: messages[boundary]?.id,
+  }];
   const duplicate = messages.slice(boundary + 1).some(message => message.kind === 'compaction'
     && message.tokensBefore === event.tokensBefore && message.tokensAfter === event.tokensAfter
     && message.reason === event.reason);
@@ -32,6 +36,7 @@ export function applyCompact(messages: ChatMessage[], event: CompactEvent): Chat
     id: eventMessageId(messages, event, 'compact'), kind: 'compaction', role: 'system',
     createdAt: event.ts, turnId: messages[boundary]?.id,
     reason: event.reason, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter,
+    ...(event.requestContext ? { requestContext: true } : {}),
   };
   let replacement = -1;
   const output: ChatMessage[] = [];

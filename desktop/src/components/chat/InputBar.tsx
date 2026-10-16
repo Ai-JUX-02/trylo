@@ -118,6 +118,8 @@ export interface InputBarProps {
   // from App.tsx (last message is a pending "Compacting
   // context…" notice).
   readonly compacting: boolean;
+  readonly compactAvailable?: boolean;
+  readonly contextUnknown?: boolean;
   // v1.16.2: attachments. The chips render between
   // the input row and the action row; the 📎 button
   // sits to the LEFT of the + mode button and opens
@@ -230,7 +232,8 @@ export function InputBar(props: InputBarProps): ReactElement {
       {(props.learning || props.onLearningDirectiveChange || (isWork && props.onOpenCognition)) && <button type="button" className="input-bar__more" title="学习与协作选项" aria-label="学习与协作选项" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}><MoreHorizontal size={16} /></button>}
       <div className="input-bar__actions-spare" />
       <span className="input-bar__hint">Enter 发送</span>
-      {props.contextUsed > 0 && <ContextRing used={props.contextUsed} total={props.contextWindow} {...(!isWork ? { onCompact: props.onCompact } : {})} />}
+      {(props.contextUsed > 0 || props.contextUnknown) && <ContextRing used={props.contextUsed} total={props.contextWindow} onCompact={props.onCompact}
+        busy={props.compacting} unknown={props.contextUnknown} disabled={props.running || props.compactAvailable === false} />}
     </div>
     {detailsOpen && <div className="input-bar__details">
       {props.learning && <LearningStatusChip {...props.learning} />}

@@ -12,9 +12,7 @@
 //   - The ring is a plain <button>.
 //   - Click fires onCompact directly. No popover, no
 //     state machine, no portal, no positioning.
-//   - The button briefly shows a "✓" confirmation
-//     when clicked (1.5s), so the user has clear
-//     visual feedback that the action was registered.
+//   - Busy and completion come from the runtime; clicking never claims success.
 //   - The label next to the ring still shows the
 //     current token count, e.g. "47k".
 //
@@ -63,13 +61,13 @@ export interface ContextRingProps {
    *  calls onCompact on click. When undefined, the ring
    *  is a passive gauge. */
   readonly onCompact?: () => void;
+  readonly busy?: boolean;
+  readonly disabled?: boolean;
+  readonly unknown?: boolean;
 }
 
 /** Hover/focus delay before the tooltip pill fades in. */
 const TIP_DELAY_MS = 300;
-
-/** How long the "✓ Sent" confirmation stays after a click. */
-const CONFIRM_MS = 1500;
 
 function tierClass(pct: number): string {
   if (pct < 60) return 'safe';
@@ -93,17 +91,12 @@ export function ContextRing(props: ContextRingProps): ReactElement {
   // button's accessible name. The old dev-facing sentence
   // ("...Run `pnpm tauri:dev` to actually trigger...") is
   // gone from the UI; it lives in the header comment.
-  const tipText = interactive ? '点击压缩上下文' : '上下文用量';
+  const tipText = props.busy ? '正在压缩上下文' : props.unknown ? '等待模型返回上下文用量' : props.disabled ? '当前任务结束后可压缩本次对话' : interactive ? '点击压缩上下文' : '上下文用量';
 
-  // v1.16.2.6: brief ✓ confirmation after click. 1.5s.
-  // Auto-resets. No popover, no portal, no positioning.
-  const [justFired, setJustFired] = useState(false);
   // v1.17.4: tooltip pill visibility (delayed, see TIP_DELAY_MS).
   const [tipOpen, setTipOpen] = useState(false);
-  const firedTimer = useRef<number | null>(null);
   const tipTimer = useRef<number | null>(null);
   useEffect(() => () => {
-    if (firedTimer.current !== null) window.clearTimeout(firedTimer.current);
     if (tipTimer.current !== null) window.clearTimeout(tipTimer.current);
   }, []);
 
@@ -123,15 +116,7 @@ export function ContextRing(props: ContextRingProps): ReactElement {
 
   const handleClick = (): void => {
     onCompact?.();
-    setJustFired(true);
-    // The ✓ Sent confirmation owns the moment; the pill
-    // fades out instead of competing with it.
     hideTip();
-    if (firedTimer.current !== null) window.clearTimeout(firedTimer.current);
-    firedTimer.current = window.setTimeout(() => {
-      setJustFired(false);
-      firedTimer.current = null;
-    }, CONFIRM_MS);
   };
 
   return (
@@ -146,7 +131,7 @@ export function ContextRing(props: ContextRingProps): ReactElement {
         onKeyDown={(e) => {
           if (e.key === 'Escape') hideTip();
         }}
-        disabled={!interactive}
+        disabled={!interactive || props.busy || props.disabled}
       >
         {/* SVG ring gauge showing context usage percentage */}
         <svg
@@ -179,9 +164,9 @@ export function ContextRing(props: ContextRingProps): ReactElement {
             className={`context-ring__arc context-ring__arc--${tier}`}
           />
         </svg>
-        {(justFired || hasData) && (
+        {(props.busy || props.unknown || hasData) && (
           <span className="context-ring__label">
-            {justFired ? '✓ Sent' : `${shortLabel}${hasData ? ` · ${Math.round(pct)}%` : ''}`}
+            {props.busy ? '正在压缩…' : props.unknown ? '暂无读数' : `${shortLabel}${hasData ? ` · ${Math.round(pct)}%` : ''}`}
           </span>
         )}
       </button>

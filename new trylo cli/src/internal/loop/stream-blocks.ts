@@ -261,6 +261,7 @@ export function applyToolCall(
     toolCallId: event.toolCallId,
     name: event.name,
     arguments: args,
+    ...(args === event.arguments ? {} : { originalArguments: event.arguments }),
   });
 }
 

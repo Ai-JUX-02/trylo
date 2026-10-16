@@ -5,7 +5,8 @@ import type { ProviderMessage, ProviderRequest, ProviderToolSpec, SystemPromptDi
 import type { JsonObject } from "../protocol/envelope.js";
 import type { ToolPort } from "../ports/tools.js";
 import type { MethodSlotMessage } from "./method-port.js";
-import { promptMessages, type PromptContext } from "./compact-boundary.js";
+import type { PromptContext } from "./compact-boundary.js";
+import { promptViewMessages as promptMessages } from "./prompt-view.js";
 import { FINAL_REPORT_INSTRUCTIONS } from "./budget-final-report.js";
 
 /**
@@ -105,17 +106,7 @@ export type RequestView = {
 };
 
 export function buildRequest(view: RequestView): ProviderRequest {
-  const prompted = applySystemPrompt(
-    promptMessages(view.prompt),
-    view.prompt.seedMessages.length,
-    view.systemPrompt,
-  );
-  const callerAppended = applySystemPromptAppend(prompted.messages, prompted.seedCount, view.systemPromptAppend);
-  const messages = withInjectedSlot(
-    withToolList(callerAppended.messages, view.tools, callerAppended.seedCount),
-    view.slot,
-    view.toolGapSlot,
-  );
+  const messages = requestMessages(promptMessages(view.prompt), view.prompt.seedMessages.length, view);
   return {
     attemptId: view.attemptId ?? "att-unknown",
     ...(view.continuationScope === undefined ? {} : { continuationScope: view.continuationScope }),
@@ -132,6 +123,24 @@ export function buildRequest(view: RequestView): ProviderRequest {
     ...(view.systemPrompt === undefined ? {} : { systemPrompt: view.systemPrompt }),
     ...(view.systemPromptAppend === undefined ? {} : { systemPromptAppend: view.systemPromptAppend }),
   };
+}
+
+/** Request decoration shared by the sender and its context budget. */
+export function requestMessages(
+  messages: ReadonlyArray<ProviderMessage>,
+  seedCount: number,
+  options: {
+    readonly tools?: ToolPort;
+    readonly systemPrompt?: SystemPromptDirective;
+    readonly systemPromptAppend?: string;
+    readonly slot?: MethodSlotMessage;
+    readonly toolGapSlot?: MethodSlotMessage;
+  },
+): ReadonlyArray<ProviderMessage> {
+  const prompted = applySystemPrompt(messages, seedCount, options.systemPrompt);
+  const appended = applySystemPromptAppend(prompted.messages, prompted.seedCount, options.systemPromptAppend);
+  return withInjectedSlot(options.tools === undefined ? appended.messages
+    : withToolList(appended.messages, options.tools, appended.seedCount), options.slot, options.toolGapSlot);
 }
 
 /**

@@ -51,6 +51,8 @@ export type WarmSpec = {
   /** Summary configuration belongs to the adapter identity, never the credential. */
   readonly reasoningSummary?: "auto";
   readonly reasoningEffort?: ReasoningEffort;
+  /** A provider carrying a workspace image reader cannot cross that boundary. */
+  readonly workspaceId?: string;
 };
 
 export type WarmStats = {
@@ -97,7 +99,8 @@ type WarmEntry = {
 export function warmKeyOf(spec: WarmSpec): string {
   const base = [spec.kind, spec.providerId, spec.model, spec.endpoint, spec.accountId].join("|");
   const key = spec.reasoningSummary === undefined ? base : `${base}|summary:${spec.reasoningSummary}`;
-  return spec.reasoningEffort === undefined ? key : `${key}|effort:${spec.reasoningEffort}`;
+  const configured = spec.reasoningEffort === undefined ? key : `${key}|effort:${spec.reasoningEffort}`;
+  return spec.workspaceId === undefined ? configured : `${configured}|workspace:${spec.workspaceId}`;
 }
 
 export function createWarmRegistry(options: WarmOptions = {}): WarmRegistry {

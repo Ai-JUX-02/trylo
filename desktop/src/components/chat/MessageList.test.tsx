@@ -50,6 +50,20 @@ function user(id: string, text: string, createdAt: number): ChatMessage {
 }
 
 describe('MessageList turn projection', () => {
+  it('keeps context measurements out of visible rows on Code and Work', () => {
+    const messages: ChatMessage[] = [user('context-user', 'continue', 1),
+      { id: 'context-only', kind: 'notice', role: 'system', text: '', createdAt: 2, contextTokens: 6000 },
+      { id: 'context-warning', kind: 'notice', role: 'system', text: '连接已恢复', createdAt: 3 }];
+    for (const surface of ['code', 'work'] as const) {
+      const view = render(<MessageList messages={messages} surface={surface} />);
+      const rows = virtuoso.captured.at(-1)!.data as readonly ListItem[];
+      expect(rows.some(row => 'id' in row && row.id === 'context-only')).toBe(false);
+      expect(screen.getByTestId('message-context-warning')).toBeInTheDocument();
+      view.unmount();
+    }
+    expect(messages[1]).toMatchObject({ contextTokens: 6000 });
+  });
+
   it('shows one row per invocation on both surfaces while retaining real repeated commands', () => {
     const first: ChatMessage = {id:'tool-a',kind:'tool',role:'assistant',createdAt:101,
       toolCallId:'call-a',tool:'Bash',status:'running',summary:'same command',input:{command:'same command'}};

@@ -8,6 +8,8 @@ Trylo is a personal learning agent project with a native desktop application, a 
 
 Windows desktop preview: [download and checksums](result/desktop/). The preview defaults to the legacy CLI; new CLI source remains included.
 
+Current source defaults to `trylo-v1`. The October 16 update includes context, tool-history, native continuation and long-stream repairs, plus Desktop startup and presentation fixes. See [context and budgets](docs/architecture/context-and-budgets.md) and the [source verification checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).
+
 ## Source map
 
 | Directory | Responsibility |

@@ -2,6 +2,7 @@ import type { Transcript } from "../protocol/transcript.js";
 import { assertExhaustive } from "../contract/index.js";
 import type { ProviderMessage, ProviderOutboundToolCall } from "../ports/provider.js";
 import { pairRejectedToolMessages } from "./rejected-tool-messages.js";
+import type { ImageReference } from "../protocol/image-reference.js";
 
 /**
  * Canonical transcript -> provider request messages.
@@ -13,6 +14,13 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
   const messages: ProviderMessage[] = [];
   let assistantText = "";
   let assistantToolCalls: ProviderOutboundToolCall[] = [];
+  let images: ImageReference[] = [];
+  const flushImages = (): void => {
+    if (images.length === 0) return;
+    // Keep a batch's tool results contiguous before the multimodal input.
+    messages.push({ role: "user", content: "Images returned by the preceding tools.", imageReferences: images });
+    images = [];
+  };
 
   const flushAssistant = (): void => {
     if (assistantText.length === 0 && assistantToolCalls.length === 0) {
@@ -28,6 +36,7 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
   };
 
   for (const item of transcript) {
+    if (item.kind !== "tool_result") flushImages();
     switch (item.kind) {
       case "system":
         flushAssistant();
@@ -46,7 +55,8 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
       case "tool_call":
         assistantToolCalls = [
           ...assistantToolCalls,
-          { toolCallId: item.toolCallId, name: item.name, arguments: item.arguments },
+          { toolCallId: item.toolCallId, name: item.name, arguments: item.arguments,
+            ...(item.originalArguments === undefined ? {} : { originalArguments: item.originalArguments }) },
         ];
         break;
       case "tool_result":
@@ -56,6 +66,7 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
           content: item.output,
           toolCallId: item.toolCallId,
         });
+        images.push(...item.images ?? []);
         break;
       default: {
         assertExhaustive(item);
@@ -64,6 +75,7 @@ export function transcriptToMessages(transcript: Transcript): ReadonlyArray<Prov
     }
   }
   flushAssistant();
+  flushImages();
   const rejected = new Map(transcript.flatMap(item => item.kind === "tool_result" && item.outcome === "failed" && item.output.startsWith("invalid_arguments") ? [[item.toolCallId, item.name] as const] : []));
   return pairRejectedToolMessages(messages, rejected);
 }

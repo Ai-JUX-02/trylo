@@ -65,11 +65,10 @@ test("a real PNG validates: facts in value, summary in output, never the payload
       assert.equal(value.detail, "high");
       assert.equal(value.width, 1);
       assert.equal(value.height, 1);
-      const dataUrl = value.dataUrl;
-      assert.equal(typeof dataUrl, "string");
-      assert.ok((dataUrl as string).startsWith("data:image/png;base64,"));
-      // The model-facing text is a summary: no base64, but the real path.
-      assert.ok(!outcome.output.includes(dataUrl as string));
+      assert.equal(value.dataUrl, undefined, "structured values also enter durable envelopes");
+      assert.equal(outcome.images?.[0]?.path, "image.png");
+      assert.match(outcome.images?.[0]?.sha256 ?? "", /^[a-f0-9]{64}$/);
+      assert.ok(!JSON.stringify(outcome).includes(Buffer.from(PNG).toString("base64")));
       assert.ok(outcome.output.includes("image/png"));
       assert.ok(outcome.output.includes("image.png"));
     }

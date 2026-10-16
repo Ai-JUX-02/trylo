@@ -52,6 +52,9 @@ export function reduce(state: ExecutionState, input: ReduceInput): ReduceResult 
   if (state.seenEventIds.includes(input.eventId)) {
     return { ok: true, state, commands: [], events: [], duplicate: true };
   }
+  if (state.phase === "terminal") {
+    return input.type === "check_result" ? applyCheck(state, input) : applyTerminal(state, input);
+  }
   if (state.seenEventIds.length >= MAX_SEEN_EVENTS) {
     // The cap is per turn, not per session: a turn that emitted this many
     // events cannot settle anything further — every later input would fail the
@@ -64,9 +67,6 @@ export function reduce(state: ExecutionState, input: ReduceInput): ReduceResult 
   }
   if (input.type === "check_result") {
     return applyCheck(state, input);
-  }
-  if (state.phase === "terminal") {
-    return applyTerminal(state, input);
   }
   switch (state.phase) {
     case "idle":

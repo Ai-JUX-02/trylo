@@ -351,7 +351,7 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
       return reportFailure(ctx, prompt);
     }
     const cancel = control === undefined ? interrupts.signal : AbortSignal.any([interrupts.signal, control.signal]);
-    const promptText = control === undefined ? await answerQuestionInput(scaffold.questions, prompt.text, ctx.readLine)
+    const promptText = prompt.text.trim() === "/compact" ? "/compact" : control === undefined ? await answerQuestionInput(scaffold.questions, prompt.text, ctx.readLine)
       : await answerStdioInput(scaffold.questions, control, prompt.text, cancel);
     const outcome = await runOneTurn(
       ctx,

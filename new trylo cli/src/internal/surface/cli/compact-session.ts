@@ -1,4 +1,5 @@
-import type { CompactWindow } from "../../ports/compaction.js";
+import type { CompactWindow, CompactRecordDraft } from "../../ports/compaction.js";
+import type { CompactionWiring } from "../../loop/compact-boundary.js";
 import type { SessionPort, SessionRecord } from "../../ports/session.js";
 import type { CliContext } from "./context.js";
 import { compactionWiring } from "./compaction-wiring.js";
@@ -24,21 +25,23 @@ export type CompactResult =
   | { readonly ok: false; readonly problem: string };
 
 export async function compactSession(
-  ctx: CliContext,
+  ctx: Pick<CliContext, "now">,
   sessionId: string,
   records: ReadonlyArray<SessionRecord>,
-  session: SessionPort | undefined,
+  session: Pick<SessionPort, "append"> | undefined,
+  options?: { readonly wiring?: CompactionWiring; readonly signal?: AbortSignal; readonly accept?: (draft: CompactRecordDraft) => boolean },
 ): Promise<CompactResult> {
+  if (options?.signal?.aborted) return { ok: false, problem: "cancelled" };
   if (records.length === 0) {
     return { ok: false, problem: "nothing to compact yet" };
   }
-  const wiring = compactionWiring({ nowMs: ctx.now() });
+  const wiring = options?.wiring ?? compactionWiring({ nowMs: ctx.now() });
   const projected = wiring.port.projectForPrompt({ records });
   if (!projected.ok) {
     return { ok: false, problem: `${projected.code}: ${projected.detail}` };
   }
   const at = new Date(ctx.now()).toISOString();
-  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary);
+  const summary = await wiring.summarize(projected.view.items, projected.view.window?.summary, options?.signal);
   const compacted = wiring.port.compact({ records, sessionId, at, summary });
   if (!compacted.ok) {
     // `nothing_to_compact` is the ordinary answer for a session whose history
@@ -48,6 +51,8 @@ export async function compactSession(
     return { ok: false, problem: `${compacted.code}: ${compacted.detail}` };
   }
   const window = compacted.record.payload;
+  if (options?.signal?.aborted) return { ok: false, problem: "cancelled" };
+  if (options?.accept && !options.accept(compacted.record)) return { ok: false, problem: "nothing_to_reduce" };
   if (session === undefined) {
     // The scaffold has no journal (a session opened without one). The window is
     // still returned, and the caller says it is for this process only.

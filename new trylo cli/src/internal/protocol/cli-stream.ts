@@ -21,6 +21,7 @@ export const CLI_STREAM_EVENT_TYPES = [
   "tool_result",
   "warning",
   "usage",
+  "compact",
   "run_result",
 ] as const;
 
@@ -35,7 +36,7 @@ export function isCliStreamEventType(value: string): value is CliStreamEventType
  * envelope; no CLI code may invent a value the journal does not contain.
  */
 export type CliStreamEvent =
-  | { readonly type: "run_start"; readonly sessionId: string; readonly turnId: string; readonly providerId: string; readonly model: string }
+  | { readonly type: "run_start"; readonly sessionId: string; readonly turnId: string; readonly providerId: string; readonly model: string; readonly operation?: "compact"; readonly contextWindow?: number }
   | { readonly type: "message_start" }
   | { readonly type: "message_delta"; readonly text: string }
   | { readonly type: "message_end" }
@@ -63,6 +64,8 @@ export type CliStreamEvent =
     }
   | { readonly type: "warning"; readonly code: string; readonly message: string }
   | { readonly type: "usage"; readonly usage: CliUsage }
+  | { readonly type: "compact"; readonly status: "started" | "completed" | "failed";
+      readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }
   | CliRunResult;
 
 export type CliUsage = {

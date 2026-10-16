@@ -28,7 +28,7 @@ import { userLearningObserver } from "../../integration/user-learning/index.js";
 import { createTurnRenderer, type CliSink } from "./render.js";
 import { localRulesFor } from "./project-rules.js";
 import { memoryPortFor } from "./memory-wiring.js";
-import { ruleChangeNoticeFor } from "./rule-changes.js";
+import { reportProjectNotices } from "./turn-project-notices.js";
 import { createSubagentJournalSink } from "./subagent-sink.js";
 import type { SubagentRole } from "../../subagent/role.js";
 import type { LspServerConfig } from "../../adapters/language-server/registry.js";
@@ -37,6 +37,7 @@ import { finishTurn, wiringFailure, type TurnOutcome } from "./turn-finish.js";
 import { turnStartRefusal } from "./turn-start-checks.js";
 import { wirePorts } from "./wiring.js";
 import { turnWiringInput } from "./turn-wiring-input.js";
+import { executeCompaction } from "./compact-maintenance.js";
 import type { RunFailure } from "./run-failure.js";
 import type { RunExecution } from "./run-execution-wiring.js";
 import type { AskUserSession } from "../../adapters/tools/ask-user/index.js";
@@ -340,6 +341,7 @@ async function runTurnWithPorts(
     if (refusal !== undefined) {
       return refusal;
     }
+    if (input.text.trim() === "/compact") return await executeCompaction(input, wiring);
 
     const startedAt = input.now();
     await recorder?.start({ startedAt, toolCatalogHash: wiring.toolCatalogHash,
@@ -352,17 +354,10 @@ async function runTurnWithPorts(
     // reads the answer while it is being written rather than once it is over
     // (WP D1/D2). It is the same translator the end-of-run projection uses, so a
     // scripted consumer sees the same sequence — only earlier.
-    // A resumed run adopts today's rules while the journal holds yesterday's. Both
-    // are true, so the run says which changed and works with the current files; it
-    // never rewrites the journal to match (WP-CLI-B1 §6). Silence is the common
-    // case and means printing nothing at all.
-    const ruleNotice = ruleChangeNoticeFor(input.resumeRecords, input.projectContext?.sources);
-    for (const problem of input.projectContext?.problems ?? []) input.sink.stderr(`warning: ${problem}\n`);
-    if (ruleNotice !== undefined) {
-      input.sink.stderr(`${ruleNotice}\n`);
-    }
+    reportProjectNotices(input);
 
     const renderer = createTurnRenderer(input.format, input.sink, {
+      ...(input.contextTokenLimit === undefined ? {} : { contextWindow: input.contextTokenLimit }),
       sessionId: input.sessionId,
       turnId: input.turnId,
       providerId: wiring.providerId,

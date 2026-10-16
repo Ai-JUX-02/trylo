@@ -426,6 +426,8 @@ export function MessageList(props: MessageListProps): ReactElement {
     };
 
     for (const m of props.messages) {
+      // Context measurements remain persisted for the ring, never as empty timeline rows.
+      if (m.kind === 'notice' && !m.text.trim()) continue;
       if (m.kind === 'text' && m.role === 'user') {
         // New turn — flush the previous one first.
         flushTurn();

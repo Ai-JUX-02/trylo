@@ -33,6 +33,7 @@ export type RunResultMeta = {
  * needs only these four facts to do it.
  */
 export type RunStartFacts = {
+  readonly contextWindow?: number;
   readonly sessionId: string;
   readonly turnId: string;
   readonly providerId: string;
@@ -61,6 +62,7 @@ export function projectRunStart(meta: RunStartFacts): CliStreamEvent {
     turnId: meta.turnId,
     providerId: meta.providerId,
     model: meta.model,
+    ...(meta.contextWindow === undefined ? {} : { contextWindow: meta.contextWindow }),
   };
 }
 

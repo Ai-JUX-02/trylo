@@ -8,6 +8,7 @@ export type CoalesceEvent = ProviderEvent | { readonly type: "flush_deltas" };
 /** Wire token boundaries are transport details, not separately retained facts. */
 export async function* coalesceDeltas(events: AsyncIterable<CoalesceEvent>): AsyncGenerator<ProviderEvent> {
   let pending: Delta | undefined;
+  let deliveredBlock: Delta | undefined;
   for await (const event of events) {
     if (event.type === "flush_deltas") {
       if (pending !== undefined) { yield pending; pending = undefined; }
@@ -16,11 +17,19 @@ export async function* coalesceDeltas(events: AsyncIterable<CoalesceEvent>): Asy
     if (event.type !== "text_delta" && event.type !== "reasoning_delta" && event.type !== "tool_input_delta") {
       if (pending !== undefined) { yield pending; pending = undefined; }
       yield event;
+      if (event.type === "text_end" || event.type === "reasoning_end" || event.type === "tool_input_end") deliveredBlock = undefined;
       continue;
     }
     if (pending !== undefined && !sameBlock(pending, event)) {
       yield pending;
       pending = undefined;
+    }
+    if (deliveredBlock === undefined || !sameBlock(deliveredBlock, event)) {
+      // Preserve immediate first-token feedback without making every network
+      // packet a retained domain event.
+      deliveredBlock = event;
+      yield event;
+      continue;
     }
     pending = pending === undefined ? event : joinDeltas(pending, event);
     const length = pending.type === "tool_input_delta" ? pending.argumentsText.length : pending.text.length;

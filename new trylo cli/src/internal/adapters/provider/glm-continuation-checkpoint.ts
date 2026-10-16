@@ -13,7 +13,11 @@ export type NativeAssistant = {
 };
 
 export function glmContinuationBinding(endpoint: string, model: string): string | undefined {
-  if (!["glm-5.3-flash", "glm-5-3-flash", "glm-5-3-flash-260828"].includes(model.toLowerCase())) return undefined;
+  // Official aliases select the model on Volcano's console. Opt into this
+  // endpoint's native reasoning_content contract, without rewriting the alias
+  // to a permanently assumed concrete model. Only received native data is kept.
+  if (!["ark-code-latest", "glm-latest", "glm-5.3", "glm-5-3",
+    "glm-5.3-flash", "glm-5-3-flash", "glm-5-3-flash-260828"].includes(model.toLowerCase())) return undefined;
   try {
     const url = new URL(endpoint);
     if (url.protocol !== "https:" || url.hostname !== "ark.cn-beijing.volces.com"
@@ -52,7 +56,7 @@ export function readGlmCheckpoint(record: SessionRecord, sessionId: string, bind
   if (!object(assistant) || Object.keys(assistant).sort().join(",") !== "calls,reasoning,text") return undefined;
   const reasoning = assistant["reasoning"], text = assistant["text"], rawCalls = assistant["calls"];
   if (typeof reasoning !== "string" || reasoning.length === 0 || reasoning.length > MAX_REASONING_CHARS
-    || typeof text !== "string" || !Array.isArray(rawCalls) || rawCalls.length === 0) return undefined;
+    || typeof text !== "string" || !Array.isArray(rawCalls) || (rawCalls.length === 0 && text.length === 0)) return undefined;
   const calls: ProviderOutboundToolCall[] = [], ids = new Set<string>();
   for (const raw of rawCalls) {
     if (!object(raw) || Object.keys(raw).sort().join(",") !== "arguments,name,toolCallId") return undefined;

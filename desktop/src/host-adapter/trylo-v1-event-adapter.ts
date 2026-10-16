@@ -60,9 +60,13 @@ export class TryloV1EventAdapter {
   private reasoningBlockId: string | undefined;
   private settledToolCallIds = new Set<string>();
   private reasoningRedacted = false;
-  /** Latest `usage` frame. Not accumulated additively — the v1 stream
-   *  emits running totals and `run_result` carries the final one. */
+  /** Per-request usage during streaming; aggregate billing only after run_result.
+   * Current context has its own reading and is never replaced by that aggregate. */
   private latestUsage: CliV1Usage | null = null;
+  private contextTokens: number | undefined;
+  private contextWindow: number | undefined;
+  private maintenance = false;
+  private compactionPending = false;
   private outcome: TryloV1Outcome | null = null;
   private sessionId: string | null = null;
   private turnId: string | null = null;
@@ -255,9 +259,22 @@ export class TryloV1EventAdapter {
         ];
       case 'usage':
         this.latestUsage = event.usage;
-        // No event: a usage frame is not a turn boundary. Emitting a
-        // `turn_end` per usage would fragment the transcript.
+        // A reading is not a turn boundary; publish hidden measurement metadata.
+        if (event.usage.inputTokens > 0) {
+          this.contextTokens = event.usage.inputTokens;
+          return [{ type: 'context_usage', seq, ts, tokens: this.contextTokens, contextWindow: this.contextWindow }];
+        }
         return [];
+      case 'compact':
+        if (event.status === 'started') {
+          this.compactionPending = true;
+          return [{ type: 'compaction_trigger', seq, ts, trigger: event.reason === 'manual' ? 'manual' : 'auto', preTokens: event.tokensBefore ?? 0, postTokens: 0 }];
+        }
+        this.compactionPending = false;
+        if (event.status === 'completed' && event.tokensAfter !== undefined) this.contextTokens = event.tokensAfter;
+        return [{ type: 'compact', seq, ts, kind: 'after', reason: event.reason, requestContext: true,
+          ...(event.status === 'failed' ? { status: 'failed' as const } : {}),
+          tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter }];
       case 'run_result':
         return this.onRunResult(event, ts);
       default:
@@ -283,6 +300,8 @@ export class TryloV1EventAdapter {
     seq: number,
     ts: number,
   ): LoopEvent[] {
+    this.maintenance = event.operation === 'compact';
+    this.contextWindow = event.contextWindow;
     this.sessionId = event.sessionId;
     this.turnId = event.turnId;
     this.providerId = event.providerId;
@@ -386,6 +405,7 @@ export class TryloV1EventAdapter {
     this.sessionId = event.sessionId;
     this.turnId = event.turnId;
     this.latestUsage = event.usage;
+    if (this.contextTokens === undefined && event.iterations === 1 && event.usage.inputTokens > 0) this.contextTokens = event.usage.inputTokens;
     const incomplete = event.status === 'completed' && (this.rejections.length > 0 || this.toolNames.size > 0);
     const warnings = this.rejections.length > 0
       ? [this.warn('protocol_rejected', this.describeRejections())]
@@ -408,6 +428,9 @@ export class TryloV1EventAdapter {
     const ts = meta?.ts ?? Date.now();
     const usage = this.latestUsage;
     const isError = outcome !== 'completed';
+    const unfinishedCompaction: LoopEvent[] = this.compactionPending ? [{ type: 'compact', seq: this.seq++, ts,
+      kind: 'after', status: 'failed', reason: `interrupted (${outcome})` }] : [];
+    this.compactionPending = false;
     // A killed stream may never send its block-end frames. Settle only the
     // bytes already delivered, preserving block ids and terminal truth.
     const pendingMessages: LoopEvent[] = [];
@@ -430,11 +453,15 @@ export class TryloV1EventAdapter {
     return [
       ...pendingMessages,
       ...pendingTools,
-      {
+      ...unfinishedCompaction,
+      ...(!this.maintenance ? [{
         type: 'turn_end',
         seq: this.seq++,
         ts,
         turn: 1,
+        usageScope: 'run' as const,
+        ...(this.contextWindow === undefined ? {} : { contextWindow: this.contextWindow }),
+        ...(this.contextTokens === undefined ? {} : { contextTokens: this.contextTokens }),
         // P1-11: a non-completed run is `failed`, NOT `tool_use`. The old
         // encoding made every provider refusal look like a tool-calling turn,
         // and `applyTurnEnd` only treats `max_tokens` as failure — so a 0-token
@@ -453,7 +480,7 @@ export class TryloV1EventAdapter {
               },
             }
           : {}),
-      },
+      } as LoopEvent] : []),
       {
         type: 'loop_end',
         seq: this.seq++,

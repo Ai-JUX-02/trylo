@@ -15,7 +15,7 @@
 // same card in place via the mapper.
 
 import { useState, type ReactElement } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { Check, ClipboardList, Minus } from 'lucide-react';
 import type { InputRequestAnswer, InputRequestQuestion } from '@trylo/work';
 import type { InputRequestMessage } from './types';
 
@@ -104,17 +104,19 @@ export function InputRequestCard(
   };
 
   return (
-    <div className="input-request-card">
+    <div className={`input-request-card${resolved ? ' input-request-card--resolved' : ''}`}>
       <div className="input-request-card__head">
-        <ClipboardList size={15} strokeWidth={2} aria-hidden="true" />
-        <span className="input-request-card__title">Input needed</span>
-        <span className="input-request-card__state">
+        {m.status === 'submitted' ? <Check size={14} aria-hidden="true" />
+          : m.status === 'dismissed' ? <Minus size={14} aria-hidden="true" />
+            : <ClipboardList size={15} aria-hidden="true" />}
+        <span className="input-request-card__title">
           {m.status === 'submitted'
-            ? 'Submitted'
+            ? '已回答'
             : m.status === 'dismissed'
-              ? 'Dismissed'
-              : 'Pending'}
+              ? '已跳过'
+              : '需要你确认'}
         </span>
+        {m.questions.length > 1 ? <span className="input-request-card__state">{m.questions.length} 个问题</span> : null}
       </div>
       {m.status === 'submitted' && m.answers ? (
         <ul className="input-request-card__answers">
@@ -133,8 +135,8 @@ export function InputRequestCard(
       ) : m.status === 'submitted' || m.status === 'dismissed' ? (
         <p className="input-request-card__resolved">
           {m.status === 'dismissed'
-            ? 'Request dismissed — the task continued with the current progress.'
-            : 'Answers submitted to the task.'}
+            ? '本次问题已跳过。'
+            : '回答已提交。'}
         </p>
       ) : (
         <>
@@ -184,7 +186,7 @@ export function InputRequestCard(
                         }}
                       />
                       <span className="input-request-card__option-label">
-                        Other
+                        其他
                       </span>
                     </label>
                   </div>
@@ -194,8 +196,8 @@ export function InputRequestCard(
                 {selected.get(q.id)?.includes(OTHER_MARKER) ? (
                   <textarea
                     className="input-request-card__other"
-                    aria-label={`${q.question} — other`}
-                    placeholder="Type a custom answer…"
+                    aria-label={`${q.question} — 自定义回答`}
+                    placeholder="输入你的想法…"
                     value={otherText.get(q.id) ?? ''}
                     disabled={submitting || !props.onRespond}
                     onChange={(e) =>
@@ -216,7 +218,7 @@ export function InputRequestCard(
               onClick={() => submit('submitted')}
               disabled={submitting || !props.onRespond || !allAnswered}
             >
-              Submit
+              {submitting ? '正在发送…' : '提交回答'}
             </button>
             <button
               type="button"
@@ -224,7 +226,7 @@ export function InputRequestCard(
               onClick={() => submit('dismissed')}
               disabled={submitting || !props.onRespond}
             >
-              Dismiss
+              跳过
             </button>
           </div>
         </>

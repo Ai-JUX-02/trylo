@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue } from "./envelope.js";
 import { assertExhaustive } from "../contract/index.js";
+import { isImageReferences, type ImageReference } from "./image-reference.js";
 
 /**
  * Canonical transcript item: the single authoritative shape for "what the model
@@ -42,6 +43,8 @@ export type TranscriptItem =
       readonly toolCallId: string;
       readonly name: string;
       readonly arguments: JsonObject;
+      /** Original provider call when execution applies a declared normalization. */
+      readonly originalArguments?: JsonObject;
     })
   | (Base & {
       readonly kind: "tool_result";
@@ -50,6 +53,7 @@ export type TranscriptItem =
       readonly output: string;
       readonly truncated: boolean;
       readonly outcome: "succeeded" | "failed" | "cancelled" | "unknown";
+      readonly images?: ReadonlyArray<ImageReference>;
     });
 
 export type Transcript = ReadonlyArray<TranscriptItem>;
@@ -114,7 +118,8 @@ export function isTranscriptItem(value: unknown): value is TranscriptItem {
         requiredString(value.toolCallId) &&
         requiredString(value.name) &&
         isRecord(value.arguments) &&
-        isJsonValue(value.arguments)
+        isJsonValue(value.arguments) &&
+        (value.originalArguments === undefined || (isRecord(value.originalArguments) && isJsonValue(value.originalArguments)))
       );
     case "tool_result":
       return (
@@ -125,7 +130,8 @@ export function isTranscriptItem(value: unknown): value is TranscriptItem {
         (value.outcome === "succeeded" ||
           value.outcome === "failed" ||
           value.outcome === "cancelled" ||
-          value.outcome === "unknown")
+          value.outcome === "unknown") &&
+        (value.images === undefined || (value.outcome === "succeeded" && isImageReferences(value.images)))
       );
     default: {
       assertExhaustive(kind);

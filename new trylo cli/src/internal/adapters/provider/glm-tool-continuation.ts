@@ -4,6 +4,7 @@ import { glmCheckpoint, glmContinuationBinding, MAX_REASONING_CHARS, readGlmChec
 import { createGlmContinuationCache } from "./glm-continuation-cache.js";
 
 export type GlmToolContinuation = {
+  readonly missingMessages: number;
   fieldsFor(message: ProviderMessage): { readonly reasoning_content?: string };
   observe(event: ProviderEvent): void;
   commit(): void;
@@ -27,7 +28,8 @@ function advanceCapture(capture: Capture, event: ProviderEvent): Capture {
   if (event.type === "tool_call") return { kind: "collecting", assistant: { ...assistant, calls: [...assistant.calls,
     { toolCallId: event.toolCallId, name: event.name, arguments: event.arguments }] } };
   if (event.type === "finish") {
-    return event.reason === "tool_calls" && assistant.reasoning.length > 0 && assistant.calls.length > 0
+    return assistant.reasoning.length > 0 && ((event.reason === "tool_calls" && assistant.calls.length > 0)
+      || (event.reason === "stop" && assistant.calls.length === 0 && assistant.text.length > 0))
       ? { kind: "complete", assistant } : { kind: "rejected" };
   }
   return capture;
@@ -42,11 +44,12 @@ function advanceCapture(capture: Capture, event: ProviderEvent): Capture {
 export function createGlmToolContinuation(endpoint: string, configuredModel: string) {
   let activeScope: string | undefined;
   let generation = 0;
+  let missingReported = false;
   const cache = createGlmContinuationCache();
   let checkpoint: { readonly scope: string; readonly value: JsonObject } | undefined;
 
   function clear(scope: string | undefined): void {
-    cache.clear(); generation += 1; activeScope = scope; checkpoint = undefined;
+    cache.clear(); generation += 1; activeScope = scope; checkpoint = undefined; missingReported = false;
   }
 
   const binding = glmContinuationBinding(endpoint, configuredModel);
@@ -75,10 +78,14 @@ export function createGlmToolContinuation(endpoint: string, configuredModel: str
       if (scope === undefined || requestBinding === undefined) return undefined;
       const epoch = generation;
       const available = cache.matching(request.messages);
+      const missing = request.messages.filter(message => message.role === "assistant" && !available.has(message)).length;
+      const missingMessages = missingReported ? 0 : missing;
+      if (missing > 0) missingReported = true;
       let capture: Capture = { kind: "collecting", assistant: { reasoning: "", text: "", calls: [] } };
       return {
+        missingMessages,
         fieldsFor(message) {
-          if (message.role !== "assistant" || message.toolCalls === undefined) return {};
+          if (message.role !== "assistant") return {};
           const text = available.get(message);
           return text === undefined ? {} : { reasoning_content: text };
         },
