@@ -70,14 +70,17 @@ export function createFileMemento({ storageRoot, log = null } = {}) {
     const dir = path.dirname(file);
     await fs.mkdir(dir, { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(map, null, 2), 'utf8');
     try {
+      await fs.writeFile(tmp, JSON.stringify(map, null, 2), 'utf8');
       await fs.rename(tmp, file);
-    } catch (err) {
-      // Windows: rename over an existing file can transiently fail; retry once
-      // after removing the target so we never leave a half state behind.
-      await fs.rm(file, { force: true });
-      await fs.rename(tmp, file);
+    } finally {
+      // A failed replacement must leave the last committed file intact.
+      // An orphaned temp is not authoritative; cleanup must not mask the write error.
+      try {
+        await fs.rm(tmp, { force: true });
+      } catch (err) {
+        if (log) log(`learning memento: temp cleanup failed: ${err?.message ?? err}`);
+      }
     }
   }
 
@@ -96,15 +99,17 @@ export function createFileMemento({ storageRoot, log = null } = {}) {
         if (log) log(message);
         throw new Error(message);
       }
-      queue = queue.then(async () => {
+      const operation = queue.then(async () => {
         const map = await readAll();
         map[key] = value;
         await writeAll(map);
       });
+      // Keep the serialization tail fulfilled while preserving this caller's
+      // failure. Already queued writes must still run after a failed update.
+      queue = operation.catch(() => {});
       try {
-        await queue;
+        await operation;
       } catch (err) {
-        queue = Promise.resolve();
         if (log) log(`learning memento: write failed: ${err && err.message ? err.message : err}`);
         throw err;
       }

@@ -153,7 +153,16 @@ describe('work.browser-debug.v1 composition (PR-7, §4.1)', () => {
     const server = parsed.mcpServers['trylo-chrome'];
     assert.equal(server.command, process.execPath);
     assert.equal(server.args[0].endsWith('chrome-devtools-mcp.js'), true);
-    assert.deepEqual(server.args.slice(1), ['--isolated', '--no-performance-crux']);
+    // The observer adds an isolated, headless viewport and a scoped loopback
+    // CDP port; these launch arguments are part of the current runtime contract.
+    const portArg = server.args.find(arg => arg.startsWith('--chromeArg=--remote-debugging-port='));
+    assert.match(portArg ?? '', /^--chromeArg=--remote-debugging-port=\d+$/);
+    const cdpPort = Number(portArg?.split('=').at(-1));
+    assert.ok(cdpPort > 0 && cdpPort <= 65535);
+    assert.deepEqual(server.args.slice(1), [
+      '--isolated', '--no-performance-crux', '--headless', '--viewport=1440x900',
+      portArg, '--chromeArg=--remote-debugging-address=127.0.0.1',
+    ]);
     assert.equal(server.env.CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS, 'true');
     // ask rules cover the new server (§6.1 defensive depth).
     const settings = JSON.parse(fs.readFileSync(resolved.permissionSettingsPath, 'utf8'));

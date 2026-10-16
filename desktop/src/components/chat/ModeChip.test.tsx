@@ -78,15 +78,16 @@ describe('ModeChip', () => {
       <ModeChip current="agent" onChange={onChange} onApplyPlan={vi.fn()} />,
     );
     // Popover not visible initially.
-    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
     // Click the chip to open the popover.
     fireEvent.click(screen.getByRole('button', { name: /agent/i }));
-    const listbox = screen.getByRole('listbox');
-    expect(listbox).toBeInTheDocument();
+    const menu = screen.getByRole('menu');
+    expect(menu).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /agent/i })).toHaveAttribute('aria-haspopup', 'menu');
     // Select a different mode (plan).
-    fireEvent.click(screen.getByRole('option', { name: /plan/i }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /计划/ }));
     expect(onChange).toHaveBeenCalledWith('plan');
     // Popover closes.
-    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

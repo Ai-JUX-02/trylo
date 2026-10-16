@@ -45,6 +45,12 @@ function matchingBrace(pattern: string, open: number): number {
       i += 1;
       continue;
     }
+    if (char === "[") {
+      const close = matchingBracket(pattern, i);
+      if (close === -1) throw new GlobSyntaxError("unterminated character class");
+      i = close;
+      continue;
+    }
     if (char === "{") {
       depth += 1;
     } else if (char === "}") {
@@ -67,6 +73,13 @@ function splitAlternatives(body: string): Array<string> {
     if (char === "\\") {
       current += char + (body[i + 1] ?? "");
       i += 1;
+      continue;
+    }
+    if (char === "[") {
+      const close = matchingBracket(body, i);
+      if (close === -1) throw new GlobSyntaxError("unterminated character class");
+      current += body.slice(i, close + 1);
+      i = close;
       continue;
     }
     if (char === "{") {
@@ -109,7 +122,9 @@ function compileClassBody(body: string): string {
   // Inside a class only `\`, `]` and `[` need care; ranges pass through, and a
   // backslash escape keeps its regex meaning.
   const escaped = rest.replace(/[[\]]/g, "\\$&");
-  return `[${negated ? "^" : ""}${escaped}]`;
+  // Like `?` and `*`, a class describes one character within a segment.
+  // Negated classes would otherwise consume '/' and silently cross folders.
+  return `(?!/)[${negated ? "^" : ""}${escaped}]`;
 }
 
 /** Translates one pattern (or alternation branch) into regex source. */

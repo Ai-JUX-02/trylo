@@ -94,6 +94,7 @@ export function connectRemoteGateway(options: {
         if (disposed || id !== generation || current !== socket) return;
         let message;
         try { message = JSON.parse(String(event.data)); } catch { return; }
+        if (!message || typeof message !== 'object' || Array.isArray(message)) return;
         if (valid(message.snapshot)) {
           ++revision;
           options.onSnapshot(message.snapshot);
@@ -107,8 +108,14 @@ export function connectRemoteGateway(options: {
           }
         }
         if (!synchronized || message.type !== 'action_event') return;
-        if (message.action === 'chat' && message.payload) options.onChatEvent?.(message.payload);
-        if (message.action === 'fun' && message.payload) options.onFunEvent?.(message.payload);
+        if (message.action === 'chat' && message.payload) {
+          ++revision;
+          options.onChatEvent?.(message.payload);
+        }
+        if (message.action === 'fun' && message.payload) {
+          ++revision;
+          options.onFunEvent?.(message.payload);
+        }
       });
       current.addEventListener('close', () => retry(id));
       current.addEventListener('error', () => retry(id));

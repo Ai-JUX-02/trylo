@@ -4,7 +4,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -94,4 +94,37 @@ test('get never creates the file (read path stays side-effect free)', async () =
   const memento = createFileMemento({ storageRoot: root });
   await memento.get(LEGACY_STATE_KEY);
   assert.equal(existsSync(memento.filePath), false);
+});
+
+test('a failed update does not discard already queued updates', async (t) => {
+  const memento = createFileMemento({ storageRoot: root });
+  const readFile = fs.readFile;
+  let failNextRead = true;
+  t.mock.method(fs, 'readFile', async (...args) => {
+    if (args[0] === memento.filePath && failNextRead) {
+      failNextRead = false;
+      throw Object.assign(new Error('injected read failure'), { code: 'EIO' });
+    }
+    return readFile(...args);
+  });
+  const results = await Promise.allSettled([
+    memento.update('failed', 1),
+    memento.update('second', 2),
+    memento.update('third', 3),
+  ]);
+  assert.deepEqual(results.map(result => result.status), ['rejected', 'fulfilled', 'fulfilled']);
+  await memento.update('later', 4);
+  assert.deepEqual(JSON.parse(readFileSync(memento.filePath, 'utf8')), { second: 2, third: 3, later: 4 });
+});
+
+test('a failed atomic replacement preserves the previously committed state', async (t) => {
+  const memento = createFileMemento({ storageRoot: root });
+  await memento.update('saved', 'keep me');
+  t.mock.method(fs, 'rename', async () => {
+    throw Object.assign(new Error('injected rename failure'), { code: 'EACCES' });
+  });
+  await assert.rejects(memento.update('new', 'not committed'), /injected rename failure/);
+  assert.equal(memento.get('saved'), 'keep me');
+  assert.equal(memento.get('new'), undefined);
+  assert.deepEqual(await fs.readdir(path.dirname(memento.filePath)), [STATE_FILE_NAME]);
 });

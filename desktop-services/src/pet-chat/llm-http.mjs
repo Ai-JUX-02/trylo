@@ -141,6 +141,7 @@ export function toErrorMessage(err) {
 
 export function isAbortError(err) {
   if (!err || typeof err !== 'object') return false;
+  if (err.name === 'AbortError') return true;
   const code = err.code ? String(err.code) : '';
   if (code === 'ABORT_ERR') return true;
   const msg = err instanceof Error ? err.message : String(err);
@@ -195,7 +196,7 @@ export async function postJson(endpoint, headers, body, signal, timeoutMs = DEFA
     signal,
     timeoutMs,
   );
-  const text = await response.text();
+  const text = await response.text().catch((err) => { throw decorateFetchError(err); });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${trimForError(text)}`);
   }
@@ -272,12 +273,24 @@ export async function postSseJson(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const text = decoder.decode(value, { stream: true });
+  let finished = false;
+  const consumeText = (text) => {
     if (!responseMode) {
-      responseMode = /^\s*(?:data:|event:|:)/.test(text) ? 'sse' : 'json';
+      // Headers may omit the SSE content type. Transport chunks can end in
+      // the middle of "data:" (or consist only of whitespace/UTF-8 bytes),
+      // so sniff the accumulated prefix before committing to JSON fallback.
+      responseBody += text;
+      const prefix = responseBody.trimStart();
+      if (/^(?:data:|event:|id:|retry:|:)/.test(prefix)) {
+        responseMode = 'sse';
+        frameBuffer = responseBody;
+        responseBody = '';
+        drainFrames(false);
+        return;
+      }
+      if (!prefix || ['data:', 'event:', 'id:', 'retry:'].some(field => field.startsWith(prefix))) return;
+      responseMode = 'json';
+      return;
     }
     if (responseMode === 'sse') {
       frameBuffer += text;
@@ -285,11 +298,25 @@ export async function postSseJson(
     } else {
       responseBody += text;
     }
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) { finished = true; break; }
+      consumeText(decoder.decode(value, { stream: true }));
+    }
+    consumeText(decoder.decode());
+    if (responseMode === 'sse') {
+      drainFrames(true);
+      return { streamed: true, payloadCount, data: null };
+    }
+    return { streamed: false, payloadCount: 0, data: parseJson(responseBody) };
+  } catch (err) {
+    throw decorateFetchError(err);
+  } finally {
+    // A model error or consumer exception must close the HTTP body as well.
+    // Cleanup failures must not hide the original response/consumer error.
+    if (!finished) await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
-
-  if (responseMode === 'sse') {
-    drainFrames(true);
-    return { streamed: true, payloadCount, data: null };
-  }
-  return { streamed: false, payloadCount: 0, data: parseJson(responseBody) };
 }

@@ -104,6 +104,21 @@ test('half-open connections fail a health deadline and reconnect', async t => {
   t.mock.timers.tick(12000); await flush();
   assert.equal(h.states.at(-1), 'reconnecting');
 });
+test('a delayed health snapshot cannot roll back a newer streamed chat event', async t => {
+  let resolveProbe;
+  const events = [];
+  const h = start({
+    snapshot: () => new Promise(resolve => { resolveProbe = resolve; }),
+    onChatEvent: event => events.push(event),
+  });
+  await flush();
+  Socket.all[0].frame({ snapshot: snapshot('initial') });
+  t.mock.timers.tick(25000); await flush();
+  Socket.all[0].frame({ type: 'action_event', action: 'chat', payload: { type: 'text-delta', delta: 'new text' } });
+  resolveProbe(snapshot('old')); await flush();
+  assert.equal(events.length, 1);
+  assert.deepEqual(h.received.map(value => value.conversation[0].text), ['initial']);
+});
 test('offline cache belongs to its paired computer even when session ids match', () => {
   const message = text => [{ id: text, text, role: 'assistant', at: Date.now() }];
   saveRemoteConversation('same-session', 'A', message('from A'), 'pc-A');
@@ -112,4 +127,34 @@ test('offline cache belongs to its paired computer even when session ids match',
   assert.equal(readLatestCachedConversation('pc-B').messages[0].text, 'from B');
   assert.equal(readLatestCachedConversation('pc-C'), null);
   assert.equal(readLatestCachedConversation(), null);
+});
+
+test('non-object WebSocket messages are ignored without breaking later snapshots', async t => {
+  // Capture the callback directly so browser-dispatched exceptions cannot be
+  // hidden by EventTarget's asynchronous error reporting in this Node fixture.
+  const addEventListener = Socket.prototype.addEventListener;
+  t.mock.method(Socket.prototype, 'addEventListener', function (type, listener, ...args) {
+    if (type === 'message') this.receive = listener;
+    else addEventListener.call(this, type, listener, ...args);
+  });
+  const h = start(); await flush();
+  const socket = Socket.all[0];
+  for (const value of [null, false, 1, 'unexpected', []]) {
+    assert.doesNotThrow(() => socket.receive({ data: JSON.stringify(value) }));
+  }
+  socket.receive({ data: JSON.stringify({ snapshot: snapshot('after malformed frame') }) });
+  assert.equal(h.states.at(-1), 'connected');
+  assert.equal(h.received[0].conversation[0].text, 'after malformed frame');
+});
+
+test('damaged offline cache entries are ignored and cached messages are sanitized', () => {
+  localStorage.setItem('trylo.remote.cache.v1', JSON.stringify({
+    broken: { sessionId: 'bad', deviceId: 'pc', at: 100, messages: null },
+    valid: { sessionId: 'good', deviceId: 'pc', workspace: 'repo', at: 1,
+      messages: [null, { role: 'assistant', text: '', attachments: [null] },
+        { id: 'm', role: 'assistant', text: 'saved reply', at: 1, attachments: 'invalid' }] },
+  }));
+  const cached = readLatestCachedConversation('pc');
+  assert.equal(cached.sessionId, 'good');
+  assert.deepEqual(cached.messages, [{ id: 'm', role: 'assistant', text: 'saved reply', at: 1 }]);
 });

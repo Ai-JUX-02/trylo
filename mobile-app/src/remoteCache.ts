@@ -50,6 +50,7 @@ function stripAttachment(attachment: DirectAttachment): DirectAttachment {
 }
 
 function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   if (
     message.role !== "user" &&
     message.role !== "assistant" &&
@@ -58,10 +59,11 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
   )
     return null;
   const text = String(message.text || "").slice(0, MAX_MESSAGE_CHARS);
-  const attachments = message.attachments?.length
-    ? message.attachments.slice(0, 6).map(stripAttachment)
-    : undefined;
-  if (!text && !attachments && message.role !== "tool") return null;
+  const attachments = Array.isArray(message.attachments)
+    ? message.attachments.filter(attachment => attachment && typeof attachment === "object"
+        && (attachment.kind === "image" || attachment.kind === "text")).slice(0, 6).map(stripAttachment)
+    : [];
+  if (!text && attachments.length === 0 && message.role !== "tool") return null;
   return {
     id: String(message.id || "").slice(0, 200),
     role: message.role,
@@ -77,7 +79,7 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
     ...(message.toolCallId
       ? { toolCallId: String(message.toolCallId).slice(0, 200) }
       : {}),
-    ...(message.input !== undefined
+    ...(typeof message.input === "string"
       ? {
           input:
             message.input.length > 2000
@@ -85,7 +87,7 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
               : message.input,
         }
       : {}),
-    ...(message.output !== undefined
+    ...(typeof message.output === "string"
       ? {
           output:
             message.output.length > 2000
@@ -96,8 +98,13 @@ function sanitizeMessage(message: RemoteChatMessage): RemoteChatMessage | null {
     ...(message.durationMs !== undefined
       ? { durationMs: message.durationMs }
       : {}),
-    ...(attachments ? { attachments } : {}),
+    ...(attachments.length ? { attachments } : {}),
   };
+}
+
+function sanitizeMessages(messages: readonly RemoteChatMessage[]): RemoteChatMessage[] {
+  return messages.slice(-MAX_MESSAGES_PER_SESSION).map(sanitizeMessage)
+    .filter((message): message is RemoteChatMessage => Boolean(message));
 }
 
 export function loadRemoteCache(): RemoteCacheFile {
@@ -105,12 +112,13 @@ export function loadRemoteCache(): RemoteCacheFile {
     const parsed = JSON.parse(
       localStorage.getItem(CACHE_STORAGE_KEY) || "{}",
     ) as RemoteCacheFile;
-    if (!parsed || typeof parsed !== "object") return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const entries = Object.values(parsed).filter(
       (entry): entry is CachedRemoteConversation =>
         Boolean(entry) &&
         typeof entry === "object" &&
-        typeof entry.sessionId === "string",
+        typeof entry.sessionId === "string" &&
+        Array.isArray(entry.messages),
     );
     entries.sort((a, b) => b.at - a.at);
     return Object.fromEntries(
@@ -118,7 +126,7 @@ export function loadRemoteCache(): RemoteCacheFile {
         .slice(0, MAX_SESSIONS)
         .map((entry) => [
           `${entry.deviceId || "legacy"}:${entry.sessionId}`,
-          entry,
+          { ...entry, messages: sanitizeMessages(entry.messages) },
         ]),
     );
   } catch {
@@ -143,10 +151,7 @@ export function saveRemoteConversation(
   context: { projectId?: string; surface?: RemoteSurface; title?: string } = {},
 ) {
   if (!sessionId) return;
-  const clean = messages
-    .slice(-MAX_MESSAGES_PER_SESSION)
-    .map(sanitizeMessage)
-    .filter((message): message is RemoteChatMessage => Boolean(message));
+  const clean = sanitizeMessages(messages);
   const cache = loadRemoteCache();
   cache[`${deviceId || "legacy"}:${sessionId}`] = {
     sessionId,

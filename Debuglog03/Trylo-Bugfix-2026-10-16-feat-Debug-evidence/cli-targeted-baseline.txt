@@ -1,0 +1,183 @@
+✔ a login writes the ledger under homeDir and a get reads it back (11.3273ms)
+✔ a hand-edited ledger is refused rather than half-read (8.0297ms)
+✔ an empty ledger file is corrupt, not 'no credentials' (1.3133ms)
+✔ a fresh directory reads as an empty ledger (missing is not an error) (1.1437ms)
+✔ a second writer while the lock is held is refused with lock_conflict (7.0407ms)
+✔ a relative ledger path is always strictly inside its root (adversarial #6) (0.5374ms)
+✔ an unbalanced root segment cannot escape the named directory (0.4852ms)
+✔ the user ledger lives at <homeDir>/credentials.json (0.6383ms)
+✔ the project ledger lives at <projectDir>/.trylo/credentials.json (0.8311ms)
+﹣ a POSIX ledger is written 0600 and a loosened one is reported insecure (0.1603ms) # POSIX mode bits are not observable on win32; recorded in AUTH-QUALITY-AUDIT.md
+✔ no temp file is left behind after a successful write (4.9223ms)
+✔ invalid expressions are refused rather than approximated (0.9475ms)
+✔ valid expressions parse and expand to sorted value lists (0.494ms)
+✔ 7 is accepted as a Sunday alias in both forms (0.1151ms)
+✔ next run is always strictly after the anchor (1.229ms)
+✔ day-of-month and day-of-week both constrained means either match (0.1645ms)
+✖ a leap day is reachable from a non-leap year (0.7005ms)
+✖ DST spring gap: a job targeting the missing hour skips that day (42.2922ms)
+✔ DST fall-back: next run from the second repeated hour is still later in real time (38.1736ms)
+✖ DST fall-back: next run from the first repeated hour advances by one real minute (37.8721ms)
+✖ DST fall-back: the repeated hour fires once, so the second pass moves on (38.5807ms)
+✖ DST fall-back: a coarser expression still sees the rest of the same day (38.0762ms)
+✖ DST fall-back: an hourly job anchored after its hour moves to tomorrow (38.868ms)
+✖ DST fall-back: from the last minute of the first hour, 61 real minutes elapse (38.6889ms)
+✔ DST fall-back: a wildcard-hour job does not stall across the transition (37.3102ms)
+✔ human rendering covers the common patterns and falls through otherwise (10.3794ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 18
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 395.1513
+
+✖ failing tests:
+
+test at dist\internal\domain\schedule-cron.test.js:92:1
+✖ a leap day is reachable from a non-leap year (0.7005ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  28 !== 29
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:99:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 28,
+    expected: 29,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:101:1
+✖ DST spring gap: a job targeting the missing hour skips that day (42.2922ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  14 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:106:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 14,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:119:1
+✖ DST fall-back: next run from the first repeated hour advances by one real minute (37.8721ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  13 !== 1
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:128:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 13,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:131:1
+✖ DST fall-back: the repeated hour fires once, so the second pass moves on (38.5807ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:144:1
+✖ DST fall-back: a coarser expression still sees the rest of the same day (38.0762ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:151:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:155:1
+✖ DST fall-back: an hourly job anchored after its hour moves to tomorrow (38.868ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  14 !== 1
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:162:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 14,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:165:1
+✖ DST fall-back: from the last minute of the first hour, 61 real minutes elapse (38.6889ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:172:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -272,9 +272,26 @@ export function createToolProfileService(options = {}) {
     if (!exists) {
       // Temp-then-rename so a crashed write can never leave a half config
       // that a later run would happily adopt.
-      const tmp = `${target}.${process.pid}.tmp`;
-      await fsp.writeFile(tmp, contents, 'utf8');
-      await fsp.rename(tmp, target);
+      // Separate resolves (including separate service instances) may publish
+      // identical content concurrently; each writer needs its own temp file.
+      const tmp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+      try {
+        await fsp.writeFile(tmp, contents, 'utf8');
+        try {
+          await fsp.rename(tmp, target);
+        } catch (err) {
+          // Windows can reject replacement when another resolver has just
+          // published this content-addressed file. Only adopt exact contents;
+          // permission failures and mismatched files remain real failures.
+          if (!['EEXIST', 'EPERM', 'EACCES'].includes(err?.code)) throw err;
+          let published;
+          try { published = await fsp.readFile(target, 'utf8'); }
+          catch { throw err; }
+          if (published !== contents) throw err;
+        }
+      } finally {
+        await fsp.rm(tmp, { force: true });
+      }
     }
     return { path: target, hash };
   }

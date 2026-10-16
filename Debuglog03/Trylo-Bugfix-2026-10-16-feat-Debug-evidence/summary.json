@@ -1,0 +1,374 @@
+{
+  "round": "Debuglog03",
+  "date": "2026-10-16",
+  "timezone": "Asia/Shanghai",
+  "branch": "feat/Debug",
+  "gitBaseline": "1502559",
+  "startingState": "Includes preserved, uncommitted Debuglog02 changes",
+  "productBugCategoriesFixed": 7,
+  "testContractCategoriesFixed": 4,
+  "newTests": 8,
+  "sourceAndTestFilesChanged": 13,
+  "changedFiles": [
+    "desktop/src/components/chat/ModePopover.tsx",
+    "desktop/src/components/chat/ModeChip.tsx",
+    "desktop/src/components/chat/ModePopover.focus.test.tsx",
+    "desktop/src/components/chat/ModeChip.test.tsx",
+    "desktop/src/components/chat/file-change.test.ts",
+    "desktop/src/host-adapter/conversation-history.test.ts",
+    "mobile-app/src/remoteConnection.ts",
+    "mobile-app/src/remoteCache.ts",
+    "mobile-app/tests/remote-connection.test.mjs",
+    "new trylo cli/src/internal/adapters/tools/read-only/glob-match.ts",
+    "new trylo cli/src/internal/adapters/tools/read-only/glob-match.test.ts",
+    "new trylo cli/src/internal/domain/schedule-cron.test.ts",
+    "desktop-services/tests/services/tooling-pr7.test.mjs"
+  ],
+  "cliBaseline": {
+    "files": 542,
+    "tests": 4092,
+    "pass": 4079,
+    "fail": 7,
+    "cancelled": 0,
+    "skipped": 6,
+    "evidence": "cli-baseline-discovery.json"
+  },
+  "cliFinal": {
+    "files": 543,
+    "tests": 4095,
+    "pass": 4089,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 6,
+    "evidence": "cli-final-discovery.json"
+  },
+  "desktopBaseline": {
+    "tests": 2647,
+    "pass": 2626,
+    "fail": 21,
+    "failures": [
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/conversation-history.test.ts",
+        "test": " conversation history normalizes Windows workspace keys"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'ask' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'workspace_write' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'unrestricted' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'unrestricted' (denied=true) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'work' 'workspace_write' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) keeps the pill above the right-side control cluster"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) stacks the pill by raising itself, not by demoting the utilities"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) creates a positioned box for that z-index to apply to"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) clamps the optical nudge so the pill never slides over the utilities"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) reserves the grown right cluster (P0-9 follow-up: 290px went stale)"
+      },
+      {
+        "file": "F:/trylo/desktop/src/tooling/native-browser-startup.test.tsx",
+        "test": " native browser startup lifecycle opens through the real host frame loop and advertises real MCP tools with the sidebar closed"
+      },
+      {
+        "file": "F:/trylo/desktop/src/components/chat/file-change.test.ts",
+        "test": " displayPathParts relativises against the workspace and names the project"
+      },
+      {
+        "file": "F:/trylo/desktop/src/components/chat/file-change.test.ts",
+        "test": " displayPathParts tolerates backslashes in either path"
+      },
+      {
+        "file": "F:/trylo/desktop/src/components/chat/ModeChip.test.tsx",
+        "test": " ModeChip opens the ModePopover on chip click, then closes on select"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock uses the same wrapper tag as user-learning and the CLI copy"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock authority keys match the four levels, in order, on all three sides"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock core schema field names exist in both the CLI and user-learning copies"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/seats.test.ts",
+        "test": " surfaces/shared/seats carries the same seat IDs in the same order as the CLI roster"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/seats.test.ts",
+        "test": " surfaces/shared/seats exposes a display name for every seat and they match the CLI"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/team/profile-types.lock.test.ts",
+        "test": " team-profile-types three-copy lock overlay fields copy into the CLI roster tools (spawn/write/research groups)"
+      }
+    ],
+    "evidence": "desktop-baseline.json"
+  },
+  "desktopFinal": {
+    "tests": 2650,
+    "pass": 2633,
+    "fail": 17,
+    "failures": [
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'ask' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'workspace_write' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'unrestricted' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'code' 'unrestricted' (denied=true) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/host-adapter/trylo-v1-browser-profile.test.ts",
+        "test": " Desktop 'work' 'workspace_write' (denied=false) uses its actual scoped MCP browser and honors approval"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) keeps the pill above the right-side control cluster"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) stacks the pill by raising itself, not by demoting the utilities"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) creates a positioned box for that z-index to apply to"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) clamps the optical nudge so the pill never slides over the utilities"
+      },
+      {
+        "file": "F:/trylo/desktop/src/styles/top-bar-mode-pill.test.ts",
+        "test": " top-bar mode pill stays the click target (Round-3 P0-9) reserves the grown right cluster (P0-9 follow-up: 290px went stale)"
+      },
+      {
+        "file": "F:/trylo/desktop/src/tooling/native-browser-startup.test.tsx",
+        "test": " native browser startup lifecycle opens through the real host frame loop and advertises real MCP tools with the sidebar closed"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock uses the same wrapper tag as user-learning and the CLI copy"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock authority keys match the four levels, in order, on all three sides"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/engineering-contract.test.ts",
+        "test": " surfaces/shared/engineering-contract three-way lock core schema field names exist in both the CLI and user-learning copies"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/seats.test.ts",
+        "test": " surfaces/shared/seats carries the same seat IDs in the same order as the CLI roster"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/shared/seats.test.ts",
+        "test": " surfaces/shared/seats exposes a display name for every seat and they match the CLI"
+      },
+      {
+        "file": "F:/trylo/desktop/src/surfaces/team/profile-types.lock.test.ts",
+        "test": " team-profile-types three-copy lock overlay fields copy into the CLI roster tools (spawn/write/research groups)"
+      }
+    ],
+    "evidence": "desktop-final.json"
+  },
+  "servicesFinal": {
+    "tests": 486,
+    "pass": 480,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 5
+  },
+  "workFinal": {
+    "tests": 353,
+    "pass": 347,
+    "fail": 6,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "mobileRemote": {
+    "tests": 13,
+    "pass": 13,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "mobileUi": {
+    "tests": 21,
+    "pass": 21,
+    "fail": 0,
+    "evidence": "mobile-ui-final.txt"
+  },
+  "cliStaleArtifact": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "cliQualityGate": {
+    "ok": false,
+    "elapsed": "28.56",
+    "steps": [
+      {
+        "step": "0-repository-baseline",
+        "ok": true,
+        "detail": "Node v24.12.0 lockHash=65af5707 deps=8 tracked=1702"
+      },
+      {
+        "step": "1-format",
+        "ok": true,
+        "detail": "hygiene check pass"
+      },
+      {
+        "step": "2-typecheck",
+        "ok": false,
+        "detail": "\n> @trylo/cli@0.1.0 build\n> tsc -p tsconfig.json && node scripts/copy-vendor.mjs && node scripts/pty/copy-pty-vendor.mjs && node scripts/release-inventory.mjs\n\nnode:fs:560\r\n  return binding.open(\r\n                 ^\r\n\r\nError: ENOENT: no such file or directory, open 'F:\\trylo\\new trylo cli\\vendor-bin\\srt-win-x64.exe'\r\n    at Object.openSync (node:fs:560:18)\r\n    at readFileSync (node:fs:444:35)\r\n    at file:///F:/trylo/new%20trylo%20cli/scripts/copy-vendor.mjs:65:17\r\n    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)\r\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)\r\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {\r\n  errno: -4058,\r\n  code: 'ENOENT',\r\n  syscall: 'open',\r\n  path: 'F:\\\\trylo\\\\new trylo cli\\\\vendor-bin\\\\srt-win-x64.exe'\r\n}\r\n\r\nNode.js v24.12.0\r\n"
+      },
+      {
+        "step": "3-lint-hygiene",
+        "ok": true,
+        "detail": "0 ts-ignore, 0 any, 0 empty catch, 0 unseamed ambient, 0 unlisted double-cast, 0 fake-imports in reachable code across 1487 files"
+      },
+      {
+        "step": "4-architecture",
+        "ok": true,
+        "detail": "layering clean & boundary prove-fail validated"
+      },
+      {
+        "step": "5-contract-tests",
+        "ok": true,
+        "detail": "contract suites executed (38 tests pass)"
+      },
+      {
+        "step": "6-unit-tests",
+        "ok": false,
+        "detail": "hermetic unit tests failed"
+      },
+      {
+        "step": "7-transitions",
+        "ok": true,
+        "detail": "domain transitions matrix executed and passed"
+      },
+      {
+        "step": "8-license-and-sbom",
+        "ok": true,
+        "detail": "license closure valid (9 packages scanned), generated dist/sbom.json & THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "step": "9-source-scan",
+        "ok": true,
+        "detail": "0 secrets, 0 unexpected binaries, 0 large files in source tree"
+      },
+      {
+        "step": "10-doc-evidence-presence",
+        "ok": true,
+        "detail": "presence checks passed (README, ENG-0, ENG-3, ADR-0001)"
+      }
+    ]
+  },
+  "browser": {
+    "url": "http://127.0.0.1:1420/",
+    "mode": "development",
+    "findings": [
+      {
+        "width": 1280,
+        "menuBox": {
+          "x": 372.828125,
+          "y": 407.796875,
+          "width": 260,
+          "height": 367.75
+        },
+        "tabFocus": {
+          "tag": "BUTTON",
+          "text": "默认模型",
+          "name": "Model: 默认模型"
+        },
+        "overflow": {
+          "viewport": 1280,
+          "documentWidth": 1280
+        },
+        "keyboard": "Home/End/Escape/selection/Tab passed"
+      },
+      {
+        "width": 360,
+        "menuBox": {
+          "x": 92,
+          "y": 146.390625,
+          "width": 260,
+          "height": 367.75
+        },
+        "tabFocus": {
+          "tag": "BUTTON",
+          "text": "默认模型",
+          "name": "Model: 默认模型"
+        },
+        "overflow": {
+          "viewport": 360,
+          "documentWidth": 360
+        },
+        "keyboard": "Home/End/Escape/selection/Tab passed"
+      }
+    ],
+    "errors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ],
+    "responses": [
+      {
+        "url": "http://127.0.0.1:1420/__dev_fs/read_file?path=C%3A%2Ftrylo-workspace%2F.trylo%2Fteam-runs.json",
+        "status": 500
+      },
+      {
+        "url": "http://127.0.0.1:1420/__dev_fs/read_file?path=C%3A%2Ftrylo-workspace%2F.trylo%2Fteam-profiles.json",
+        "status": 500
+      }
+    ]
+  },
+  "limitations": [
+    "CLI official build/test remains blocked by missing vendor-bin/srt-win-x64.exe; compiled diagnostics do not replace packaged validation",
+    "Desktop 17 existing failures remain: 6 browser integration/resource cases, 5 removed top-bar CSS assumptions, 6 missing old CLI contract source cases",
+    "Services windows_mcp vendor source is missing; Work has 6 missing vendor/recording fixture failures",
+    "Native Tauri/WebView2, Android device, packaged binaries and real model endpoints were not exercised",
+    "Browser dev mode uses a mock workspace; 2 missing optional team JSON files return HTTP 500",
+    "Initial overlapping clean/build diagnostics were invalidated and excluded; final CLI diagnostics ran after recompile with no build overlap"
+  ]
+}

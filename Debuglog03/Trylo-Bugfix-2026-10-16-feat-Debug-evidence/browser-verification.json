@@ -1,0 +1,58 @@
+{
+  "url": "http://127.0.0.1:1420/",
+  "mode": "development",
+  "findings": [
+    {
+      "width": 1280,
+      "menuBox": {
+        "x": 372.828125,
+        "y": 407.796875,
+        "width": 260,
+        "height": 367.75
+      },
+      "tabFocus": {
+        "tag": "BUTTON",
+        "text": "默认模型",
+        "name": "Model: 默认模型"
+      },
+      "overflow": {
+        "viewport": 1280,
+        "documentWidth": 1280
+      },
+      "keyboard": "Home/End/Escape/selection/Tab passed"
+    },
+    {
+      "width": 360,
+      "menuBox": {
+        "x": 92,
+        "y": 146.390625,
+        "width": 260,
+        "height": 367.75
+      },
+      "tabFocus": {
+        "tag": "BUTTON",
+        "text": "默认模型",
+        "name": "Model: 默认模型"
+      },
+      "overflow": {
+        "viewport": 360,
+        "documentWidth": 360
+      },
+      "keyboard": "Home/End/Escape/selection/Tab passed"
+    }
+  ],
+  "errors": [
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ],
+  "responses": [
+    {
+      "url": "http://127.0.0.1:1420/__dev_fs/read_file?path=C%3A%2Ftrylo-workspace%2F.trylo%2Fteam-runs.json",
+      "status": 500
+    },
+    {
+      "url": "http://127.0.0.1:1420/__dev_fs/read_file?path=C%3A%2Ftrylo-workspace%2F.trylo%2Fteam-profiles.json",
+      "status": 500
+    }
+  ]
+}

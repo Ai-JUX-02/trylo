@@ -1285,7 +1285,10 @@ export function createToolPackageManager(options = {}) {
       // guaranteed-availability path when the upstream CDN is throttled or
       // unreachable.
       const isLocalMirror =
-        /^[a-zA-Z]:[\\/]/.test(mirrorBase) || mirrorBase.startsWith('\\\\') || mirrorBase.startsWith('file://');
+        path.isAbsolute(mirrorBase) ||
+        /^[a-zA-Z]:[\\/]/.test(mirrorBase) ||
+        mirrorBase.startsWith('\\\\') ||
+        mirrorBase.startsWith('file://');
       if (isLocalMirror) {
         const localBase = mirrorBase.startsWith('file://') ? fileURLToPath(mirrorBase) : mirrorBase;
         const mirrorFile = path.join(localBase, id, `${sha256.slice(0, 16)}-${artifactBasename(url)}`);
@@ -1789,20 +1792,21 @@ async function applyWindowsMcpPatches(versionDirPath) {
   } catch {}
 }
 
-/** CAD/EDA: locate the npm CLI that ships beside the Node runtime the
- *  Service Host itself runs under. Falls back to PATH. Never throws. */
 /** CAD/EDA: locate the npm CLI. Returns `{ command, args }` — the JS entry
  *  (`npm-cli.js`) run under the SAME Node runtime the Service Host uses.
  *  Spawning `npm.cmd` directly is NOT an option: Node ≥18.20 rejects
  *  .cmd/.bat spawns without a shell (CVE-2024-27980, `spawn EINVAL`), and a
- *  shell join would loosen argv handling. Null when npm is not adjacent to
- *  the runtime (node_modules/npm ships beside node.exe in every official
- *  Node distribution). */
-export function resolveNpmCommand() {
-  const prefix = path.dirname(process.execPath);
-  const cli = path.join(prefix, 'node_modules', 'npm', 'bin', 'npm-cli.js');
-  if (isFileSync(cli)) {
-    return { command: process.execPath, args: [cli] };
+ *  shell join would loosen argv handling. Windows keeps npm beside node.exe;
+ *  Unix installations place it under <prefix>/lib beside <prefix>/bin/node.
+ *  Null when this Node installation does not include npm. */
+export function resolveNpmCommand(nodeExecutable = process.execPath) {
+  const binDir = path.dirname(nodeExecutable);
+  const candidates = [
+    path.join(binDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.resolve(binDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+  for (const cli of candidates) {
+    if (isFileSync(cli)) return { command: nodeExecutable, args: [cli] };
   }
   return null;
 }

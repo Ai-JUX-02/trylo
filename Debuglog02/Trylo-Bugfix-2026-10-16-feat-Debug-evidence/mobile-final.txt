@@ -1,0 +1,19 @@
+✔ socket open is not connected until the authoritative snapshot is received (12.9279ms)
+✔ failed ticket retries and recovers without a history request (0.5397ms)
+✔ a socket that never sends its initial snapshot times out (0.3582ms)
+✔ foreground recovery rejects frames from the old socket and restores a full snapshot (0.5388ms)
+✔ dispose aborts a pending ticket and cannot leak a late socket (0.7933ms)
+✔ offline immediately disables controls; online uses a new ticket and snapshot (0.2676ms)
+✔ a delayed health snapshot never rolls back a newer event (0.3321ms)
+✔ half-open connections fail a health deadline and reconnect (0.2832ms)
+✔ a delayed health snapshot cannot roll back a newer streamed chat event (0.3833ms)
+✔ offline cache belongs to its paired computer even when session ids match (0.4021ms)
+✔ real gateway reconnect recovers missed results, approvals and selected session (111.3595ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 211.8097

@@ -1,0 +1,62 @@
+✔ socket open is not connected until the authoritative snapshot is received (14.4326ms)
+✔ failed ticket retries and recovers without a history request (0.5779ms)
+✔ a socket that never sends its initial snapshot times out (0.3638ms)
+✔ foreground recovery rejects frames from the old socket and restores a full snapshot (0.6435ms)
+✔ dispose aborts a pending ticket and cannot leak a late socket (0.2715ms)
+✔ offline immediately disables controls; online uses a new ticket and snapshot (0.2764ms)
+✔ a delayed health snapshot never rolls back a newer event (0.3836ms)
+✔ half-open connections fail a health deadline and reconnect (0.2798ms)
+✔ a delayed health snapshot cannot roll back a newer streamed chat event (0.3572ms)
+✔ offline cache belongs to its paired computer even when session ids match (0.4152ms)
+✖ non-object WebSocket messages are ignored without breaking later snapshots (0.8334ms)
+✖ damaged offline cache entries are ignored and cached messages are sanitized (0.4342ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 10
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 122.1047
+
+✖ failing tests:
+
+test at tests\remote-connection.test.mjs:132:1
+✖ non-object WebSocket messages are ignored without breaking later snapshots (0.8334ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "Cannot read properties of null (reading 'snapshot')"
+      at TestContext.<anonymous> (file:///F:/trylo/mobile-app/tests/remote-connection.test.mjs:143:12)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: TypeError: Cannot read properties of null (reading 'snapshot')
+        at Socket.receive (file:///F:/trylo/mobile-app/src/remoteConnection.ts:97:27)
+        at file:///F:/trylo/mobile-app/tests/remote-connection.test.mjs:143:38
+        at getActual (node:assert:611:5)
+        at strict.doesNotThrow (node:assert:779:32)
+        at TestContext.<anonymous> (file:///F:/trylo/mobile-app/tests/remote-connection.test.mjs:143:12)
+        at async Test.run (node:internal/test_runner/test:1113:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:788:7),
+    expected: undefined,
+    operator: 'doesNotThrow',
+    diff: 'simple'
+  }
+
+test at tests\remote-connection.test.mjs:150:1
+✖ damaged offline cache entries are ignored and cached messages are sanitized (0.4342ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'bad' !== 'good'
+  
+      at TestContext.<anonymous> (file:///F:/trylo/mobile-app/tests/remote-connection.test.mjs:157:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'bad',
+    expected: 'good',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

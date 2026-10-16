@@ -1,0 +1,28 @@
+✔ impersonation of an official repo is rejected (0.6775ms)
+✔ LICENSE disagrees with vendored binary (0.1249ms)
+✔ postinstall bypass is closed (0.2556ms)
+✔ path traversal symlink and zip bomb cannot leave quarantine (0.0974ms)
+✔ grant replay across versions is fail-closed (0.9612ms)
+✔ quarantine tools cannot appear in production search (0.2021ms)
+✔ MCP description prompt injection is stripped from production (0.1348ms)
+✔ tool output leak and overflow become canonical errors (0.131ms)
+✔ optimized missing upstream is not cataloged (0.2962ms)
+✔ contribution button cannot auto-publish even with a contribute token (0.354ms)
+✔ Board Permission and My Tools do not each store a writable active state (0.4392ms)
+✔ large-vendor status does not skip assessment alternatives (0.2171ms)
+✔ failed health probe fails sandbox smoke (0.8887ms)
+✔ cancel timeout and crash are never classified success (0.1322ms)
+✔ package SPI requires cancel timeout idempotency and output bounds (0.0827ms)
+✔ generator cannot write verifier pass (0.0775ms)
+✔ validation cannot skip stages (0.0987ms)
+✔ failed verification stays out of production-ready catalog state (0.1394ms)
+✔ independent pass attaches verified without exposing capability on fail path (0.103ms)
+✔ output bounds truncate/reject overflow and secret leaks (0.1155ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 74.5863

@@ -110,7 +110,8 @@ describe('conversation history', () => {
   });
 
   it('normalizes Windows workspace keys', () => {
-    expect(workspaceKey('C:\\work\\demo-ws\\')).toBe('C:/work/demo-ws');
+    expect(workspaceKey('C:\\work\\demo-ws\\')).toBe('c:/work/demo-ws');
+    expect(workspaceKey('c:/WORK/demo-ws')).toBe(workspaceKey('C:\\work\\demo-ws\\'));
   });
 });
 

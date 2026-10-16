@@ -1,0 +1,20 @@
+✔ character classes cannot match directory separators (0.8586ms)
+✔ brace alternation preserves commas inside character classes (0.4316ms)
+✔ brace delimiters inside a character class remain literal (0.2568ms)
+✔ a slash-free pattern matches basenames at any depth, sorted (13.463ms)
+✔ ** crosses directories, ? matches one character, {a,b} alternates (7.4076ms)
+✔ the path argument narrows the walk and the matching base (3.5236ms)
+✔ excluded directories are never descended into (3.2469ms)
+✔ a malformed pattern is a typed invalid_pattern error, not a crash or an empty list (3.8772ms)
+✔ a missing or empty pattern is invalid_arguments (2.3011ms)
+✔ a path outside the workspace is refused like every other read (1.0247ms)
+✔ more matches than the entry cap reports truncated instead of ending quietly (3.5267ms)
+✔ glob_files is advertised in the tool table as read-only, no approval (1.2078ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 113.9028

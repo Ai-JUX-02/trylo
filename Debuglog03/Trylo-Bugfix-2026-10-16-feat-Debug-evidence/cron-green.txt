@@ -1,0 +1,23 @@
+✔ invalid expressions are refused rather than approximated (1.5323ms)
+✔ valid expressions parse and expand to sorted value lists (0.551ms)
+✔ 7 is accepted as a Sunday alias in both forms (0.1069ms)
+✔ next run is always strictly after the anchor (1.259ms)
+✔ day-of-month and day-of-week both constrained means either match (0.1546ms)
+✔ a leap day is reachable from a non-leap year (40.4764ms)
+✔ DST spring gap: a job targeting the missing hour skips that day (38.0872ms)
+✔ DST fall-back: next run from the second repeated hour is still later in real time (39.4401ms)
+✔ DST fall-back: next run from the first repeated hour advances by one real minute (38.9877ms)
+✔ DST fall-back: the repeated hour fires once, so the second pass moves on (40.7573ms)
+✔ DST fall-back: a coarser expression still sees the rest of the same day (39.3561ms)
+✔ DST fall-back: an hourly job anchored after its hour moves to tomorrow (44.0669ms)
+✔ DST fall-back: from the last minute of the first hour, 61 real minutes elapse (37.9862ms)
+✔ DST fall-back: a wildcard-hour job does not stall across the transition (36.2002ms)
+✔ human rendering covers the common patterns and falls through otherwise (10.1893ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 427.0875

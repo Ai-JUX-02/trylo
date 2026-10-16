@@ -1,0 +1,1 @@
+JSON report written to F:/trylo/Debuglog03/Trylo-Bugfix-2026-10-16-feat-Debug-evidence/desktop-baseline.json
