@@ -94,6 +94,7 @@ export function connectRemoteGateway(options: {
         if (disposed || id !== generation || current !== socket) return;
         let message;
         try { message = JSON.parse(String(event.data)); } catch { return; }
+        if (!message || typeof message !== 'object' || Array.isArray(message)) return;
         if (valid(message.snapshot)) {
           ++revision;
           options.onSnapshot(message.snapshot);

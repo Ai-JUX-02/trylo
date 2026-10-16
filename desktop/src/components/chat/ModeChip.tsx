@@ -61,7 +61,7 @@ export function ModeChip(props: ModeChipProps): ReactElement {
         type="button"
         className={`mode-chip mode-chip--${props.current}`}
         onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
         title={`Current mode: ${MODE_META[props.current].label}. Click to switch.`}
       >

@@ -105,9 +105,7 @@ test("day-of-month and day-of-week both constrained means either match", () => {
 });
 
 test("a leap day is reachable from a non-leap year", () => {
-  const fields = parseCronExpression("0 0 29 2 *");
-  assert.ok(fields !== null, "0 0 29 2 * must parse");
-  const next = computeNextCronRun(fields, new Date("2026-10-06T00:00:00Z"));
+  const next = nextIn("UTC", "0 0 29 2 *", "2026-10-06T00:00:00Z");
   assert.ok(next !== null, "a leap day must be reachable, not merely not-found");
   assert.equal(next.getUTCFullYear(), 2028);
   assert.equal(next.getUTCMonth(), 1);
@@ -118,9 +116,7 @@ test("DST spring gap: a job targeting the missing hour skips that day", () => {
   // 2026-03-08 America/New_York has no 02:30 local.
   const next = nextIn("America/New_York", "30 2 * * *", "2026-03-08T01:59:00-05:00");
   assert.ok(next !== null, "the gap hour must not swallow the schedule");
-  assert.equal(next.getDate(), 9);
-  assert.equal(next.getHours(), 2);
-  assert.equal(next.getMinutes(), 30);
+  assert.equal(next.toISOString(), "2026-03-09T06:30:00.000Z");
 });
 
 test("DST fall-back: next run from the second repeated hour is still later in real time", () => {
@@ -146,8 +142,7 @@ test("DST fall-back: next run from the first repeated hour advances by one real 
   assert.ok(next !== null);
   assert.ok(next.getTime() > from, `next=${next.toISOString()} is not after from=${new Date(from).toISOString()}`);
   assert.equal(next.getTime() - from, 60_000);
-  assert.equal(next.getHours(), 1);
-  assert.equal(next.getMinutes(), 11);
+  assert.equal(next.toISOString(), "2026-11-01T05:11:00.000Z");
 });
 
 test("DST fall-back: the repeated hour fires once, so the second pass moves on", () => {
@@ -160,8 +155,7 @@ test("DST fall-back: the repeated hour fires once, so the second pass moves on",
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
   assert.ok(next !== null);
   assert.ok(next.getTime() > from);
-  assert.equal(next.getHours(), 2);
-  assert.equal(next.getMinutes(), 0);
+  assert.equal(next.toISOString(), "2026-11-01T07:00:00.000Z");
 });
 
 test("DST fall-back: a coarser expression still sees the rest of the same day", () => {
@@ -171,8 +165,7 @@ test("DST fall-back: a coarser expression still sees the rest of the same day", 
   const from = Date.parse("2026-11-01T01:30:00-05:00");
   const next = nextIn("America/New_York", "30 * * * *", new Date(from).toISOString());
   assert.ok(next !== null);
-  assert.equal(next.getHours(), 2);
-  assert.equal(next.getMinutes(), 30);
+  assert.equal(next.toISOString(), "2026-11-01T07:30:00.000Z");
   assert.equal(next.getTime() - from, 60 * 60_000);
 });
 
@@ -182,9 +175,7 @@ test("DST fall-back: an hourly job anchored after its hour moves to tomorrow", (
   const from = Date.parse("2026-11-01T01:30:00-05:00");
   const next = nextIn("America/New_York", "0 1 * * *", new Date(from).toISOString());
   assert.ok(next !== null);
-  assert.equal(next.getDate(), 2);
-  assert.equal(next.getHours(), 1);
-  assert.equal(next.getMinutes(), 0);
+  assert.equal(next.toISOString(), "2026-11-02T06:00:00.000Z");
 });
 
 test("DST fall-back: from the last minute of the first hour, 61 real minutes elapse", () => {
@@ -194,8 +185,7 @@ test("DST fall-back: from the last minute of the first hour, 61 real minutes ela
   const from = Date.parse("2026-11-01T01:59:00-04:00");
   const next = nextIn("America/New_York", "* * * * *", new Date(from).toISOString());
   assert.ok(next !== null);
-  assert.equal(next.getHours(), 2);
-  assert.equal(next.getMinutes(), 0);
+  assert.equal(next.toISOString(), "2026-11-01T07:00:00.000Z");
   assert.equal(next.getTime() - from, 61 * 60_000);
 });
 
@@ -207,7 +197,7 @@ test("DST fall-back: a wildcard-hour job does not stall across the transition", 
   const next = nextIn("America/New_York", "30 * * * *", new Date(from).toISOString());
   assert.ok(next !== null, "a wildcard-hour job must not stall across the transition");
   assert.ok(next.getTime() > from);
-  assert.equal(next.getMinutes(), 30);
+  assert.equal(next.toISOString(), "2026-11-01T07:30:00.000Z");
 });
 
 test("human rendering covers the common patterns and falls through otherwise", () => {

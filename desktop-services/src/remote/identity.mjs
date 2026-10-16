@@ -28,6 +28,22 @@ export const REMOTE_IDENTITY_FILE = 'remote-identity.json';
 const IDENTITY_FILE = 'identity.json';
 const IDENTITY_VERSION = 1;
 
+// All stores in this service process share one read-modify-write owner per
+// destination. A failed operation must not poison later load/import attempts.
+const identityWrites = new Map();
+
+function serializeIdentity(filePath, action) {
+  const resolved = path.resolve(filePath);
+  const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const operation = (identityWrites.get(key) ?? Promise.resolve()).then(action);
+  const tail = operation.then(() => undefined, () => undefined);
+  identityWrites.set(key, tail);
+  void tail.then(() => {
+    if (identityWrites.get(key) === tail) identityWrites.delete(key);
+  });
+  return operation;
+}
+
 /** `<appDataDir>/Trylo/remote/identity.json`; '' when no root. */
 export function remoteIdentityFilePath(appDataDir) {
   const root = String(appDataDir || '').trim();
@@ -40,7 +56,7 @@ export function generatePairingToken() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
-/** Read-only parse of an identity file; null when absent/corrupt. */
+/** Read-only parse; null when absent/corrupt, rejects on storage/access errors. */
 export async function readIdentityFile(filePath) {
   if (!filePath) return null;
   try {
@@ -56,22 +72,28 @@ export async function readIdentityFile(filePath) {
       updatedAt: Number(parsed.updatedAt) || 0,
     };
   } catch (err) {
-    if (err && err.code === 'ENOENT') return null;
-    return null; // corrupt file: treat as absent, never guess a token
+    if (err && (err.code === 'ENOENT' || err instanceof SyntaxError)) return null;
+    // Access/storage failures do not prove absence. Never rotate a paired
+    // token merely because its file cannot currently be read.
+    throw err;
   }
 }
 
-async function writeIdentity(filePath, identity) {
+async function writeIdentity(filePath, identity, log) {
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
-  const tmp = `${filePath}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(identity, null, 2), 'utf8');
+  const tmp = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
+    await fs.writeFile(tmp, JSON.stringify(identity, null, 2), 'utf8');
     await fs.rename(tmp, filePath);
-  } catch (err) {
-    // Windows: rename over an existing file can transiently fail; retry once.
-    await fs.rm(filePath, { force: true });
-    await fs.rename(tmp, filePath);
+  } finally {
+    // Cleanup is best-effort and must not replace the original write error.
+    // In particular, never remove the previously committed identity.
+    try {
+      await fs.rm(tmp, { force: true });
+    } catch (err) {
+      if (log) log(`remote identity: temp cleanup failed (${err?.code || 'unknown'})`);
+    }
   }
 }
 
@@ -87,41 +109,49 @@ export function createIdentityStore(options = {}) {
   const filePath = remoteIdentityFilePath(appDataDir);
   const generateToken = options.generateToken ?? generatePairingToken;
 
+  function withIdentity(action) {
+    if (!filePath) return Promise.reject(new Error('remote identity: app data dir is not configured'));
+    return serializeIdentity(filePath, action);
+  }
+
   /** Load existing or create+persist. Never rotates an existing token. */
   async function loadOrCreate() {
-    if (!filePath) throw new Error('remote identity: app data dir is not configured');
-    const existing = await readIdentityFile(filePath);
-    if (existing) return existing;
-    const identity = {
-      version: IDENTITY_VERSION,
-      pairingToken: generateToken(),
-      deviceSeed: os.hostname(),
-      updatedAt: now(),
-    };
-    await writeIdentity(filePath, identity);
-    return identity;
+    return withIdentity(async () => {
+      const existing = await readIdentityFile(filePath);
+      if (existing) return existing;
+      const identity = {
+        version: IDENTITY_VERSION,
+        pairingToken: generateToken(),
+        deviceSeed: os.hostname(),
+        updatedAt: now(),
+      };
+      await writeIdentity(filePath, identity, log);
+      return identity;
+    });
   }
 
   /** Best-effort legacy import (arch §7.4): copy the old plugin's
    *  remote-identity.json verbatim into the Desktop identity slot. Runs
    *  ONCE — an existing Desktop identity is never replaced. */
   async function importLegacy({ legacyDir }) {
-    const legacyPath = legacyDir
-      ? path.join(String(legacyDir), REMOTE_IDENTITY_FILE)
-      : '';
-    if (!legacyPath) return { imported: false, skipped: true, reason: 'no legacy dir' };
-    const existing = await readIdentityFile(filePath);
-    if (existing) return { imported: false, skipped: true, reason: 'identity already exists' };
-    const legacy = await readIdentityFile(legacyPath);
-    if (!legacy) return { imported: false, skipped: true, reason: 'no legacy identity found' };
-    await writeIdentity(filePath, {
-      version: IDENTITY_VERSION,
-      pairingToken: legacy.pairingToken,
-      deviceSeed: legacy.deviceSeed || os.hostname(),
-      updatedAt: now(),
+    return withIdentity(async () => {
+      const legacyPath = legacyDir
+        ? path.join(String(legacyDir), REMOTE_IDENTITY_FILE)
+        : '';
+      if (!legacyPath) return { imported: false, skipped: true, reason: 'no legacy dir' };
+      const existing = await readIdentityFile(filePath);
+      if (existing) return { imported: false, skipped: true, reason: 'identity already exists' };
+      const legacy = await readIdentityFile(legacyPath);
+      if (!legacy) return { imported: false, skipped: true, reason: 'no legacy identity found' };
+      await writeIdentity(filePath, {
+        version: IDENTITY_VERSION,
+        pairingToken: legacy.pairingToken,
+        deviceSeed: legacy.deviceSeed || os.hostname(),
+        updatedAt: now(),
+      }, log);
+      if (log) log('remote identity: imported legacy pairing identity');
+      return { imported: true, skipped: false };
     });
-    if (log) log('remote identity: imported legacy pairing identity');
-    return { imported: true, skipped: false };
   }
 
   return {

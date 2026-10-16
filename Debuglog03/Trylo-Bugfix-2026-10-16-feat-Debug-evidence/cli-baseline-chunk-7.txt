@@ -1,0 +1,413 @@
+✔ force-delete is recognised however it is spelled (0.6852ms)
+✔ a wrapper does not hide the dangerous command underneath it (0.153ms)
+✔ a dangerous command hidden inside one shell-source argument is not recognised (known gap) (0.0897ms)
+✔ -- ends the option section, so `rm -- -f` deletes a file called -f (0.0781ms)
+✔ a deletion the operator can be asked about is not a danger signal (0.1115ms)
+✔ wrappers past the depth cap fail closed instead of failing open (0.0907ms)
+✔ a command nobody owns is refused in a non-interactive run (0.0722ms)
+✔ danger asks a person whenever there is a person to ask (0.0577ms)
+✔ asking for a sandbox relaxation is asking (0.0731ms)
+✔ a rule whose own example does not match cannot be loaded (0.5239ms)
+✔ a rule that matches what it claims not to cannot be loaded (0.1268ms)
+✔ a typo in the decision is a load failure, not a default (0.1211ms)
+✔ an empty or blank justification is refused rather than stored (0.0801ms)
+✔ a pattern must describe at least one word (0.0519ms)
+✔ host executables must be absolute paths to the program they name (0.186ms)
+✔ the most severe matching rule decides, not the last one written (0.6058ms)
+✔ individually harmless rules do not add up to permission (0.2677ms)
+✔ a pattern is a prefix: arguments past the end are not constrained (0.1159ms)
+✔ a shorter command is not covered by a longer rule (0.0948ms)
+✔ alternative heads expand into one rule per word (0.4337ms)
+✔ an absolute path answers to a rule written for its basename (0.1895ms)
+✔ declaring where a program lives narrows rather than widens (0.1165ms)
+✔ windows executable suffixes and case are folded into one program (0.1599ms)
+✔ an unmatched command falls through to the caller's own approval facts (0.5146ms)
+✔ a policy with no rules never decides a command (0.163ms)
+✔ merging policies cannot remove a refusal written earlier (0.5751ms)
+✔ operator-facing output lists only what is allowed, deduped (0.1785ms)
+✔ every decision word round-trips through the parser (0.1242ms)
+✔ cancel during approval waiting is cancelled not denied (1.0123ms)
+✔ cancel during tooling is cancelled not tool failure (0.2021ms)
+✔ duplicate chunk with same eventId is ignored (0.1275ms)
+✔ finish then cancel does not rewrite completed (0.1994ms)
+✔ duplicate tool result with new eventId is illegal after leaving tooling (0.2302ms)
+✔ retry exhausts after MAX_ATTEMPTS (0.2192ms)
+✔ the three kinds are named, and each has one lifetime (0.946ms)
+✔ no grant of one kind answers another's question (0.0965ms)
+✔ a grant answers only the questions its kind was issued for (0.0927ms)
+✔ an unknown question is refused rather than guessed (0.0949ms)
+✔ matching is necessary and not sufficient (0.104ms)
+✔ a revoked grant authorises nothing, whatever matched (0.0565ms)
+✔ a session grant covers the exact call and a different value is a different call (0.1078ms)
+✔ a substitution attempt is a named defect, not a boolean to be handled (0.0761ms)
+✔ the ledger states are three, and unknown is one of them (0.0791ms)
+✔ a ledger may only open at issued and may only end once (0.1376ms)
+✔ a ledger refuses to open mid-story (0.1539ms)
+✔ the honest sequence is accepted and nothing is left behind (0.0655ms)
+✔ a crash leaves unknown, and unknown never becomes committed (0.0546ms)
+✔ a redelivered record is not a tampered one (0.0714ms)
+✔ an entry only authorises through the kind check, not by being present (0.081ms)
+✔ a reader is shown the unknowns (0.085ms)
+✔ an inbox starts empty and bound to one turn (0.8248ms)
+✔ a blank message is refused, and refusing it changes nothing (0.6152ms)
+✔ a message typed for a different turn is refused, not delivered late (0.1282ms)
+✔ the queue is bounded, and the refusal says it is full (0.148ms)
+✔ draining hands each message over exactly once (0.1778ms)
+✔ every accepted message carries the turn it was typed for (0.0977ms)
+✔ closing hands back what was never taken, and refuses anything after (0.1225ms)
+✔ a closed inbox is still closed when it is empty (0.0601ms)
+✔ belongsToTurn: an addressed message, an unaddressed one, and a foreign one (0.1029ms)
+✔ 反方 #19 — parallel off never introduces a batch (1.3648ms)
+✔ 反方 #18 — a batch stays in tooling until its last member settles (0.7445ms)
+✔ 反方 #18 — a result for a call that is not in the batch is refused (0.1525ms)
+✔ 反方 #18 — a repeated tool id cannot make the batch un-settlable (0.1342ms)
+✔ a batch settles in id order regardless of completion order (0.1012ms)
+✔ 反方 #20 — a steer is refused everywhere but the safe boundary (0.2524ms)
+✔ an empty steer is refused even at the safe boundary (0.0826ms)
+✔ 反方 #21 — a waiting user message keeps the turn open (0.107ms)
+✔ the input queue promotes one queued message, but every leading steer (0.1612ms)
+✔ 反方 #22 — a spent budget is awaiting continuation, not a crash (0.2312ms)
+✔ 反方 #22 — a waiting turn-failure says so, a plain one does not (0.1237ms)
+✔ cancelling a batch cancels every member still in flight (0.3573ms)
+✔ two readers hold the shared lock at once (2.2423ms)
+✔ a writer waits for every reader, not just the first (0.4374ms)
+✔ a reader does not enter while a writer holds the lock (0.3052ms)
+✔ a waiting writer is not overtaken by a reader that arrived later (0.8119ms)
+✔ releasing twice releases once (0.9046ms)
+✔ duplicate eventId is idempotent (1.114ms)
+✔ retry creates a new attempt and keeps correlation (0.4118ms)
+✔ completed cannot be retried (0.1817ms)
+✔ late finish after cancel does not rewrite terminal (0.2016ms)
+✔ completed and verification fail are independent facts (0.1699ms)
+✔ permission deny is not user cancel (0.3067ms)
+✔ replaying the same journal yields the same state (0.8703ms)
+✔ dropping an event changes the state (0.1548ms)
+✔ invalid expressions are refused rather than approximated (0.8841ms)
+✔ valid expressions parse and expand to sorted value lists (0.4681ms)
+✔ 7 is accepted as a Sunday alias in both forms (0.1085ms)
+✔ next run is always strictly after the anchor (1.3914ms)
+✔ day-of-month and day-of-week both constrained means either match (0.1608ms)
+✖ a leap day is reachable from a non-leap year (0.6719ms)
+✖ DST spring gap: a job targeting the missing hour skips that day (42.2081ms)
+✔ DST fall-back: next run from the second repeated hour is still later in real time (39.2018ms)
+✖ DST fall-back: next run from the first repeated hour advances by one real minute (40.191ms)
+✖ DST fall-back: the repeated hour fires once, so the second pass moves on (51.7915ms)
+✖ DST fall-back: a coarser expression still sees the rest of the same day (57.1817ms)
+✖ DST fall-back: an hourly job anchored after its hour moves to tomorrow (42.9257ms)
+✖ DST fall-back: from the last minute of the first hour, 61 real minutes elapse (42.1875ms)
+✔ DST fall-back: a wildcard-hour job does not stall across the transition (40.8293ms)
+✔ human rendering covers the common patterns and falls through otherwise (10.6017ms)
+✔ legal and illegal transitions are enumerated (1.9119ms)
+✔ retry from completed is illegal; retry from unknown is legal (0.8151ms)
+✔ a full turn delivers counts and stops exactly once (0.9393ms)
+✔ appends outside live, double stops, and late cancels are illegal (0.1423ms)
+✔ cancel is terminal from every active state and never from a settled one (0.0891ms)
+✔ backend denial and mid-turn errors carry their codes into failed (0.5332ms)
+✔ availability refuses missing backends, unproven devices, and unsupported models (0.1305ms)
+✔ a file that does not exist yet does not satisfy the watch (1.2546ms)
+✔ a real file appearing satisfies the watch, and says which file (1.2087ms)
+✔ contents and exit codes are separate conditions, and both name what they saw (0.1399ms)
+✔ a flag is a condition, which is how a session says the thing is true (0.0996ms)
+✔ the occurrence id is derived, so a restart re-derives the same one (0.161ms)
+✔ a condition that stays true does not fire twice (0.1258ms)
+✔ a different watch at the same moment is a different occurrence (0.0724ms)
+✔ an armed watch can be cancelled, and says why (0.1047ms)
+✔ cancelling something already fired refuses, because the work happened (0.0984ms)
+✔ cancelling an unknown watch says so (0.1329ms)
+✔ cancelling twice is answered, not re-done (0.0868ms)
+✔ an armed watch says what it is waiting for (0.2459ms)
+✔ a fired watch reports when it fired and which message it left (0.0606ms)
+✔ the fire request carries the occurrence id the record will use (0.0904ms)
+✔ every condition describes itself in words (0.5908ms)
+✔ 只有跑成功的活才接着领下一条 (0.5857ms)
+✔ 没有 detail 的回执不写出 detail 键 (0.125ms)
+✔ 有 detail 的回执带上它 (0.1139ms)
+✔ 回执保留时间戳与身份 (0.0876ms)
+✔ 四种结局各有各的说法，不互相含糊 (0.1653ms)
+✔ pass 报告条数与停下理由 (0.0909ms)
+✔ 队列空不整趟停，读不到才停 (0.08ms)
+✔ 陈旧判定看身份对，不看进程在不在 (0.0884ms)
+✔ 预算是一个小常数，不是队列长度 (0.1097ms)
+✔ every git command carries the isolation overrides (1.7089ms)
+✔ inherited repository selectors are dropped and ours are pinned (0.142ms)
+✔ every selector Codex lists is on the list (0.1506ms)
+✔ scrubbing survives a missing environment (0.0762ms)
+✔ the create sequence peels tags and checks out detached and empty (0.1316ms)
+✔ checkout writes the destination config, never the shared one (0.1193ms)
+✔ removal is unforced unless we are undoing our own work (0.0722ms)
+✔ rev-parse passes its arguments through (0.1034ms)
+✔ filter drivers include smudge, which the read-only diff hardener omits (0.2516ms)
+✔ the porcelain listing separates entries on empty fields, not newlines (0.3118ms)
+✔ a checkout with no HEAD is reported rather than dropped (0.1065ms)
+✔ a trailing entry without a blank field is still parsed (0.0722ms)
+✔ a bucket is four hex digits and nothing else (0.6095ms)
+✔ exactly two levels below the pool, first a bucket (0.258ms)
+✔ a directory whose name merely looks like a bucket is not one (0.1212ms)
+✔ relativeWithin refuses to answer for a path outside (0.1282ms)
+✔ windows containment does not confuse drives (0.0982ms)
+✔ a repository root with no directory name is not namable (0.0734ms)
+✔ the ownership record round-trips (0.5036ms)
+✔ a record from a newer writer is not read as one we understand (0.1101ms)
+✔ W1 端到端整机路径：用户任务 → fixture-write → 工具写+自检 → 检查点快照 → 压缩窗口 → 会话持久化 (467.9363ms)
+✔ W1 崩溃恢复：通过 checkpoint restore 恢复损坏的工作区 (728.3851ms)
+✔ W1 会话续跑（resume）：从压缩窗口继续对话并到达终态 (791.9742ms)
+✔ 反方/红例：篡改 Golden Trace 必报错（回放一致性保证） (0.1313ms)
+✔ SA-S-3 端到端运行：trylo run --provider fixture-subagent 调度真子代理完成任务并落盘协议 (421.4481ms)
+✔ SA-S-5 缺省隔离性：缺省 fixture 运行零子代理副作用，会话日志完全不含 subagent_spawn/end (365.2198ms)
+✔ W2 Harness Fixture 臂：离线全绿可重复，不需要真网络或凭据 (371.0753ms)
+✔ W2 Harness Real-Provider 臂门控：无凭据时如实报告 BLOCKED_MISSING_CREDENTIAL，不冒充通过 (360.4572ms)
+✔ W2 Harness 双臂对照：当端点与凭据点亮时，两臂皆绿并产生可比对结果 (744.7882ms)
+✔ W4 Harness Real-Provider: 从凭据存储自动发现凭据并解锁真实臂 (346.4444ms)
+✔ 反方/红例：凭据为空字符串时不得假装点亮 (1.0295ms)
+✔ hermetic 隔离：host shell 导出的合成凭据不得越过门控点亮真实臂 (1.1655ms)
+✔ W3 去投机分诊：NO_LEARNING_PROFILE 严格隔离激活层与控制板 (0.6445ms)
+✔ W3 去投机分诊：ToolRunnerPort 标记为 OPEN，不提前在主仓铺桩 (0.1543ms)
+✔ W3 去投机分诊：生产 CLI wiring 不得直接导入学习总控制板 (0.7891ms)
+✔ W3 去投机分诊：在跑包写入集完整性保护（不得误删） (0.2098ms)
+✔ ENG-3 五态分诊：全仓 100% 生产 TypeScript 源码已纳入五态分类，0 孤立未分诊文件 (11.9385ms)
+✔ ENG-3 五态分诊：每个 approved_deferred 模块具备明确的所有者、消费者、目标里程碑和归宿 (0.1411ms)
+✔ ENG-3 五态分诊：library_reachable 纯模块具备完备的导出面和合同测试 (0.1919ms)
+✔ ENG-3 五态分诊：test_support 设施严格隔离，绝不暴露在主 CLI 导出面 (0.7063ms)
+✔ a run stopped by its output budget resumes to a real terminal and the task's artifact (770.9856ms)
+✔ a context ceiling that cannot be cleared ends the run explicitly and resumes under its window (753.6613ms)
+✔ attack: two dissimilar tasks wrongly attributed (0.7261ms)
+✔ attack: model and tool upgraded but credited to prompt (0.3121ms)
+✔ attack: long output judged as high quality (0.0845ms)
+✔ attack: self-generated tests manufacture fake success (0.2748ms)
+✔ attack: one user complaint generalized to a global rule (0.4055ms)
+✔ attack: prompt patch smuggles permission and tool switch (0.2424ms)
+✔ attack: one phrasing change upgraded to skill (0.1329ms)
+✔ attack: evaluator self-approves generator output (0.2618ms)
+✔ attack: token budget would drop the current user instruction (0.2673ms)
+✔ completed without verifier is not an external pass (0.1893ms)
+✔ domain generators do not import evaluator pass or board activation (26.8889ms)
+✔ user/prompt/skill/workflow domains do not import sibling domains (11.5637ms)
+✔ learning and evaluation production sources do not call network (44.9904ms)
+✔ evaluator does not propose or induce assets (3.2469ms)
+✔ evaluator with only LLM self-score cannot set externalPass (0.8298ms)
+✔ critical regression rejects even if the primary metric improved (0.1287ms)
+✔ self-generated tests cannot be the sole external anchor (0.1059ms)
+✔ independent external pass recommends shadow, never activation (0.1422ms)
+✔ self-generated anchors are stripped from externalAnchors (0.1047ms)
+✔ cost and latency spike without failure diversity is rejected (0.0878ms)
+✔ judge rubric cannot fill externalPass (0.1034ms)
+✔ keep-best never activates even when candidate wins shadow (0.1294ms)
+✔ evidence records a confidence interval (0.1124ms)
+✔ profile drops duplicates and global scope leaks (6.7556ms)
+✔ evaluator consumes a prompt draft and records threshold plus successRate (1.6322ms)
+✔ induced skill/workflow drafts still need external eval and cannot activate (0.1161ms)
+✔ longer output does not increase quality (0.0454ms)
+✔ generator and evaluator roles are separated and cannot activate (0.0975ms)
+✔ shared role id cannot self-approve (0.057ms)
+✔ profile preview reports conflicts and keeps the current instruction (0.0959ms)
+✔ token budget trims inferred assets but never the current instruction (0.1117ms)
+✔ hidden chain-of-thought cannot enter the preview (0.0759ms)
+✔ profile render is deterministic (0.4997ms)
+✔ C9 exit gates document cites all twelve gates and evidence paths (1.2719ms)
+✔ RUN.md audit scope names pipeline.ts and EXIT-GATES.md so doc gaps fail (0.6873ms)
+✔ an absent, empty, or star matcher matches every value (1.144ms)
+✔ a bare word matches exactly, never as a substring (0.1461ms)
+✔ pipe-separated alternatives match whole values only (0.0866ms)
+✔ anything outside [a-zA-Z0-9_|] is a regular expression over the value (0.1253ms)
+✔ invalid regular expressions never match (fail-closed) (0.0901ms)
+✔ truth table against the old CLI matchesPattern (0.1187ms)
+✔ matcher-applicable events filter by the caller-supplied value (0.5587ms)
+✔ always-run events ignore the matcher and still fire once each (0.0934ms)
+✔ selection order is source priority, then matcher, then id (0.1563ms)
+✔ disableAll and per-id disables remove hooks without touching the store (0.2174ms)
+✔ exit 0 with a block decision blocks the task (1.6122ms)
+✔ exit 0 with plain text observes and injects the text as context (0.2417ms)
+✔ exit 2 blocks; any other non-zero exit is a recorded non-blocking error (0.2624ms)
+✔ a denied hook command never reaches the executor (0.1234ms)
+✔ an aborted trigger cancels without running anything (0.1443ms)
+✔ a hook that never finishes is cancelled when the scheduler fires (3.5408ms)
+✔ an http hook to a non-allowlisted url never leaves the process (0.2732ms)
+✔ a throwing http port cancels the aggregation fail-closed (0.2944ms)
+✔ a failing prompt port cancels fail-closed (0.3261ms)
+✔ an agent hook without a usable answer cancels; ok:false blocks (0.2512ms)
+✔ a hook cannot widen the caller's recursion ceiling (P0-2) (0.1197ms)
+✔ an abort during authorisation never spawns the command (P0-3) (0.1207ms)
+✔ an exit-2 hook prefers a JSON reason over raw output (0.1193ms)
+✔ an exit-2 hook with plain-text stdout keeps the text as its reason (0.1073ms)
+✔ an exit-2 hook prefers stderr over stdout text (0.1139ms)
+✔ an exit-2 hook with a reason-less JSON answer falls back to raw output (0.0915ms)
+✔ prompt and agent hooks past the recursion bound never reach their ports (0.1172ms)
+✔ aggregation keeps execution order and the first block reason wins (0.1735ms)
+✔ a hook may inject context and rewritten input into the next request (0.1627ms)
+✔ no matching hooks is an allow with empty evidence (0.0622ms)
+✔ only tool assets are projected, the packageVersionId comes from the canonical asset, and duplicates fail closed (0.9263ms)
+✔ a forged activation record with no canonical asset behind it fails closed (P0-3) (0.1051ms)
+✔ an asset whose kind or scope disagrees with the activation fails closed (0.1391ms)
+✔ an asset that does not trace back to a canonical proposal fails closed (0.1292ms)
+✔ a tool asset whose content does not declare the tooling packageVersionId fails closed (0.111ms)
+✔ a stale projection cannot overwrite newer board state (0.1192ms)
+✔ a projection without a version id fails closed (0.0968ms)
+✔ my tools shows the board lifecycle, not a catalog guess (0.3885ms)
+✔ production search only sees verified, independently validated, active tools (0.3499ms)
+✔ a corrupted board projection is reported instead of silently hidden (0.1642ms)
+✔ no source kind can emit activation or approval commands (3.8861ms)
+✔ the adapter never fabricates fields the admission did not supply (0.6409ms)
+✔ untrusted entry input never throws: unknown JSON fails closed (P1-11) (0.5669ms)
+✔ a candidate cannot smuggle extra permissions past the exact-match gate (P1-2) (0.1853ms)
+✔ a withdraw admission that does not match its draft is refused (P1-1) (0.1963ms)
+✔ a withdraw admission without an authoritative target resolution is refused (0.1514ms)
+✔ no production module keeps a module-level ledger, issuer, or reset hook (584.7863ms)
+✔ without an injected port none of the four protected call sites performs an effect (2.8715ms)
+✔ the board's evidence gate is traceability only: forged receipt coordinates still reach shadow (0.946ms)
+ℹ tests 256
+ℹ suites 0
+ℹ pass 249
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2345.9898
+
+✖ failing tests:
+
+test at dist\internal\domain\schedule-cron.test.js:92:1
+✖ a leap day is reachable from a non-leap year (0.6719ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  28 !== 29
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:99:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 28,
+    expected: 29,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:101:1
+✖ DST spring gap: a job targeting the missing hour skips that day (42.2081ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  14 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:106:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 14,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:119:1
+✖ DST fall-back: next run from the first repeated hour advances by one real minute (40.191ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  13 !== 1
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:128:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 13,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:131:1
+✖ DST fall-back: the repeated hour fires once, so the second pass moves on (51.7915ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:141:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:144:1
+✖ DST fall-back: a coarser expression still sees the rest of the same day (57.1817ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:151:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:155:1
+✖ DST fall-back: an hourly job anchored after its hour moves to tomorrow (42.9257ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  14 !== 1
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:162:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 14,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at dist\internal\domain\schedule-cron.test.js:165:1
+✖ DST fall-back: from the last minute of the first hour, 61 real minutes elapse (42.1875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  15 !== 2
+  
+      at TestContext.<anonymous> (file:///F:/trylo/new%20trylo%20cli/dist/internal/domain/schedule-cron.test.js:172:12)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:788:18)
+      at Test.postRun (node:internal/test_runner/test:1235:19)
+      at Test.run (node:internal/test_runner/test:1163:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 15,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

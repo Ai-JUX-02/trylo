@@ -273,7 +273,18 @@ export function createToolProfileService(options = {}) {
       const tmp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
       try {
         await fsp.writeFile(tmp, contents, 'utf8');
-        await fsp.rename(tmp, target);
+        try {
+          await fsp.rename(tmp, target);
+        } catch (err) {
+          // Windows can reject replacement when another resolver has just
+          // published this content-addressed file. Only adopt exact contents;
+          // permission failures and mismatched files remain real failures.
+          if (!['EEXIST', 'EPERM', 'EACCES'].includes(err?.code)) throw err;
+          let published;
+          try { published = await fsp.readFile(target, 'utf8'); }
+          catch { throw err; }
+          if (published !== contents) throw err;
+        }
       } finally {
         await fsp.rm(tmp, { force: true });
       }

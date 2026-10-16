@@ -30,3 +30,19 @@ test('concurrent profile resolutions publish the same complete config without sh
   const files = await fs.readdir(path.dirname(results[0].mcpConfigPath));
   assert.deepEqual(files, ['mcp.json']);
 });
+
+for (const matching of [true, false]) {
+  test(`a Windows rename conflict reuses only identical published config (matching=${matching})`, async (t) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'trylo-profile-conflict-'));
+    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    const service = createToolProfileService({ storageRoot: root, catalog: { get: () => undefined, list: () => [] } });
+    t.mock.method(fs, 'rename', async (source, destination) => {
+      await fs.writeFile(destination, matching ? await fs.readFile(source, 'utf8') : '{"unexpected":true}');
+      throw Object.assign(new Error('injected Windows publish conflict'), { code: 'EPERM' });
+    });
+    const result = await service.resolve();
+    assert.equal(result.ok, matching, JSON.stringify(result));
+    if (matching) assert.deepEqual(JSON.parse(await fs.readFile(result.mcpConfigPath, 'utf8')), { mcpServers: {} });
+    else assert.equal(result.reasonCode, 'config_write_failed');
+  });
+}

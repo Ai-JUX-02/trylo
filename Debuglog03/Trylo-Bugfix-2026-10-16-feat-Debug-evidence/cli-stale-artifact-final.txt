@@ -1,0 +1,9 @@
+✔ deleted source tests are not selected even if old dist js remains (3.5118ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 55.3477

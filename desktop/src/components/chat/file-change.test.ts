@@ -94,13 +94,13 @@ describe('computeFileChange', () => {
 describe('displayPathParts', () => {
   it('relativises against the workspace and names the project', () => {
     const parts = displayPathParts('C:/work/demo-ws/desktop/src/a.ts', 'C:/work/demo-ws');
-    expect(parts.project).toBe('trylo');
+    expect(parts.project).toBe('demo-ws');
     expect(parts.relative).toBe('desktop/src/a.ts');
   });
 
   it('tolerates backslashes in either path', () => {
     const parts = displayPathParts('C:\\work\\demo-ws\\desktop\\a.ts', 'C:\\work\\demo-ws\\');
-    expect(parts.project).toBe('trylo');
+    expect(parts.project).toBe('demo-ws');
     expect(parts.relative).toBe('desktop/a.ts');
   });
 

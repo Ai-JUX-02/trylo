@@ -96,12 +96,14 @@ export function createDesktopChatCommand({ store }) {
     controller = abort;
     currentRequestId = requestId || crypto.randomUUID();
     const effectiveRequestId = currentRequestId;
-    let messages = await store.read();
-    messages = sanitizeDesktopChatMessages(messages.concat({ role: 'user', text: prompt, at: Date.now() }));
-    await store.write(messages);
-    respond({ type: 'chat_started', requestId: effectiveRequestId });
-
     try {
+      let messages = await store.read();
+      abort.signal.throwIfAborted();
+      messages = sanitizeDesktopChatMessages(messages.concat({ role: 'user', text: prompt, at: Date.now() }));
+      await store.write(messages);
+      abort.signal.throwIfAborted();
+      respond({ type: 'chat_started', requestId: effectiveRequestId });
+
       const config = chatConfig || {};
       if (!config.endpoint) throw new Error('API endpoint is missing. Configure it in the Trylo desktop settings.');
       if (!config.apiKey && config.apiKeyHeader) {
@@ -134,6 +136,7 @@ export function createDesktopChatCommand({ store }) {
         config.apiFormat === 'anthropic'
           ? await requestAnthropic(resolvedConfig, prompt, abort.signal, options)
           : await requestOpenAI(resolvedConfig, prompt, abort.signal, options);
+      abort.signal.throwIfAborted();
       const answer = String((result && (result.text || result.reasoning_content)) || '').trim();
       if (!answer) throw new Error('The model returned an empty response.');
       messages = sanitizeDesktopChatMessages(
@@ -144,6 +147,7 @@ export function createDesktopChatCommand({ store }) {
         }),
       );
       await store.write(messages);
+      abort.signal.throwIfAborted();
       respond({ type: 'chat_complete', requestId: effectiveRequestId, text: answer });
     } catch (err) {
       respond({
