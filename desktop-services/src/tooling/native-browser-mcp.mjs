@@ -32,11 +32,27 @@ export async function runNativeBrowserMcp({ gate, entry, args = [], stdin = proc
     }
     if (message.method !== 'tools/call') { child.stdin.write(line + '\n'); return; }
     const controller = new AbortController(); waiting.set(message.id, controller);
-    void post('lease/start', { clientId }, controller.signal).then(({ leaseId }) => {
+    void post('lease/start', { clientId }, controller.signal).then(async ({ leaseId }) => {
       waiting.delete(message.id);
       if (disposed || controller.signal.aborted) { void post('lease/end', { clientId, leaseId }).catch(() => {}); return; }
-      leases.set(message.id, leaseId); child.stdin.write(line + '\n');
-    }).catch(error => { waiting.delete(message.id); if (!disposed) writeError(message.id, error); });
+      leases.set(message.id, leaseId);
+      const call = message.params;
+      if ((call?.name === 'browser_navigate' || (call?.name === 'browser_tabs' && call.arguments?.action === 'new'))
+        && typeof call.arguments?.url === 'string' && call.arguments.url.toLowerCase().startsWith('file:')) {
+        const preview = await post('preview/resolve', { clientId, leaseId, url: call.arguments.url }, controller.signal);
+        message.params = { ...call, arguments: { ...call.arguments, url: preview.url } };
+        line = JSON.stringify(message);
+      }
+      if (disposed || controller.signal.aborted) {
+        leases.delete(message.id); await post('lease/end', { clientId, leaseId }).catch(() => {}); return;
+      }
+      child.stdin.write(line + '\n');
+    }).catch(error => {
+      waiting.delete(message.id);
+      const leaseId = leases.get(message.id);
+      if (leaseId) { leases.delete(message.id); void post('lease/end', { clientId, leaseId }).catch(() => {}); }
+      if (!disposed) writeError(message.id, error);
+    });
   });
   output.on('line', line => {
     outputTail = outputTail.then(async () => {

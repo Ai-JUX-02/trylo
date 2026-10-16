@@ -389,6 +389,7 @@ function denyMessage(reasonCode: string): string {
 }
 
 interface PlaywrightAnalysis {
+  readonly localPage: string | null;
   readonly problem: string | null;
   /** A prompt-without-lease: the origin is outside a configured allow list.
    *  Not a deny — the server filters requests, not navigations — but it is
@@ -412,6 +413,7 @@ function analyzePlaywrightInput(
   canonicalRoot: string,
 ): PlaywrightAnalysis {
   const base: PlaywrightAnalysis = {
+    localPage: null,
     problem: null,
     outsideAllowlist: false,
     oversized: inputJsonLength(input) > MAX_INPUT_JSON_LENGTH,
@@ -435,6 +437,18 @@ function analyzePlaywrightInput(
       if (url === undefined || url === null) return base; // blank tab
     }
     if (typeof url !== 'string') return { ...base, problem: 'invalid_url' };
+    if (url.toLowerCase().startsWith('file:')) {
+      try {
+        const parsed = new URL(url);
+        const pathname = decodeURIComponent(parsed.pathname).replace(/^\/([a-zA-Z]:\/)/, '$1');
+        if (parsed.hostname || !/\.html?$/i.test(pathname)) return { ...base, problem: 'invalid_url' };
+        if (hasControlChars(pathname) || pathname.split(/[\\/]/).includes('..')
+          || !locateInWorkspace(pathname, canonicalRoot).inside) {
+          return { ...base, problem: 'path_outside_workspace' };
+        }
+        return { ...base, localPage: pathname };
+      } catch { return { ...base, problem: 'invalid_url' }; }
+    }
     const parsed = parseBrowserOrigin(url);
     if (parsed.kind === 'invalid') return { ...base, problem: parsed.reasonCode };
     if (manifestBlocked.some((o) => o.toLowerCase() === parsed.origin.toLowerCase())) {
@@ -550,14 +564,17 @@ export function classifyPlaywrightTool(
 
   // A 完全自动：仅硬拒绝拦；oversized 在非完全自动下才卡
   if (analysis.problem) return deny(analysis.problem);
+  if (analysis.localPage) return prompt('sensitive', 'workspace_page_requires_approval',
+    `打开工作区本地页面需要确认：${locateInWorkspace(analysis.localPage, context.projectRoot.replace(/\\/g, '/')).display}`);
   if (analysis.oversized && context.permissionLevel !== 'unrestricted') {
     return prompt('sensitive', 'input_too_large', '输入超过自动分类上限，需人工确认');
   }
 
-  // Code tools are bypass-immune — 始终审批（含 unrestricted，安全底线）
+  // Package fact: code execution is sensitive. The final host mode policy
+  // may authorize it automatically when the user selected unrestricted.
   if (CODE_TOOLS.has(shortName)) {
     if (context.permissionLevel === 'read_only') return deny('code_denied_read_only');
-    return prompt('sensitive', 'evaluate_requires_approval', '浏览器内执行代码：始终需要审批');
+    return prompt('sensitive', 'evaluate_requires_approval', '浏览器内执行代码可能修改页面或触发外部操作');
   }
 
   // §6.3 workspace-write rule, verified against the pinned server source:
@@ -586,7 +603,7 @@ export function classifyPlaywrightTool(
       }
       // action 'new': with a URL it is a navigation; without one it is a
       // blank tab (no origin, nothing external).
-      if (!isPlainRecord(context.input) || context.input['url'] == null) {
+      if (!isPlainRecord(context.input) || context.input['url'] === null || context.input['url'] === undefined) {
         return autoAllow('new_tab');
       }
     }
@@ -594,7 +611,8 @@ export function classifyPlaywrightTool(
     if (context.permissionLevel === 'unrestricted') {
       return autoAllow('unrestricted_navigate');
     }
-    if (!analysis.outsideAllowlist && options.leases?.active(origin, context.conversationId, context.at)) {
+    if (context.permissionLevel === 'workspace_write' && !analysis.outsideAllowlist
+      && options.leases?.active(origin, context.conversationId, context.at)) {
       return autoAllow('origin_leased');
     }
     if (context.permissionLevel === 'workspace_write' && !analysis.outsideAllowlist) {
@@ -643,7 +661,7 @@ export function buildPlaywrightApprovalPreview(
     const input = isPlainRecord(context.input) ? context.input : {};
     let target = shortName;
 
-    if (shortName === 'browser_navigate' || (shortName === 'browser_tabs' && input['url'] != null)) {
+    if (shortName === 'browser_navigate' || (shortName === 'browser_tabs' && input['url'] !== null && input['url'] !== undefined)) {
       const parsed = parseBrowserOrigin(String(input['url'] ?? ''));
       if (parsed.kind === 'ok') {
         let path = '';

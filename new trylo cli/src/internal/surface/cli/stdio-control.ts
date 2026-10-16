@@ -18,6 +18,14 @@ function parse(line: string): unknown {
   }
 }
 
+export function stdioResponse(line: string): { readonly requestId: string; readonly response: RecordValue } | undefined {
+  const frame = parse(line);
+  if (!record(frame) || frame.type !== "control_response" || !record(frame.response)) return undefined;
+  const response = frame.response;
+  if (response.subtype !== "success" || typeof response.request_id !== "string" || !record(response.response)) return undefined;
+  return { requestId: response.request_id, response: response.response };
+}
+
 /** The same user frame Desktop sends to its legacy runner, text blocks only. */
 export function stdioPrompt(line: string | undefined): string | undefined {
   if (line === undefined) return undefined;
@@ -35,12 +43,10 @@ export function stdioPrompt(line: string | undefined): string | undefined {
 }
 
 export function stdioAnswer(line: string, requestId: string): PermissionDecision | undefined {
-  const frame = parse(line);
-  if (!record(frame) || frame.type !== "control_response" || !record(frame.response)) return undefined;
-  const response = frame.response;
-  if (response.subtype !== "success" || response.request_id !== requestId || !record(response.response)) return undefined;
-  if (response.response.behavior === "allow") return decision("approved");
-  if (response.response.behavior === "deny") return decision("denied", "once", "user_denied");
+  const reply = stdioResponse(line);
+  if (reply?.requestId !== requestId) return undefined;
+  if (reply.response.behavior === "allow") return decision("approved");
+  if (reply.response.behavior === "deny") return decision("denied", "once", reply.response.reason === "policy_denied" ? "policy_denied" : "user_denied");
   return undefined;
 }
 

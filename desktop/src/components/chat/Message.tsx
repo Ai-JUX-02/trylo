@@ -128,6 +128,7 @@ export interface MessageProps {
   // 2026-09-04 (CLI 单核): the workd input-request responder retired with
   // the daemon; only the `approval` case reads this.
   readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the stable
   // `approvalId` (Work) or `requestId` (Code). Never triggers
@@ -502,13 +503,13 @@ function MessageImpl(props: MessageProps): ReactElement {
       );
     }
     case 'input_request': {
-      // 2026-09-04 (CLI 单核): no live responder anymore — the daemon
-      // input-request pipeline retired. Persisted cards render read-only.
+      // Live requests route by their originating CLI id. Saved cards cannot answer a later run.
       return (
         <div className="message message--input-request" role="listitem">
           <InputRequestCard
             key={m.id}
             message={m}
+            onRespond={props.onRespondInputRequest}
           />
         </div>
       );

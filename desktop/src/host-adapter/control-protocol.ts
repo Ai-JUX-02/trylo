@@ -28,7 +28,13 @@ export interface ControlCancelFrame {
   readonly requestId: string;
 }
 
-export type ControlFrame = ControlPermissionFrame | ControlCancelFrame;
+export interface ControlInputFrame {
+  readonly kind: 'input';
+  readonly requestId: string;
+  readonly questions: readonly (import('@trylo/work').InputRequestQuestion & { readonly multiSelect?: boolean })[];
+}
+
+export type ControlFrame = ControlPermissionFrame | ControlCancelFrame | ControlInputFrame;
 
 /** Shared text-only user frame for both CLI transports. */
 export function buildUserPrompt(prompt: string): string {
@@ -49,6 +55,22 @@ export function parseControlFrame(parsed: unknown): ControlFrame | null {
     const request = o['request'];
     if (!request || typeof request !== 'object') return null;
     const r = request as Record<string, unknown>;
+    if (r['subtype'] === 'ask_user_question') {
+      const questions = r['questions'];
+      if (!Array.isArray(questions) || questions.length < 1 || questions.length > 4) return null;
+      const seen = new Set<string>();
+      for (const q of questions) {
+        if (!q || typeof q !== 'object' || typeof q.id !== 'string' || !q.id || seen.has(q.id)
+          || typeof q.header !== 'string' || typeof q.question !== 'string' || !q.question
+          || !Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4
+          || (q.multiSelect !== undefined && typeof q.multiSelect !== 'boolean')) return null;
+        seen.add(q.id);
+        if (q.options.some((option: unknown) => !option || typeof option !== 'object'
+          || !('label' in option) || typeof option.label !== 'string'
+          || !('description' in option) || typeof option.description !== 'string')) return null;
+      }
+      return { kind: 'input', requestId, questions };
+    }
     if (r['subtype'] !== 'can_use_tool') return null;
     const toolName = typeof r['tool_name'] === 'string' ? r['tool_name'] : '';
     if (!toolName) return null;
@@ -89,10 +111,11 @@ export function buildControlResponse(
   allow: boolean,
   input: Record<string, unknown> = {},
   denyMessage = 'Denied from the Trylo desktop companion.',
+  reason?: 'policy_denied',
 ): string {
   const response = allow
     ? { behavior: 'allow', updatedInput: input }
-    : { behavior: 'deny', message: denyMessage };
+    : { behavior: 'deny', message: denyMessage, ...(reason ? { reason } : {}) };
   return `${JSON.stringify({
     type: 'control_response',
     response: { subtype: 'success', request_id: requestId, response },

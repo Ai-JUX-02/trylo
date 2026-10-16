@@ -468,10 +468,10 @@ export function classifyChromeDevtoolsTool(
     return prompt('sensitive', 'input_too_large', '输入超过自动分类上限，需人工确认');
   }
 
-  // Code execution — 即使 unrestricted 也不放行（安全底线）
+  // Package sensitivity; the final host mode policy owns unrestricted approval.
   if (shortName === 'evaluate_script') {
     if (context.permissionLevel === 'read_only') return deny('code_denied_read_only');
-    return prompt('sensitive', 'evaluate_requires_approval', '浏览器内执行脚本：始终需要审批');
+    return prompt('sensitive', 'evaluate_requires_approval', '浏览器内执行脚本可能修改页面或触发外部操作');
   }
 
   // §6.3 write rules: the server bounds explicit filePath writes to the OS
@@ -500,7 +500,8 @@ export function classifyChromeDevtoolsTool(
     if (context.permissionLevel === 'unrestricted' && !analysis.outsideAllowlist) {
       return autoAllow('unrestricted_navigate');
     }
-    if (!analysis.outsideAllowlist && options.leases?.active(origin, context.conversationId, context.at)) {
+    if (context.permissionLevel === 'workspace_write' && !analysis.outsideAllowlist
+      && options.leases?.active(origin, context.conversationId, context.at)) {
       return autoAllow('origin_leased');
     }
     if (context.permissionLevel === 'workspace_write' && !analysis.outsideAllowlist) {

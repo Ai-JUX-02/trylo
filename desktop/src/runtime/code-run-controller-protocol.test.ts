@@ -120,6 +120,7 @@ vi.mock('./cli-runtime-guard', () => ({
 }));
 
 const { CodeRunController } = await import('./code-run-controller');
+const { CodePermissionRegistry } = await import('./code-permission-registry');
 const { buildStopTaskRequest } = await import('../host-adapter/control-protocol');
 
 const CWD = 'C:/trylo-workspace/workspace' as FilePath;
@@ -129,11 +130,12 @@ function settings(protocol: 'legacy-stream-json' | 'trylo-v1'): SettingsForCodeR
   return { cliPath: CLI_PATH, cwd: CWD, cliRuntimeProtocol: protocol };
 }
 
-function controller(): InstanceType<typeof CodeRunController> {
+function controller(withRegistry = true): InstanceType<typeof CodeRunController> {
   return new CodeRunController({
     projectKey: 'p',
     conversationId: 'c',
     onChange: () => undefined,
+    ...(withRegistry ? { permissions: new CodePermissionRegistry({ onChange() {}, send: async () => true }) } : {}),
   });
 }
 
@@ -262,13 +264,14 @@ describe('CodeRunController — protocol routing', () => {
     expect(c.hasPrewarm()).toEqual({ processId: null, ready: false });
   });
 
-  it('reports steering as unsupported on the v1 protocol', async () => {
+  it('delivers steering on the framed v1 protocol', async () => {
     const c = controller();
     await c.run(request('trylo-v1'));
     // Round-3 P0-5: `unsupported` (not a thrown error): nothing was even
     // attempted. The caller must be able to tell "this runtime cannot do it"
     // apart from "the write failed" — see runtime/steer-delivery.ts.
-    expect(await c.steer('actually, stop')).toEqual({ kind: 'unsupported' });
+    expect(await c.steer('actually, stop')).toEqual({ kind: 'delivered' });
+    expect(m.calls.sendPrompt).toBe(1);
   });
 
   it('stops a v1 run through the v1 stop path', async () => {
@@ -303,7 +306,7 @@ describe('CodeRunController — protocol routing', () => {
   });
 
   it('refuses an ask run when its controller has no approval registry', async () => {
-    const c = controller();
+    const c = controller(false);
     await expect(
       c.run({
         ...request('trylo-v1'),
@@ -314,8 +317,12 @@ describe('CodeRunController — protocol routing', () => {
   });
 
   it('refuses automatic editing when commands could not be approved by the host', async () => {
-    await expect(controller().run({ ...request('trylo-v1'), permissionLevel: 'workspace_write' }))
+    await expect(controller(false).run({ ...request('trylo-v1'), permissionLevel: 'workspace_write' }))
       .rejects.toThrow(/approval/i);
+    expect(m.calls.startTryloV1).toBe(0);
+  });
+  it('refuses read-only runs when the host cannot deny unclassified MCP effects', async () => {
+    await expect(controller(false).run(request('trylo-v1'))).rejects.toThrow(/approval/i);
     expect(m.calls.startTryloV1).toBe(0);
   });
 });

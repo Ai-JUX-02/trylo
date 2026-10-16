@@ -87,6 +87,9 @@ export interface WorkspaceIndex {
 
 const HISTORY_FILE = '.trylo/conversations.v1.json';
 const HISTORY_BROWSER_PREFIX = 'trylo:conversation-history:v1:';
+// Large transcripts live in the native atomic history file. Keeping another
+// full copy in localStorage can exhaust the shared quota and block settings.
+const MAX_BROWSER_BACKUP_BYTES = 512 * 1024;
 const WORKSPACE_INDEX_KEY = 'trylo:workspace-index:v1';
 const LEGACY_SESSIONS_KEY = 'trylo:workspace-sessions:v1';
 const saveTimers = new Map<string, number>();
@@ -802,6 +805,15 @@ function readBrowserBackup(root: string): WorkspaceConversationHistory | null {
   }
 }
 
+function releasePersistedBrowserBackup(root: string, expectedRaw: string | null): void {
+  if (expectedRaw === null || expectedRaw.length * 2 <= MAX_BROWSER_BACKUP_BYTES) return;
+  try {
+    const key = browserHistoryKey(root);
+    // A newer unload/pending snapshot must survive an older disk write.
+    if (window.localStorage.getItem(key) === expectedRaw) window.localStorage.removeItem(key);
+  } catch { /* cleanup cannot invalidate a successful native save/load */ }
+}
+
 function migrateLegacySessions(root: string): WorkspaceConversationHistory | null {
   try {
     const raw = window.localStorage.getItem(LEGACY_SESSIONS_KEY);
@@ -835,7 +847,11 @@ export async function loadWorkspaceHistory(root: FilePath): Promise<WorkspaceCon
   if (typeof window !== 'undefined' && isTauri()) {
     try {
       const raw = await invoke<string | null>('conversation_history_load', { workspaceRoot: root });
-      if (raw) return normalizeWorkspaceHistory(JSON.parse(raw));
+      if (raw) {
+        const history = normalizeWorkspaceHistory(JSON.parse(raw));
+        releasePersistedBrowserBackup(root, raw);
+        return history;
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.warn('[trylo] project history load failed; using browser backup', error);
@@ -849,11 +865,14 @@ export async function saveWorkspaceHistory(
   history: WorkspaceConversationHistory,
 ): Promise<void> {
   const json = JSON.stringify(history);
+  let browserBackup: string | null = null;
   if (typeof window !== 'undefined') {
     try { window.localStorage.setItem(browserHistoryKey(root), json); } catch { /* backup is best effort */ }
+    try { browserBackup = window.localStorage.getItem(browserHistoryKey(root)); } catch { /* storage unavailable */ }
   }
   if (typeof window !== 'undefined' && isTauri()) {
     await invoke('conversation_history_save', { workspaceRoot: root, json });
+    releasePersistedBrowserBackup(root, browserBackup);
   }
 }
 

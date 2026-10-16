@@ -2,13 +2,13 @@
 //
 // The new CLI's `run` is ONE PROCESS PER TURN: it reads the prompt from
 // stdin, streams Trylo Protocol events, emits one `run_result`, and exits.
-// Ordinary mode needs prompt EOF. Explicit stdio approval mode reads one
-// user frame and keeps stdin open for decisions. Neither mode reuses a
-// process or supports steering (spec §3.3).
+// Desktop uses one framed prompt and keeps stdin open for correlated
+// questions, approvals, guidance and cancellation. The process still exits
+// after one turn; context reuse belongs to the CLI session journal.
 //
 // The lifecycle this class enforces:
 //
-//   idle → spawning → writing_prompt → input_closed → streaming
+//   idle → spawning → writing_prompt → streaming
 //        → terminal(completed|failed|cancelled|unknown) → exited
 //
 // and the four invariants (spec §4.3):
@@ -18,9 +18,8 @@
 //      still awaited for resource reclamation;
 //   3. exiting WITHOUT `run_result` yields unknown/failed/cancelled —
 //      never a fabricated `completed`;
-//   4. a prompt that was written but whose closeInput outcome is unknown
-//      ends as `unknown`. No automatic retry: a retry could re-run a turn
-//      that already had side effects.
+//   4. an uncertain prompt delivery is never retried automatically: a retry
+//      could re-run a turn that already had side effects.
 
 import { hostAdapter } from './index';
 import type { FilePath } from './types';
@@ -35,6 +34,8 @@ import {
   type SessionArgs,
 } from './cli-session-binding';
 import type { PermissionLevel } from '../permission/permission-policy';
+import { codePermissionFlagsForV1 as permissionFlagsForV1 } from '../permission/permission-policy';
+export { codePermissionFlagsForV1 as permissionFlagsForV1 } from '../permission/permission-policy';
 import { cliSpawnCommand } from './cli-runtime-path';
 import { buildUserPrompt, type ControlFrame } from './control-protocol';
 import { readV1Control, usesV1ApprovalTransport } from './trylo-v1-control';
@@ -43,18 +44,11 @@ import { desktopSystemPrompt } from './trylo-system-prompt';
 /** stderr lines kept for terminal diagnosis (spec §5.1). */
 const STDERR_HISTORY = 20;
 const PENDING_CONTROL_LIMIT = 32;
-// Kept at this protocol boundary, matching the CLI's workspace-write contract.
-const WORKSPACE_WRITE_TOOLS = ['write_file', 'edit_file', 'apply_patch', 'notebook_edit'];
-// apply_patch can delete/move files, so Desktop automatic editing retains its
-// explicit-decision contract for that tool until operation-level policy exists.
-const AUTOMATIC_EDIT_TOOLS = WORKSPACE_WRITE_TOOLS.filter(name => name !== 'apply_patch').join(',');
-const MUTATING_TOOLS = [...WORKSPACE_WRITE_TOOLS, 'run_shell'].join(',');
 
 export type TryloV1State =
   | 'idle'
   | 'spawning'
   | 'writing_prompt'
-  | 'input_closed'
   | 'streaming'
   | 'terminal'
   | 'exited';
@@ -82,26 +76,6 @@ export class TryloV1UnsupportedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'TryloV1UnsupportedError';
-  }
-}
-
-/**
- * Permission mapping. File/notebook edits are automatic; multi-file patches,
- * commands and external tools still use the host approval transport.
- */
-export function permissionFlagsForV1(level: PermissionLevel): readonly string[] {
-  switch (level) {
-    case 'read_only':
-      return ['--ask', 'never', '--deny-tools', MUTATING_TOOLS];
-    case 'workspace_write':
-      return ['--ask', 'always', '--allow-tools', AUTOMATIC_EDIT_TOOLS, '--permission-prompt-tool', 'stdio'];
-    case 'unrestricted':
-      // Builtins retain full access; external MCP still reaches the host classifier.
-      return ['--ask', 'always', '--allow-tools', MUTATING_TOOLS, '--permission-prompt-tool', 'stdio'];
-    case 'ask':
-      return ['--ask', 'always', '--permission-prompt-tool', 'stdio'];
-    default:
-      return ['--ask', 'never', '--deny-tools', MUTATING_TOOLS];
   }
 }
 
@@ -167,6 +141,8 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
 
 /** Per-process state the runner keeps between spawn and exit. */
 interface TryloV1Run {
+  readonly exited: Promise<void>;
+  readonly markExited: () => void;
   readonly adapter: TryloV1EventAdapter;
   readonly onEvents: (events: readonly LoopEvent[]) => void;
   readonly guard: { isSuperseded: () => boolean };
@@ -238,8 +214,7 @@ export interface StartTryloV1Args {
  * Events keep flowing through `onEvents`; process exit is handled separately.
  */
 export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId: string; state: () => TryloV1State }> {
-  const usesControl = usesV1ApprovalTransport(args.permissionLevel);
-  if (usesControl && args.onControlFrame === undefined) {
+  if (usesV1ApprovalTransport(args.permissionLevel) && args.onControlFrame === undefined) {
     throw new TryloV1UnsupportedError('trylo-v1: Desktop approval requires a control-frame handler.');
   }
   const binding: CliSessionBinding = args.binding ?? { state: 'none' };
@@ -266,7 +241,10 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   });
 
   const adapter = new TryloV1EventAdapter();
+  let markExited: () => void = () => {};
+  const exited = new Promise<void>(resolve => { markExited = resolve; });
   const run: TryloV1Run = {
+    exited, markExited,
     adapter,
     onEvents: args.onEvents,
     guard: args.guard ?? { isSuperseded: () => false },
@@ -292,7 +270,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     },
     onOutput: (line) => {
       if (run.guard.isSuperseded()) return;
-      const control = usesControl ? readV1Control(line) : null;
+      const control = readV1Control(line);
       if (control !== null) {
         if (adapter.hasTerminal) return;
         if (ownerId !== null) args.onControlFrame?.(control, ownerId);
@@ -302,7 +280,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
       }
       const hadTerminal = adapter.hasTerminal;
       const events = adapter.feed(line);
-      if (run.state === 'input_closed') run.state = 'streaming';
+      if (run.state === 'writing_prompt') run.state = 'streaming';
       if (events.length > 0) {
         // §6.2: `run_start` is the CLI confirming the session it was given.
         //
@@ -330,6 +308,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
       if (run.stderr.length > STDERR_HISTORY) run.stderr.shift();
     },
     onExit: (info) => {
+      run.markExited();
       run.state = 'exited';
       // §6.2: died mid-creation ⇒ the session's fate is genuinely unknown.
       // Never assume the journal exists because "a file might be there".
@@ -376,7 +355,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   }
   for (const frame of pendingControls) args.onControlFrame?.(frame, handleKey);
 
-  // The transport is selected explicitly; ordinary prompts still need EOF.
+  // Keep stdin open for correlated answers, guidance and cancellation.
   run.state = 'writing_prompt';
   try {
     // §6.2: with an established session the CLI owns the context, so
@@ -385,37 +364,35 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
       sessionArgs.kind === 'resume'
         ? args.prompt
         : promptWithHistory(args.priorMessages ?? [], args.prompt);
-    await hostAdapter.process.send(handleKey, usesControl ? buildUserPrompt(prompt) : prompt);
+    await hostAdapter.process.send(handleKey, buildUserPrompt(prompt));
   } catch (error) {
     live.delete(handleKey);
     await hostAdapter.process.stop(handleKey).catch(() => undefined);
     throw new Error('Failed to write the prompt to the trylo-v1 CLI stdin', { cause: error });
   }
 
-  if (usesControl) {
-    if (!adapter.hasTerminal) run.state = 'streaming';
-    return { processId: handleKey, state: () => run.state };
-  }
-  try {
-    await hostAdapter.process.closeInput(handleKey);
-    run.state = 'input_closed';
-  } catch {
-    // Outcome unknown: the write may or may not have taken effect. Do
-    // NOT retry (the turn may already have side effects) and do NOT
-    // assume success — the exit handler will settle on `unknown`.
-    run.state = 'input_closed';
-  }
-
+  if (!adapter.hasTerminal) run.state = 'streaming';
   return { processId: handleKey, state: () => run.state };
 }
 
 /**
- * Cancel a v1 run. Terminates the process TREE and marks the exit as a
- * cancellation so the synthesised outcome is `cancelled`, not `failed`.
+ * Ask the CLI to cancel and seal its journal; terminate the process tree if
+ * an older or unresponsive control channel cannot acknowledge by exiting.
  */
 export async function stopTryloV1(processId: string): Promise<void> {
   const run = live.get(processId);
-  if (run) run.cancelled = true;
+  if (run) {
+    run.cancelled = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await hostAdapter.process.send(processId, `${JSON.stringify({ type: 'control_request',
+        request_id: `interrupt-${processId}`, request: { subtype: 'interrupt' } })}\n`);
+      const graceful = await Promise.race([run.exited.then(() => true),
+        new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), 3000); })]);
+      if (graceful) return;
+    } catch { /* Broken or older control channels fall back to process-tree termination. */ }
+    finally { clearTimeout(timer); }
+  }
   await hostAdapter.process.stop(processId);
 }
 

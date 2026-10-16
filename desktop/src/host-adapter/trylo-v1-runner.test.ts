@@ -158,14 +158,15 @@ describe('buildTryloV1Args', () => {
 
   it('maps each permission level to explicit tool flags', () => {
     expect(permissionFlagsForV1('read_only')).toEqual([
-      '--ask', 'never', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell',
+      '--ask', 'always', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell',
+      '--permission-prompt-tool', 'stdio',
     ]);
     expect(permissionFlagsForV1('workspace_write')).toEqual([
-      '--ask', 'always', '--allow-tools', 'write_file,edit_file,notebook_edit',
+      '--ask', 'always',
       '--permission-prompt-tool', 'stdio',
     ]);
     expect(permissionFlagsForV1('unrestricted')).toEqual([
-      '--ask', 'always', '--allow-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell',
+      '--ask', 'always',
       '--permission-prompt-tool', 'stdio',
     ]);
   });
@@ -174,7 +175,7 @@ describe('buildTryloV1Args', () => {
     expect(permissionFlagsForV1('ask')).toEqual(['--ask', 'always', '--permission-prompt-tool', 'stdio']);
   });
 
-  it('keeps multi-file patches behind approval because they may delete or move files', () => {
+  it('lets the host distinguish patch operations rather than allow-listing a whole tool', () => {
     const flags = permissionFlagsForV1('workspace_write');
     const allowed = flags[flags.indexOf('--allow-tools') + 1]?.split(',');
     expect(allowed).not.toContain('apply_patch');
@@ -259,6 +260,7 @@ describe('TryloV1Runner lifecycle', () => {
       cwd: CWD,
       providerId: 'fixture',
       permissionLevel: 'read_only',
+        onControlFrame: () => undefined,
       onEvents: (events) => sink.events.push(...events),
       onTerminal: (outcome) => sink.outcomes.push(outcome),
     });
@@ -275,7 +277,7 @@ describe('TryloV1Runner lifecycle', () => {
     expect(texts[texts.length - 1]!.fullText).toBe('The package name is @trylo/cli.');
   });
 
-  it('writes the prompt to stdin and then closes it — in that order', async () => {
+  it('writes one framed prompt and retains stdin for input and cancellation', async () => {
     const { processId } = await startTryloV1({
       prompt: 'write a haiku',
       cliPath: CLI_PATH,
@@ -283,10 +285,11 @@ describe('TryloV1Runner lifecycle', () => {
       providerId: 'fixture',
       onEvents: () => undefined,
     });
-    expect(h.record.sent).toEqual([{ id: processId, message: 'write a haiku' }]);
-    // EOF is what makes the run start at all; without it the CLI waits
-    // forever (golden trace 06).
-    expect(h.record.closed).toEqual([processId]);
+    expect(h.record.sent).toHaveLength(1);
+    expect(h.record.sent[0]!.id).toBe(processId);
+    expect(JSON.parse(h.record.sent[0]!.message)).toMatchObject({ type: 'user', message: { role: 'user', content: [{ text: 'write a haiku' }] } });
+    // Framed prompts start the run without closing its reply channel.
+    expect(h.record.closed).toEqual([]);
     expect(h.record.stopped).toHaveLength(0);
   });
 
@@ -367,7 +370,7 @@ describe('TryloV1Runner lifecycle', () => {
     expect(sink.outcomes).toEqual(['cancelled']);
   });
 
-  it('does not retry a turn whose closeInput outcome is unknown', async () => {
+  it('does not close or retry a turn on a broken EOF channel', async () => {
     h.setCloseInputFails(true);
     const sink = collect();
     const { processId, state } = await startTryloV1({
@@ -443,6 +446,7 @@ describe('TryloV1Runner — session binding (P08 §6.2)', () => {
     cwd: CWD,
     providerId: 'fixture',
     permissionLevel: 'read_only' as const,
+    onControlFrame: () => undefined,
   };
 
   /** The real CLI echoes back the id it was given (verified 2026-09-22). */

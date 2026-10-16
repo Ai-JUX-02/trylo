@@ -58,6 +58,7 @@ import type { CodeRunBindingState, CodeRunViewState, SettingsForCodeRun } from '
 import type { RuntimeResultScope } from '../results/result-scope';
 import type { CodeRunLifecycleObserver, CodeRunOutcome } from './code-run-lifecycle';
 import type { CodePermissionRegistry, CodePermissionRequest } from './code-permission-registry';
+import { CodeInputRegistry } from './code-input-registry';
 import type { CodeDiagnosticsBuffer } from '../diagnostics/code-diagnostics-buffer';
 // Round-3 P0-5: `steer` must say WHY it did not inject, not just that it did
 // not. See ./steer-delivery.ts.
@@ -237,6 +238,9 @@ export class CodeRunController {
   private resultScope: RuntimeResultScope | null = null;
   private lifecycleObserver: CodeRunLifecycleObserver | null = null;
   private readonly permissions: CodePermissionRegistry | null;
+  readonly inputRequests = new CodeInputRegistry(async (id, line) => {
+    if (!await sendControlLineToProcess(id, line)) throw new Error('User input could not reach its owning CLI process');
+  });
 
   // M4-C1 prewarm: an idle CLI spawned ahead of the first send so
   // cold-start (Node loading the ~50.8 MiB single-file bundle) is
@@ -756,6 +760,7 @@ export class CodeRunController {
             onEvents: onRunEvents,
             onControlFrame: (frame, processId) => {
               if (spawnGeneration !== this.generation) return;
+              if (this.inputRequests.handle(frame, processId, onRunEvents)) return;
               this.permissions?.handleControlFrame(frame, {
                 processId, projectKey: this.projectKey, conversationId: this.conversationId,
                 ...classifierScope,
@@ -849,10 +854,7 @@ export class CodeRunController {
    * treats an additional user frame as steering at its next safe boundary. */
   async steer(prompt: string): Promise<SteerDelivery> {
     const processId = this.processId;
-    // P08 §3.3: trylo-v1 has no steering. Its stdin is closed right
-    // after the prompt, so an injected frame would be silently dropped
-    // — reporting `unsupported` is the honest answer: NOTHING was attempted,
-    // and no amount of retrying changes what this runtime can do.
+    // V1 retains framed stdin for guidance until this one-shot turn exits.
     if (!supportsSteering(this.ownedProtocol)) return STEER_UNSUPPORTED;
     if (!this.busy || !processId || this.bindingState !== 'busy') return STEER_NOT_RUNNING;
     const sent = await sendPromptToProcess(processId, prompt);
@@ -1152,6 +1154,7 @@ export class CodeRunController {
 
   /** Stop THIS conversation's run and terminate its CLI. */
   async stop(): Promise<void> {
+    if (this.processId) this.inputRequests.clearProcess(this.processId);
     // A forced one-shot stop cannot release or seal the CLI-owned journal.
     // Continue later in a fresh CLI session, using the visible chat as context;
     // never remove the CLI's lock or pretend its interrupted turn is resumable.
@@ -1172,7 +1175,7 @@ export class CodeRunController {
     this.bindingState = 'exited';
     this.runId = null;
     this.error = false;
-    if (processId) this.permissions?.clearProcess(processId);
+    if (processId) { this.permissions?.clearProcess(processId); this.inputRequests.clearProcess(processId); }
     this.notify();
     if (processId) {
       // P08 §3.3: a v1 run must be told it was cancelled — its synthesised
@@ -1209,6 +1212,7 @@ export class CodeRunController {
   }
 
   private onChildExit(info: ProcessExitInfo): void {
+    if (this.processId) this.inputRequests.clearProcess(this.processId);
     // Process exit always lands here, both for cold spawns and for
     // prewarms that have been adopted. We log it (no prompt text,
     // no signal name) so the diagnostic chain is complete.
@@ -1228,7 +1232,7 @@ export class CodeRunController {
     this.bindingState = 'exited';
     this.runId = null;
     this.busy = false;
-    if (deadProcessId) this.permissions?.clearProcess(deadProcessId);
+    if (deadProcessId) { this.permissions?.clearProcess(deadProcessId); this.inputRequests.clearProcess(deadProcessId); }
     if (crashedWhileBusy) {
       this.error = true;
     }

@@ -242,3 +242,9 @@ new trylo cli/trylo-audit-*
 
 # Private local development overrides never belong in public source.
 .env.*.local
+
+/Debuglog01/
+
+/Debuglog02/
+
+/Debuglog03/

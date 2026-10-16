@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createNativeBrowserCursor } from './native-browser-cursor.mjs';
+import { createWorkspacePagePreview } from './workspace-page-preview.mjs';
 
 export function nativeBrowserScope({ projectRoot = '', conversationId = '' } = {}) {
   return JSON.stringify([path.resolve(projectRoot || '.').replaceAll('\\', '/').toLowerCase().replace(/\/$/, ''), conversationId]);
@@ -123,6 +124,10 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
       return json(response, 200, { clientId });
     }
     if (!session.clients.has(value.clientId)) return json(response, 403, { error: 'unknown MCP client' });
+    if (action === 'preview/resolve') {
+      if (session.leases.get(value.leaseId) !== value.clientId) return json(response, 403, { error: 'local preview requires an active MCP call' });
+      return json(response, 200, { url: await session.preview.open(value.url) });
+    }
     if (action === 'client/close') {
       session.clients.delete(value.clientId);
       for (const [id, owner] of session.leases) if (owner === value.clientId) session.leases.delete(id);
@@ -240,7 +245,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
     let session = sessions.get(scope);
     if (session && session.record.cdpPort === record.cdpPort) { session.record = record; await refresh(session); report(session); return { ...state(session), endpoint: session.base }; }
     if (session) await disposeSession(session);
-    session = { scope, record, targets: new Map(), cursors: new Map(), held: false, leases: new Map(), waiters: new Set(), clients: new Map(), token: crypto.randomBytes(24).toString('hex'), failed: '', connections: new Set() };
+    session = { scope, record, preview: createWorkspacePagePreview(path.resolve(projectRoot)), targets: new Map(), cursors: new Map(), held: false, leases: new Map(), waiters: new Set(), clients: new Map(), token: crypto.randomBytes(24).toString('hex'), failed: '', connections: new Set() };
     session.server = http.createServer((request, response) => void serve(session, request, response).catch(error => { if (!response.headersSent) json(response, 500, { error: String(error.message ?? error) }); else response.destroy(); }));
     session.websockets = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 * 1024 });
     session.server.on('upgrade', (request, socket, head) => void upgrade(session, request, socket, head).catch(() => socket.destroy()));
@@ -294,6 +299,7 @@ export function createNativeBrowserService({ emit, requestNative: injectedReques
   async function select({ scope, label } = {}) { const session = get(scope); await nativeOperation(session, 'activate', { label }); return state(session); }
   async function create({ scope } = {}) { const session = get(scope); await nativeOperation(session, 'create'); return state(session); }
   async function disposeSession(session) {
+    await session.preview.dispose();
     clearInterval(session.timer); session.held = true;
     await Promise.all([...session.cursors.values()].map(cursor => cursor.dispose()));
     for (const connection of session.connections) connection.terminate();

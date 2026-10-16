@@ -14,17 +14,19 @@
 //   deny       → answered immediately with a machine-readable reason;
 //   prompt     → registered as pending (with the classifier's safe
 //                preview) so the ApprovalCard is the decision surface.
-// Tools the classifier does not manage (built-ins, the user's own MCP
-// servers) keep the legacy register-and-wait behaviour. Classification is
+// The final code-tool-policy applies the selected mode to package facts,
+// built-ins and user MCP tools. Unknown legacy scopes still wait for a human.
+// Classification is
 // synchronous and pure, so the stdout path stays race-free; only the
-// auto-response write is async, and a FAILED write falls back to a human
-// decision instead of dropping the request.
+// auto-response write is async. A failed automatic allowance can be retried
+// by a human; a hard denial never becomes an approval button.
 //
 // Failure policy: an unknown/expired requestId responds false — the
 // caller (ApprovalService) records it in diagnostics; we never guess.
 
 import type { ControlFrame } from '../host-adapter/control-protocol';
 import { buildControlResponse } from '../host-adapter/control-protocol';
+import { resolveCodeToolPolicy } from '../permission/code-tool-policy';
 import type { PermissionLevel } from '../permission/permission-policy';
 import type { ApprovalPreview } from '../approval/approval-preview';
 import type { SafeAudit, ToolLeaseGrant, ToolRiskRoute, ToolRiskRouter } from '../tooling/tool-risk-classifier';
@@ -107,6 +109,7 @@ const AUDIT_LIMIT = 64;
 const RESPONDED_REQUEST_LIMIT = 256;
 
 export class CodePermissionRegistry {
+  private readonly automatic = new Map<string, { processId: string }>();
   private readonly pending = new Map<string, CodePermissionRequest>();
   private readonly onChange: () => void;
   private readonly send: (processId: string, line: string) => Promise<boolean>;
@@ -124,11 +127,13 @@ export class CodePermissionRegistry {
 
   /** Route a control frame from one process's stdout stream. */
   handleControlFrame(frame: ControlFrame, scope: CodePermissionScope): void {
+    if (frame.kind === 'input') return; // User answers have no permission authority.
     if (frame.kind === 'cancel') {
-      if (this.pending.delete(frame.requestId)) this.notify();
+      if (this.automatic.get(frame.requestId)?.processId === scope.processId) this.automatic.delete(frame.requestId);
+      if (this.pending.get(frame.requestId)?.processId === scope.processId && this.pending.delete(frame.requestId)) this.notify();
       return;
     }
-    if (this.pending.has(frame.requestId)) return;
+    if (this.pending.has(frame.requestId) || this.automatic.has(frame.requestId)) return;
 
     const route = this.classifyFrame(frame, scope);
     if (route) {
@@ -136,7 +141,9 @@ export class CodePermissionRegistry {
       if (route.behavior === 'auto_allow' || route.behavior === 'deny') {
         // Fire-and-forget: the CLI blocks on the response; a failed write
         // degrades to a pending human decision inside autoRespond.
-        void this.autoRespond(frame, scope, route);
+        const delivery = { processId: scope.processId };
+        this.automatic.set(frame.requestId, delivery);
+        void this.autoRespond(frame, scope, route, delivery);
         return;
       }
       this.pending.set(frame.requestId, {
@@ -172,6 +179,7 @@ export class CodePermissionRegistry {
   /** Drop every pending request owned by a process (exit / stop /
    *  dispose path). */
   clearProcess(processId: string): void {
+    for (const [id, delivery] of this.automatic) if (delivery.processId === processId) this.automatic.delete(id);
     let changed = false;
     for (const [id, request] of this.pending) {
       if (request.processId === processId) {
@@ -226,16 +234,17 @@ export class CodePermissionRegistry {
     return true;
   }
 
-  /** Classify one frame, or null when the default path must apply
-   *  (no classifier, unmanaged tool, or an un-evaluable scope). */
+  /** Apply package constraints, then the final mode policy. Missing context or
+   *  a classifier fault falls back to human review, except read-only effects. */
   private classifyFrame(
     frame: Extract<ControlFrame, { kind: 'permission' }>,
     scope: CodePermissionScope,
   ): Exclude<ToolRiskRoute, { behavior: 'unmanaged' }> | null {
-    if (!this.riskClassifier) return null;
     if (!scope.projectRoot || !scope.permissionLevel) return null;
+    const policyInput = { ...scope, toolName: frame.toolName, input: frame.input,
+      projectRoot: scope.projectRoot, permissionLevel: scope.permissionLevel, at: Date.now() };
     try {
-      const route = this.riskClassifier.classify({
+      const route = this.riskClassifier?.classify({
         toolName: frame.toolName,
         input: frame.input,
         permissionLevel: scope.permissionLevel,
@@ -245,9 +254,12 @@ export class CodePermissionRegistry {
         ...(scope.managedPackageIds !== undefined
           ? { managedPackageIds: scope.managedPackageIds }
           : {}),
-      });
-      return route.behavior === 'unmanaged' ? null : route;
+      }) ?? { behavior: 'unmanaged' as const };
+      return resolveCodeToolPolicy(policyInput, route);
     } catch {
+      if (scope.permissionLevel === 'read_only') {
+        return resolveCodeToolPolicy(policyInput, { behavior: 'unmanaged' });
+      }
       // A classifier crash must not break the approval path — route to a
       // human instead of guessing (spec §6.2 fail-closed, not fail-silent).
       return null;
@@ -259,13 +271,13 @@ export class CodePermissionRegistry {
     if (this.audits.length > AUDIT_LIMIT) this.audits.splice(0, this.audits.length - AUDIT_LIMIT);
   }
 
-  /** Answer a classified request without ever projecting it. A failed
-   *  stdin write registers the request as pending so a human can still
-   *  decide — the CLI keeps waiting either way. */
+  /** Send a policy decision without a card. Failed allowances can become
+   *  pending for retry; denials and replies from cleared processes cannot. */
   private async autoRespond(
     frame: Extract<ControlFrame, { kind: 'permission' }>,
     scope: CodePermissionScope,
     route: Extract<ToolRiskRoute, { behavior: 'auto_allow' | 'deny' }>,
+    delivery: { processId: string },
   ): Promise<void> {
     const allow = route.behavior === 'auto_allow';
     const line = buildControlResponse(
@@ -273,6 +285,7 @@ export class CodePermissionRegistry {
       allow,
       frame.input,
       route.behavior === 'deny' ? route.userMessage : undefined,
+      route.behavior === 'deny' ? 'policy_denied' : undefined,
     );
     let sent = false;
     try {
@@ -280,7 +293,10 @@ export class CodePermissionRegistry {
     } catch {
       sent = false;
     }
-    if (sent) return;
+    if (this.automatic.get(frame.requestId) !== delivery) return;
+    this.automatic.delete(frame.requestId);
+    // A policy denial can never become an approval button after a pipe failure.
+    if (sent || route.behavior === 'deny') return;
     if (this.pending.has(frame.requestId)) return;
     this.pending.set(frame.requestId, {
       requestId: frame.requestId,

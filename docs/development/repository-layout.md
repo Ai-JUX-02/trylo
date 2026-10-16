@@ -59,7 +59,7 @@ node scripts/release/source-tree.mjs --preview .local-release/source-preview --r
 
 ## 当前阻断项
 
-- Desktop 默认仍是 legacy-stream-json，存在旧 CLI 路径和 shadow 调用。
+- Desktop 默认已切换 trylo-v1；显式旧协议适配与 shadow 调用仍需独立验收。
 - CLI/website/native 的新路径尚未进入现有构建脚本。
 - 沙箱静态 JS 与类型声明已纳入源码；原生/沙箱预编译 helper 仍需固定获取或重建过程。
 - workd 仍依赖未进入公库的上游完整树；不通过省略功能或测试隐藏。

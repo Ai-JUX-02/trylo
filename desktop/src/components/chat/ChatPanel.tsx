@@ -157,6 +157,7 @@ export interface ChatPanelProps {
    * the daemon.
    */
   readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the
   // stable `approvalId` (Work) or `requestId` (Code).
@@ -335,6 +336,7 @@ export function ChatPanel(props: ChatPanelProps): ReactElement {
       workspacePath={props.workspaceRoot}
       onOpenArtifact={props.onOpenCodeArtifact}
       onRespondApproval={props.onRespondApproval}
+      onRespondInputRequest={props.onRespondInputRequest}
       onOpenApprovalPreview={props.onOpenApprovalPreview}
       resultDockSlot={props.codeResultDock}
       personTeamStatusBarSlot={props.personTeamStatusBar}
@@ -478,6 +480,7 @@ function WorkSurface(props: ChatPanelProps): ReactElement {
       onOpenArtifact={props.onOpenWorkArtifact}
       workspacePath={props.workspaceRoot}
       onRespondApproval={props.onRespondApproval}
+      onRespondInputRequest={props.onRespondInputRequest}
       onOpenApprovalPreview={props.onOpenApprovalPreview}
       {...(props.onRunTaskSuggestion
         ? { onRunTaskSuggestion: props.onRunTaskSuggestion }

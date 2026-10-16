@@ -41,6 +41,10 @@ import { closeRunResources } from "./run-resources.js";
 import { createAskUserTools, type AskUserSession } from "../../adapters/tools/ask-user/index.js";
 import { restoreQuestions } from "../../adapters/tools/ask-user/recovery.js";
 import { answerQuestionInput } from "./question-input.js";
+import { resolvePrompt } from "./run-prompt.js";
+export { resolvePrompt } from "./run-prompt.js";
+import { answerStdioInput, stdioQuestions } from "./stdio-questions.js";
+import type { StdioSession } from "./stdio-session.js";
 
 export type { RunFailure } from "./run-failure.js";
 export { reportFailure } from "./run-failure.js";
@@ -321,32 +325,6 @@ export async function prepareRun(
   };
 }
 
-/** argv message and piped stdin are combined; `-` forces stdin. */
-export async function resolvePrompt(
-  ctx: CliContext,
-  options: RunCommandOptions,
-): Promise<{ readonly text: string } | RunFailure> {
-  const fromArgv = options.message.join(" ").trim();
-  const wantsStdin = options.readStdin || (fromArgv.length === 0 && !ctx.stdinIsTty);
-  if (!wantsStdin) {
-    if (fromArgv.length === 0) {
-      return fail(
-        EXIT_CODES.USAGE,
-        "no prompt given",
-        "pass a message, pipe stdin, or use `-` to read stdin explicitly",
-      );
-    }
-    return { text: fromArgv };
-  }
-  const piped = (await ctx.readStdin()).trim();
-  const text = fromArgv.length === 0 ? piped : `${fromArgv}\n${piped}`.trim();
-  if (text.length === 0) {
-    return fail(EXIT_CODES.USAGE, "stdin contained no prompt", "pipe a message into trylo run");
-  }
-  return { text };
-}
-
-
 export function writeLastMessage(
   ctx: CliContext,
   target: string | undefined,
@@ -360,7 +338,7 @@ export function writeLastMessage(
   return ok ? [] : [`output_last_message_failed:${absolute}`];
 }
 
-export async function handleRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink): Promise<ExitCode> {
+export async function handleRun(ctx: CliContext, options: RunCommandOptions, sink: CliSink, control?: StdioSession): Promise<ExitCode> {
   const permissionMode = ctx.stdinIsTty ? "interactive" : "non_interactive";
   const scaffold = await prepareRun(ctx, { options, sink, permissionMode });
   if (isRunFailure(scaffold)) {
@@ -372,15 +350,19 @@ export async function handleRun(ctx: CliContext, options: RunCommandOptions, sin
     if ("exitCode" in prompt) {
       return reportFailure(ctx, prompt);
     }
-    const promptText = await answerQuestionInput(scaffold.questions, prompt.text, ctx.readLine);
+    const cancel = control === undefined ? interrupts.signal : AbortSignal.any([interrupts.signal, control.signal]);
+    const promptText = control === undefined ? await answerQuestionInput(scaffold.questions, prompt.text, ctx.readLine)
+      : await answerStdioInput(scaffold.questions, control, prompt.text, cancel);
     const outcome = await runOneTurn(
       ctx,
-      scaffold,
+      control === undefined || scaffold.questions === undefined ? scaffold
+        : { ...scaffold, questions: stdioQuestions(scaffold.questions, control) },
       promptText,
       sink,
       permissionMode,
       permissionChoice(options),
-      interrupts.signal,
+      cancel,
+      control?.pendingInput,
     );
     if ("message" in outcome && "hint" in outcome) {
       return reportFailure(ctx, outcome);

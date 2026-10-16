@@ -55,6 +55,7 @@ export type LoopEventType =
   // the model said it, and never silently dropped (a denied tool call
   // reaches the UI as a warning and nothing else).
   | 'runtime_warning'
+  | 'input_request'
   // User-side loopRunner events (3)
   | 'loop_started'
   | 'budget_breached'
@@ -294,6 +295,14 @@ export interface RuntimeWarningEvent extends BaseEvent {
   readonly message: string;
 }
 
+export interface InputRequestEvent extends BaseEvent {
+  readonly type: 'input_request';
+  readonly requestId: string;
+  readonly questions: readonly import('@trylo/work').InputRequestQuestion[];
+  readonly status: 'pending' | 'submitted' | 'dismissed';
+  readonly answers?: Readonly<Record<string, import('@trylo/work').InputRequestAnswer>>;
+}
+
 export interface TodoUpdatedEvent extends BaseEvent {
   readonly type: 'todo_updated';
   readonly todos: readonly { content: string; status: string; activeForm: string }[];
@@ -328,7 +337,8 @@ type StrictLoopEvent =
   | AbortedEvent
   | TodoUpdatedEvent
   | PlanModeTransitionEvent
-  | RuntimeWarningEvent;
+  | RuntimeWarningEvent
+  | InputRequestEvent;
 
 export type LoopEvent = StrictLoopEvent | OtherLoopEvent;
 

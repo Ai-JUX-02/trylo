@@ -2,12 +2,12 @@
 // "approval / input").
 //
 // Renders an inline structured user-input question set
-// (`input_request_created`). The user picks one option per
-// question and submits — or dismisses — so a task paused
+// (`input_request`). The user picks options or supplies free text
+// and submits — or dismisses — so a task paused
 // waiting for input never just sits and times out.
 //
 // `onRespond(requestId, status, answers)` is wired to
-// `WorkRuntime.respondInputRequest` by the host. When no
+// the conversation supervisor by the host. When no
 // responder is provided the card renders read-only.
 //
 // The card keeps ONE stable identity (the requestId) so
@@ -21,12 +21,12 @@ import type { InputRequestMessage } from './types';
 
 export interface InputRequestCardProps {
   readonly message: InputRequestMessage;
-  /** Wired to WorkRuntime.respondInputRequest by the host. */
+  /** Routes the answer to the CLI process that owns this request. */
   readonly onRespond?: (
     requestId: string,
     status: 'submitted' | 'dismissed',
     answers?: Record<string, InputRequestAnswer>,
-  ) => void;
+  ) => void | Promise<boolean>;
 }
 
 /** Sentinel radio value for the per-question "Other"
@@ -36,21 +36,17 @@ const OTHER_MARKER = '__other_free_text__';
 
 function buildAnswers(
   questions: readonly InputRequestQuestion[],
-  selected: ReadonlyMap<string, string>,
+  selected: ReadonlyMap<string, readonly string[]>,
   otherText: ReadonlyMap<string, string>,
 ): Record<string, InputRequestAnswer> {
-  const out: Record<string, InputRequestAnswer> = {};
+  const out: Record<string, InputRequestAnswer> = Object.create(null);
   for (const q of questions) {
     const label = selected.get(q.id);
-    if (label === undefined) continue;
-    if (label === OTHER_MARKER) {
-      const text = otherText.get(q.id);
-      if (text !== undefined && text.trim().length > 0) {
-        out[q.id] = { otherText: text };
-      }
-    } else {
-      out[q.id] = { optionLabel: label };
-    }
+    if (!label?.length) continue;
+    const labels = label.filter(value => value !== OTHER_MARKER);
+    const text = label.includes(OTHER_MARKER) ? otherText.get(q.id)?.trim() : undefined;
+    out[q.id] = { ...(q.multiSelect ? (labels.length ? { optionLabels: labels } : {})
+      : labels[0] ? { optionLabel: labels[0] } : {}), ...(text ? { otherText: text } : {}) };
   }
   return out;
 }
@@ -59,36 +55,49 @@ export function InputRequestCard(
   props: InputRequestCardProps,
 ): ReactElement {
   const m = props.message;
-  const [selected, setSelected] = useState<ReadonlyMap<string, string>>(
+  const [selected, setSelected] = useState<ReadonlyMap<string, readonly string[]>>(
     () => new Map(),
   );
   const [otherText, setOtherText] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const choose = (question: InputRequestQuestion, value: string): void => {
+    setSelected(previous => {
+      const current = previous.get(question.id) ?? [];
+      const next = question.multiSelect ? current.includes(value)
+        ? current.filter(item => item !== value) : [...current, value] : [value];
+      return new Map(previous).set(question.id, next);
+    });
+  };
   const resolved = m.status !== 'pending';
   const allAnswered =
     m.questions.length > 0 &&
     m.questions.every((q) => {
       const sel = selected.get(q.id);
-      if (sel === undefined) return false;
+      if (!sel?.length) return false;
       // "Other" only counts once non-empty free text is given.
-      if (sel === OTHER_MARKER) return (otherText.get(q.id) ?? '').trim().length > 0;
+      if (sel.includes(OTHER_MARKER)) return (otherText.get(q.id) ?? '').trim().length > 0;
       return true;
     });
 
-  const submit = (status: 'submitted' | 'dismissed'): void => {
+  const submit = async (status: 'submitted' | 'dismissed'): Promise<void> => {
     if (!props.onRespond || resolved || submitting) return;
     if (status === 'submitted' && !allAnswered) return;
     setSubmitting(true);
+    setError('');
     try {
-      props.onRespond(
+      const delivered = await props.onRespond(
         m.requestId,
         status,
         status === 'submitted'
           ? buildAnswers(m.questions, selected, otherText)
           : undefined,
       );
+      if (delivered === false) setError('回答尚未送达，请重试。');
+    } catch {
+      setError('回答发送失败，请重试。');
     } finally {
       setSubmitting(false);
     }
@@ -115,7 +124,7 @@ export function InputRequestCard(
               <li key={q.id} className="input-request-card__answer">
                 <span className="input-request-card__answer-q">{q.question}</span>
                 <span className="input-request-card__answer-v">
-                  {a?.optionLabel ?? a?.otherText ?? '—'}
+                  {[...(a?.optionLabels ?? (a?.optionLabel ? [a.optionLabel] : [])), ...(a?.otherText ? [a.otherText] : [])].join(', ') || '—'}
                 </span>
               </li>
             );
@@ -134,17 +143,17 @@ export function InputRequestCard(
               <li key={q.id} className="input-request-card__question">
                 <p className="input-request-card__question-text">{q.question}</p>
                 {q.options.length > 0 ? (
-                  <div className="input-request-card__options" role="radiogroup" aria-label={q.question}>
+                  <div className="input-request-card__options" role={q.multiSelect ? 'group' : 'radiogroup'} aria-label={q.question}>
                     {q.options.map((o) => (
                       <label key={o.label} className="input-request-card__option">
                         <input
-                          type="radio"
+                          type={q.multiSelect ? 'checkbox' : 'radio'}
                           name={`ir-${m.requestId}-${q.id}`}
                           value={o.label}
-                          checked={selected.get(q.id) === o.label}
+                          checked={selected.get(q.id)?.includes(o.label) ?? false}
                           disabled={submitting || !props.onRespond}
                           onChange={() =>
-                            setSelected((prev) => new Map(prev).set(q.id, o.label))
+                            choose(q, o.label)
                           }
                         />
                         <span className="input-request-card__option-label">
@@ -159,15 +168,13 @@ export function InputRequestCard(
                     ))}
                     <label className="input-request-card__option">
                       <input
-                        type="radio"
+                        type={q.multiSelect ? 'checkbox' : 'radio'}
                         name={`ir-${m.requestId}-${q.id}`}
                         value={OTHER_MARKER}
-                        checked={selected.get(q.id) === OTHER_MARKER}
+                        checked={selected.get(q.id)?.includes(OTHER_MARKER) ?? false}
                         disabled={submitting || !props.onRespond}
                         onChange={() => {
-                          setSelected((prev) =>
-                            new Map(prev).set(q.id, OTHER_MARKER),
-                          );
+                          choose(q, OTHER_MARKER);
                           const t = otherText.get(q.id) ?? '';
                           setOtherText((prev) =>
                             t.length === 0
@@ -184,7 +191,7 @@ export function InputRequestCard(
                 ) : (
                   <p className="input-request-card__no-options">—</p>
                 )}
-                {selected.get(q.id) === OTHER_MARKER ? (
+                {selected.get(q.id)?.includes(OTHER_MARKER) ? (
                   <textarea
                     className="input-request-card__other"
                     aria-label={`${q.question} — other`}
@@ -201,6 +208,7 @@ export function InputRequestCard(
               </li>
             ))}
           </ul>
+          {error ? <p role="alert">{error}</p> : null}
           <div className="input-request-card__actions">
             <button
               type="button"

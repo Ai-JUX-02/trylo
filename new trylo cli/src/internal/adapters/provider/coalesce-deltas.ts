@@ -2,11 +2,17 @@ import type { ProviderEvent } from "../../ports/provider.js";
 
 type Delta = Extract<ProviderEvent, { type: "text_delta" | "reasoning_delta" | "tool_input_delta" }>;
 const CHUNK_CHARACTERS = 128;
+/** Adapter-local boundary; never leaves the adapter as a public event. */
+export type CoalesceEvent = ProviderEvent | { readonly type: "flush_deltas" };
 
 /** Wire token boundaries are transport details, not separately retained facts. */
-export async function* coalesceDeltas(events: AsyncIterable<ProviderEvent>): AsyncGenerator<ProviderEvent> {
+export async function* coalesceDeltas(events: AsyncIterable<CoalesceEvent>): AsyncGenerator<ProviderEvent> {
   let pending: Delta | undefined;
   for await (const event of events) {
+    if (event.type === "flush_deltas") {
+      if (pending !== undefined) { yield pending; pending = undefined; }
+      continue;
+    }
     if (event.type !== "text_delta" && event.type !== "reasoning_delta" && event.type !== "tool_input_delta") {
       if (pending !== undefined) { yield pending; pending = undefined; }
       yield event;

@@ -146,6 +146,8 @@ export type StreamContext = {
    * and the case that loses work is the one that never got the chance.
    */
   readonly onPartial?: (partials: StreamPartials) => Promise<void>;
+  /** Observe durable input while the connection is still open. Effects stay deferred. */
+  readonly onInput?: (input: ReduceInput) => Promise<void>;
 };
 
 /** The one method this loop calls on a stripper; each channel owns its own take. */
@@ -190,6 +192,7 @@ type StreamIterator = AsyncIterator<ProviderEvent, unknown>;
 async function pullStream(context: StreamContext, acc: StreamAccumulator, iterator: StreamIterator): Promise<void> {
   let fieldingCommitted = false;
   let savedItems = 0;
+  let notifiedInputs = 0;
   let savedPartials = partialsDigest(openPartials(acc));
   for (;;) {
     let step: IteratorResult<ProviderEvent, unknown>;
@@ -233,6 +236,8 @@ async function pullStream(context: StreamContext, acc: StreamAccumulator, iterat
       await context.onPartial?.(open);
       savedPartials = digest;
     }
+    for (const input of acc.inputs.slice(notifiedInputs)) await context.onInput?.(input);
+    notifiedInputs = acc.inputs.length;
     // Commit the fielding the instant the model accepts the request, while the
     // stream is still open (audit P1-1). Awaited here so the exposure is durable
     // before the next pull: a crash mid-stream cannot lose a start that happened.

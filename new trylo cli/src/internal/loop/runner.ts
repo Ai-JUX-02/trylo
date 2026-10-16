@@ -391,6 +391,7 @@ async function runOneIteration(
     engine.iterations,
     ports.tools,
   );
+  const streamedInputs = new Set<string>();
   const observation = await consumeProviderStream({
     port: ports.provider,
     request: buildRequest({
@@ -422,6 +423,13 @@ async function runOneIteration(
     normalizeArguments: createToolArgumentNormalizer(ports.tools),
     onTranscriptItems: items => flushStreamItems(ports.progress, items),
     onPartial: partials => preserveOpenBlocks(ports.progress, partials),
+    onInput: async input => {
+      if (input.type !== "text_delta" && input.type !== "reasoning_delta") return;
+      // Stream visible deltas through the canonical reducer immediately. Tool
+      // requests remain one scheduling batch until the provider has finished.
+      await applyStreamInputs(engine, ports, [input]);
+      streamedInputs.add(input.eventId);
+    },
     ...(teaching.channel === undefined ? {} : { channel: teaching.channel }),
     ...(teaching.feedbackChannel === undefined ? {} : { feedbackChannel: teaching.feedbackChannel }),
     ...(teaching.toolGapChannel === undefined ? {} : { toolGapChannel: teaching.toolGapChannel }),
@@ -502,7 +510,7 @@ async function runOneIteration(
       reason: "media_too_large",
     });
   }
-  const finish = await applyStreamInputs(engine, ports, observation.inputs);
+  const finish = await applyStreamInputs(engine, ports, observation.inputs.filter(input => !streamedInputs.has(input.eventId)));
   if (finish !== undefined && currentPhase(engine) !== "terminal") {
     await dispatch(engine, ports, finish);
   }

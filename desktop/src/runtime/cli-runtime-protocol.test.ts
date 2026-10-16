@@ -47,18 +47,18 @@ describe('capabilities', () => {
     expect(supportsSteering('legacy-stream-json')).toBe(true);
   });
 
-  it('turns off everything that assumes a resident process on v1', () => {
+  it('keeps warm processes off while enabling framed v1 guidance', () => {
     // §3.3: "预热、warm reuse、sendPromptToProcess 和 steering 在新运行时
     // 路径上必须关闭或明确报告不支持".
     expect(capabilitiesFor('trylo-v1')).toEqual({
       warmReuse: false,
       prewarm: false,
-      steering: false,
+      steering: true,
       controlFrames: true,
     });
     expect(supportsWarmReuse('trylo-v1')).toBe(false);
     expect(supportsPrewarm('trylo-v1')).toBe(false);
-    expect(supportsSteering('trylo-v1')).toBe(false);
+    expect(supportsSteering('trylo-v1')).toBe(true);
   });
 
   it('supports explicit stdio approvals on v1', () => {

@@ -71,6 +71,7 @@ export interface AgentConversationSurfaceProps {
   // M4-E (spec §6.7 Core "approval / input"): inline
   // decision responders (inert for Code).
   readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the
   // stable `approvalId` (Work) or `requestId` (Code). The
@@ -123,6 +124,7 @@ export function AgentConversationSurface(
           onOpenArtifact={props.onOpenArtifact}
           workspacePath={props.workspacePath}
           onRespondApproval={props.onRespondApproval}
+          onRespondInputRequest={props.onRespondInputRequest}
           onOpenApprovalPreview={props.onOpenApprovalPreview}
           onRunTaskSuggestion={props.onRunTaskSuggestion}
           onPromoteRuntimeArtifact={props.onPromoteRuntimeArtifact}

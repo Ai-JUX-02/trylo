@@ -44,4 +44,4 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
 
-当前主库同步与验证：[同步记录](docs/release/MAIN_SOURCE_SYNC_2026_10_15.md)。既有 Desktop R3 下载包仍保持原来的旧 CLI 默认与校验值；本次仅更新源码。
+当前主库同步与验证：[当前快照与验证](docs/release/CURRENT_SOURCE_CHECKPOINT.md)。现有 Desktop R3 下载保持不变。

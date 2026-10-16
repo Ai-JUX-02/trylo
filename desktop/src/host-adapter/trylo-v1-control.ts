@@ -1,9 +1,9 @@
 import { parseControlFrame, type ControlFrame } from './control-protocol';
 import type { PermissionLevel } from '../permission/permission-policy';
 
-/** Automatic editing still needs host decisions for commands and external tools. */
+/** Every explicit Desktop mode needs host decisions, including read-only MCP denials. */
 export function usesV1ApprovalTransport(level: PermissionLevel | undefined): boolean {
-  return level === 'ask' || level === 'workspace_write' || level === 'unrestricted';
+  return level !== undefined;
 }
 
 export function readV1Control(line: string): ControlFrame | null {

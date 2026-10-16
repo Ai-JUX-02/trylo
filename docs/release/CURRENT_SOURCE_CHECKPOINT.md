@@ -1,31 +1,40 @@
 # Current source checkpoint / 当前源码快照
 
-> Current source decision (2026-10-15): main working-tree fixes are synchronized, trylo-v1 is the default, and legacy CLI source/engine staging are excluded. [Synchronization record](MAIN_SOURCE_SYNC_2026_10_15.md). Earlier R3 artifact notes describe their historical download, not this source default.
-> 2026-10-15 source audit: the Windows-MCP fork, tool registry, Tauri icons and sandbox source inputs are now included. See [source completeness](SOURCE_COMPLETENESS_2026_10_15.md). Historical migration plans and release limitations below remain distinct.
-Date / 日期：2026-10-15
-Status / 状态：源码开发快照；目录迁移和发行验收未完成。
+Date / 日期：2026-10-16
+Status / 状态：Alpha 源码快照；目录迁移与原生发行验收未完成。
 
-This checkpoint adds the current new Trylo CLI and refreshes the public product source. It keeps the existing source directory names so that the proposed reorganization does not introduce an additional path break. The target tree in the architecture document remains a migration plan.
+源码默认使用新版 trylo-v1 CLI，保留显式配置的外部旧协议兼容。
+旧 CLI 源码与引擎不进入公库或后续默认打包。
+现有 R3 Desktop 下载仍为原来的发行产物，本次没有替换安装包或 APK。
 
-本次更新产品源码、新版 CLI 和整理后的架构说明。保留现有目录名，避免把未接线的预览目录当作产品入口。旧 CLI 和官方 runtime 发行件未纳入；旧协议适配器仍存在，不能宣称整个桌面产品已完成迁移。
+## Current changes / 当前变更
 
-## Included / 已纳入
-- Product source, existing lockfiles, website source, and selected architecture/engineering policies.
-- Existing Trylo PTY/WGC helper source in its current build locations.
-- The sandbox adapter's five static JavaScript modules, upstream LICENSE and provenance.
-- Synthetic source fixtures; raw session traffic, recordings and private development history are excluded.
+- 实时转发正文与公开思考摘要；支持结构化问题、多选回答、运行中排队引导和正常取消。
+- 统一四级权限模式，保留扩展硬拒绝、工作区边界和所属进程的审批生命周期。
+- 修复连接保存、浏览器存储额度、远程配对身份恢复、工具配置并发和桌宠聊天状态。
+- 同步手机缓存/连接、菜单键盘焦点、文件模式匹配和时区测试修复。
+- 保留工具来源、Windows-MCP fork、图标和沙箱源码闭包；原始调试目录不进入当前源码树。
+
+## Verification / 验证
+
+| 范围 | 结果 |
+| --- | --- |
+| 新版 CLI 完整门禁 | 11/11；38 项合同测试、3,945 个 hermetic 测试名；类型、架构、许可/SBOM、源扫描通过 |
+| Desktop 回归 | 174 项；浏览器分类合同另 62 项；远端菜单/历史另 49 项 |
+| 最终源码 CLI 真实进程 | 8 项；实时摘要、问答、多选、引导、审批、四级权限、取消、连接与协议对照 |
+| 远端服务修复 | 64 项 |
+| 手机连接与本地网关 | 13 项 |
+| 源码完整性与工具桥接 | 通过 |
+
+上述结果按各自范围记录，不代表原生 WebView2、安装版 Desktop、真实设备或
+外部模型服务已经验收。原始失败与后续恢复分别保存在本地发布审计记录。
 
 ## Open work / 未关闭事项
 
-The source default and future packaging now use the new CLI; see
-[the current synchronization record](MAIN_SOURCE_SYNC_2026_10_15.md) for
-headless regression results and retained first-run failures.
+1. 本机 Vite 构建受 esbuild 大输入临时文件删除权限阻断；不能声明前端生产包构建通过。
+2. 完成干净克隆的原生组装、安装版 Desktop 和最终产物许可清单。
+3. 完成原生窗口、设备和外部 provider 验收。
+4. 继续迁移依赖私有历史记录的验收脚本，按既有职责边界整理目录。
 
-1. Complete clean-clone native packaging and installed Desktop acceptance.
-2. Complete WebView2/native-window, device and real-provider acceptance.
-3. Migrate remaining history-dependent acceptance scripts to distributable fixtures.
-4. Resolve the existing services tooling-pr7 browser argv expectation.
-5. Update the final artifact-level dependency/license inventory when producing a new binary.
-
-## Verification / 验证
-The exact verification result for the frozen source is recorded in SOURCE_CHECKPOINT_VALIDATION.md. No production-ready or all-platform acceptance claim is made.
+架构目标与当前构建路径分别见
+[架构](../architecture/README.md)和[目录迁移](../development/repository-layout.md)。

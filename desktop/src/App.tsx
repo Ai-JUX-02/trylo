@@ -543,7 +543,7 @@ async function materializeRemoteAttachments(
   const created: Attachment[] = []
   for (const att of attachments) {
     const safeName =
-      att.name.replace(/[^\w.\-]+/g, '_') || (att.kind === 'image' ? 'image.jpg' : 'file.txt')
+      att.name.replace(/[^\w.-]+/g, '_') || (att.kind === 'image' ? 'image.jpg' : 'file.txt')
     const filePath = `${dir}${sep}${rid()}-${safeName}`
     if (att.kind === 'image' && att.dataUrl) {
       await hostAdapter.fs.writeFileBytes(filePath, att.dataUrl)
@@ -557,7 +557,7 @@ async function materializeRemoteAttachments(
         excerpt: '',
         addedAt: Date.now(),
       })
-    } else if (att.kind === 'text' && att.text != null) {
+    } else if (att.kind === 'text' && att.text !== null && att.text !== undefined) {
       await hostAdapter.fs.writeFile(filePath, att.text)
       created.push({
         id: rid(),
@@ -5638,9 +5638,9 @@ function App(): ReactElement {
               workComposerRunning={workBusy}
               onWorkStop={handleWorkStop}
               // M4-E (spec §6.7 Core "approval"): the inline ApprovalCard responder.
-              // 2026-09-04 (CLI 单核): the workd input-request responder is retired
-              // with the daemon — approvals run through the CodePermissionRegistry.
+              // Both replies are routed to the originating CLI process by the supervisor.
               onRespondApproval={handleRespondApproval}
+              onRespondInputRequest={(id, status, answers) => supervisor.respondInputRequest(id, status, answers)}
               onCognitionAnswer={handleCognitionAnswer}
               onCognitionDismiss={handleCognitionDismiss}
               onLearningImpactResolve={handleLearningImpactResolve}

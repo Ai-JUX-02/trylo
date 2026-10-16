@@ -69,6 +69,7 @@ export interface MessageListProps {
   // Message for the inline ApprovalCard / InputRequestCard
   // responders. Unused by Code conversations.
   readonly onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  readonly onRespondInputRequest?: import('./InputRequestCard').InputRequestCardProps['onRespond'];
   // P3 (spec §3.3): open the right-side diff panel for a
   // pending approval's proposed change. The id is the
   // stable `approvalId` (Work) or `requestId` (Code).
@@ -650,6 +651,7 @@ export function MessageList(props: MessageListProps): ReactElement {
               workspacePath={props.workspacePath}
               // M4-E: inline decision responders.
               onRespondApproval={props.onRespondApproval}
+              onRespondInputRequest={props.onRespondInputRequest}
               // P3 (spec §3.3): route the "查看变更" click into
               // the right-side diff panel. The card itself never
               // auto-approves; the host owns the open.

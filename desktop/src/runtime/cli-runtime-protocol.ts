@@ -32,9 +32,8 @@ export function isCliRuntimeProtocol(value: unknown): value is CliRuntimeProtoco
 
 /**
  * Capability matrix (P08 §3.3): `trylo-v1` is ONE PROCESS PER TURN.
- * Anything that assumes a resident stdin process is off on that path —
- * not degraded, but explicitly unsupported, because faking it produces
- * bugs that look like "the model ignored me".
+ * Its stdin remains open for answers, queued guidance and cancellation
+ * during that turn; idle process reuse and prewarming remain disabled.
  */
 export interface CliRuntimeCapabilities {
   /** Reuse a live idle CLI for the next turn (legacy warm path). */
@@ -45,8 +44,8 @@ export interface CliRuntimeCapabilities {
   readonly steering: boolean;
   /**
    * Bidirectional permission/control frames on the prompt stdin.
-   * V1 keeps stdin open only in explicit stdio approval mode (ADR 2026-10-03).
-   * This does not imply steering or a resident process.
+   * Desktop V1 runs use framed stdio at every permission level. Guidance
+   * joins the current run at its next input boundary; no idle process remains.
    */
   readonly controlFrames: boolean;
 }
@@ -61,7 +60,7 @@ const LEGACY_CAPABILITIES: CliRuntimeCapabilities = {
 const V1_CAPABILITIES: CliRuntimeCapabilities = {
   warmReuse: false,
   prewarm: false,
-  steering: false,
+  steering: true,
   controlFrames: true,
 };
 

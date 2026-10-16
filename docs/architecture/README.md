@@ -16,7 +16,7 @@ Trylo 的产品入口包括原生桌面、CLI/TUI、移动端与网站。公开�
 
 参考 Codex 的职责分离：核心、协议、终端入口、进程服务、执行隔离、持久化与发行脚本各自有边界。参考的是依赖方向和职责，不把 Rust workspace 的每个 crate 对应成一个新的 npm 包。本批保留一个 CLI TypeScript 包，避免一次迁移同时改变目录、模块体系和运行协议。
 
-当前 Desktop 仍保留默认 legacy 协议及新协议分支；服务层的 shadow runner 也使用旧调用形态。因此“预览树中没有旧 CLI 文件”和“产品不再依赖旧 CLI”是两项不同的验收，后者尚未通过。当前没有统一 app-server；本次不把规划中的服务冒充现有能力。
+当前 Desktop 默认使用 trylo-v1，并保留显式旧协议兼容；shadow runner 等后台调用仍需单独验收。因此“预览树中没有旧 CLI 文件”和“产品不再依赖旧 CLI”是两项不同的验收，后者尚未通过。当前没有统一 app-server；本次不把规划中的服务冒充现有能力。
 
 参考：
 - [Codex workspace](https://github.com/openai/codex/blob/main/codex-rs/Cargo.toml)

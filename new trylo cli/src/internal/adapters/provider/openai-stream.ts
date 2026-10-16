@@ -1,5 +1,5 @@
 import type { ProviderEvent } from "../../ports/provider.js";
-import { coalesceDeltas } from "./coalesce-deltas.js";
+import { coalesceDeltas, type CoalesceEvent } from "./coalesce-deltas.js";
 import { createOpenAiTranslator } from "./openai-translate.js";
 import { isDoneFrame, parseSseFrames, type SseFrame } from "./sse.js";
 
@@ -12,7 +12,7 @@ export function translateBody(body: ReadableStream<Uint8Array>, signal: AbortSig
 async function* decodeBody(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
-): AsyncGenerator<ProviderEvent> {
+): AsyncGenerator<CoalesceEvent> {
   const translator = createOpenAiTranslator();
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -47,6 +47,8 @@ async function* decodeBody(
           yield event;
         }
       }
+      // Flush short visible fragments before awaiting the next network chunk.
+      yield { type: "flush_deltas" };
     }
   } catch {
     bodyClosed = true;

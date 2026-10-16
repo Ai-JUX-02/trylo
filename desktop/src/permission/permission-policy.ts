@@ -83,16 +83,16 @@ export const PERMISSION_LEVELS: readonly PermissionLevelDescriptor[] = [
     value: 'workspace_write',
     label: '自动编辑（推荐）',
     shortLabel: '自动',
-    description: '自动编辑（推荐） — 工作区内读写自动，命令/删除/外部仍审批',
-    hint: '工作区内自动，外部仍审批',
+    description: '自动编辑（推荐） — 普通工作区读写自动，命令/删除/外部与敏感操作仍审批',
+    hint: '普通编辑自动，敏感操作仍审批',
     risk: 'recommended',
   },
   {
     value: 'unrestricted',
     label: '完全自动',
     shortLabel: '完全',
-    description: '完全自动 — 尽量自动执行（高风险）',
-    hint: '高风险，不再询问',
+    description: '完全自动 — 工具操作自动批准，仍受工作区与禁用工具限制',
+    hint: '不再逐次审批；需要你回答的问题仍会显示',
     risk: 'high',
   },
 ] as const;
@@ -143,6 +143,15 @@ export function codePermissionMode(level: PermissionLevel): CodePermissionMode {
     case 'unrestricted':
       return 'bypassPermissions';
   }
+}
+
+/** V1 keeps approval-capable tools behind the host's final mode policy.
+ * Read-only also denies built-in mutations in the CLI before host review. */
+export function codePermissionFlagsForV1(level: PermissionLevel): readonly string[] {
+  const framed = ['--ask', 'always', '--permission-prompt-tool', 'stdio'];
+  return level === 'read_only'
+    ? ['--ask', 'always', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell', '--permission-prompt-tool', 'stdio']
+    : framed;
 }
 
 /** Map UI level → Work daemon `permissionMode` value. `bypass_permissions`

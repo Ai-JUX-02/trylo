@@ -385,6 +385,14 @@ export function applyEvents(
 
 function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
   switch (e.type) {
+    case 'input_request': {
+      const id = `input_request:${e.requestId}`;
+      const existing = msgs.findIndex(message => message.id === id);
+      const message: import('./types').InputRequestMessage = { id, kind: 'input_request', role: 'assistant',
+        createdAt: e.ts, turnId: msgs[lastUserIndex(msgs)]?.id, requestId: e.requestId,
+        questions: e.questions, status: e.status, ...(e.answers ? { answers: e.answers } : {}) };
+      return existing < 0 ? [...msgs, message] : msgs.map((m, i) => i === existing ? { ...message, createdAt: m.createdAt } : m);
+    }
     case 'thinking':  return applyThinking(msgs, e);
     case 'text':      return applyText(msgs, e);
     case 'tool_use':   return applyToolUse(msgs, e);

@@ -389,6 +389,13 @@ export class ConversationRunSupervisor {
     return this.permissions.respond(requestId, allow);
   }
 
+  respondInputRequest(requestId: string, status: 'submitted' | 'dismissed', answers?: Record<string, import('@trylo/work').InputRequestAnswer>): Promise<boolean> {
+    for (const controller of this.controllers.values()) {
+      if (controller.inputRequests.has(requestId)) return controller.inputRequests.respond(requestId, status, answers);
+    }
+    return Promise.resolve(false);
+  }
+
   /** PR-2: recent host-classifier decisions across every CLI (bounded,
    *  redacted — see SafeAudit). Diagnostics surface. */
   toolRiskAudits(): readonly CodePermissionAuditEntry[] {

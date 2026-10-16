@@ -599,16 +599,41 @@ export function loadSettings(): TryloSettings {
 export function saveSettings(s: TryloSettings): void {
   if (typeof window === 'undefined') return;
   let previousRaw: string | null;
+  let reclaimedBackup = false;
   try {
-    previousRaw = window.localStorage.getItem(STORAGE_KEY);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    throw new Error('设置保存失败，未应用更改。请检查存储空间或权限后重试。');
+    const storage = window.localStorage;
+    previousRaw = storage.getItem(STORAGE_KEY);
+    const raw = JSON.stringify(s);
+    try {
+      storage.setItem(STORAGE_KEY, raw);
+    } catch (error) {
+      // Reclaim only our redundant backup. Never discard the only valid copy
+      // or unrelated history/learning data to make a settings write succeed.
+      const backup = storage.getItem(STORAGE_BACKUP_KEY);
+      if (!(error instanceof DOMException && error.name === 'QuotaExceededError')
+        || !parseStoredSettings(previousRaw) || backup === null) throw error;
+      storage.removeItem(STORAGE_BACKUP_KEY);
+      try {
+        storage.setItem(STORAGE_KEY, raw);
+        reclaimedBackup = true;
+      } catch (retryError) {
+        try { storage.setItem(STORAGE_BACKUP_KEY, backup); } catch { /* primary remains intact */ }
+        throw retryError;
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw new Error('浏览器本地存储额度已满（QuotaExceededError），设置未保存。请重新打开工作区以释放已落盘的会话副本后重试。');
+    }
+    if (error instanceof DOMException && error.name === 'SecurityError') {
+      throw new Error('浏览器禁止访问本地存储（SecurityError），设置未保存。请检查应用的存储访问权限。');
+    }
+    throw new Error('设置保存失败，未应用更改。请检查应用存储是否可用后重试。');
   }
   // Backup is best-effort and follows the primary commit: an optional backup
   // hitting quota must never silently keep the old primary connection active.
   try {
-    if (parseStoredSettings(previousRaw)) window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!);
+    if (!reclaimedBackup && parseStoredSettings(previousRaw)) window.localStorage.setItem(STORAGE_BACKUP_KEY, previousRaw!);
   } catch {
     // The primary is already committed; retain any older backup as-is.
   }

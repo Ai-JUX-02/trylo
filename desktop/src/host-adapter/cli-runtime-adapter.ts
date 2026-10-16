@@ -133,7 +133,7 @@ const V1_ABILITIES: CliRuntimeAbilities = {
   // available on this path — not degraded, explicitly unsupported.
   persistentProcess: false,
   warmReuse: false,
-  steering: 'none',
+  steering: 'queued',
   approvals: 'host-transport',
   durableSessions: true,
   richToolEvents: false,

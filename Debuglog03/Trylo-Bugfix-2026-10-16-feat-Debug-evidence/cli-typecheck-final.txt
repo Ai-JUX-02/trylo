@@ -1,1 +1,0 @@
-PASS standalone CLI TypeScript check

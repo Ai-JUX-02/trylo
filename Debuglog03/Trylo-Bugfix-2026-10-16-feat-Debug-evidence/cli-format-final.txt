@@ -1,5 +1,0 @@
-
-> @trylo/cli@0.1.0 format:check
-> node scripts/quality/format-check.mjs
-
-PASS format-check

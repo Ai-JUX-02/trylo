@@ -33,6 +33,7 @@ import { isTrivialFinalText } from "./work-result-resolver.js";
  *  upstream `RequestUserInputQuestion` shape, re-declared so
  *  the presenter stays vendor-payload-free for consumers). */
 export interface InputRequestQuestion {
+  readonly multiSelect?: boolean;
   readonly id: string;
   readonly header: string;
   readonly question: string;
@@ -42,6 +43,7 @@ export interface InputRequestQuestion {
 /** A user response to one input-request question (upstream
  *  `InputRequestAnswer`). */
 export interface InputRequestAnswer {
+  readonly optionLabels?: readonly string[];
   readonly optionLabel?: string;
   readonly otherText?: string;
 }
