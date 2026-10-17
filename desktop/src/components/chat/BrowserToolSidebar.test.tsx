@@ -8,12 +8,41 @@ class ResizeFixture { observe(): void {} disconnect(): void {} }
 beforeEach(() => { vi.stubGlobal('ResizeObserver', ResizeFixture) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 const state: ToolPreviewState = { title: '浏览器', status: '执行中', detail: '', hasStarted: true, active: true, action: { id: 'step', title: '点击', target: '保存', status: '执行中' } }
+
+it('offers fixed viewport controls without resizing the panel or changing webpage zoom', async () => {
+  const setPageViewport = vi.fn(async () => {});
+  const preview = { ...controller(), setPageViewport };
+  render(<BrowserToolSidebar state={state} preview={preview} width={480} onClose={() => {}} />);
+  fireEvent.change(screen.getByLabelText('页面尺寸模式'), { target: { value: 'desktop' } });
+  await waitFor(() => expect(setPageViewport).toHaveBeenCalledWith({ mode: 'fixed', width: 1440, height: 900 }));
+  expect(preview.setZoom).not.toHaveBeenCalled();
+});
+
+it('shows the actual fixed dimensions and display scale with a route back to follow-panel', async () => {
+  const setPageViewport = vi.fn(async () => {}), base = controller();
+  const nativeState = { ...base.nativeState!, viewport: { mode: 'fixed' as const, width: 1440, height: 900, scale: 0.25 } };
+  render(<BrowserToolSidebar state={state} preview={{ ...base, nativeState, setPageViewport }} width={480} onClose={() => {}} />);
+  expect(screen.getByText('1440 × 900')).toBeTruthy(); expect(screen.getByText('展示 25%')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('页面尺寸模式'), { target: { value: 'panel' } });
+  await waitFor(() => expect(setPageViewport).toHaveBeenCalledWith({ mode: 'panel' }));
+});
 function controller(over: Partial<BrowserPreviewController> = {}): BrowserPreviewController {
   return { scope: 'one', status: 'running', detail: '', url: 'https://page.test', frameSeq: 0, latestFrame: null, zoom: 1,
     nativeState: { ok: true, scope: 'one', state: 'running', detail: '', control: 'agent', inFlight: 0, activeLabel: 'view-one', tabs: [{ id: 'target-one', label: 'view-one', title: 'Page', url: 'https://page.test' }] },
     start: vi.fn(async () => {}), stop: vi.fn(async () => {}), navigate: vi.fn(async () => {}), input: vi.fn(async () => {}), setVisible: vi.fn(), setViewportSize: vi.fn(), setBounds: vi.fn(async () => {}), setZoom: vi.fn(async () => {}), takeControl: vi.fn(async () => {}), releaseControl: vi.fn(async () => {}), selectTab: vi.fn(async () => {}), createTab: vi.fn(async () => {}), ...over }
 }
 describe('native browser sidebar', () => {
+  it('disables page size changes during an active tool and surfaces rejected custom dimensions', async () => {
+    const base = controller(), setPageViewport = vi.fn(async () => { throw new Error('页面尺寸过大') })
+    const { rerender } = render(<BrowserToolSidebar state={state} preview={{ ...base, nativeState: { ...base.nativeState!, inFlight: 1 }, setPageViewport }} width={480} onClose={() => {}} />)
+    expect((screen.getByLabelText('页面尺寸模式') as HTMLSelectElement).disabled).toBe(true)
+    rerender(<BrowserToolSidebar state={state} preview={{ ...base, setPageViewport }} width={480} onClose={() => {}} />)
+    fireEvent.change(screen.getByLabelText('页面尺寸模式'), { target: { value: 'custom' } })
+    fireEvent.change(screen.getByLabelText('页面宽度'), { target: { value: '1600' } })
+    fireEvent.click(screen.getByRole('button', { name: '应用' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('页面尺寸过大'))
+    expect(setPageViewport).toHaveBeenCalledWith({ mode: 'fixed', width: 1600, height: 900 })
+  })
   it('shows the current action and control owner prominently above the page', () => {
     const { container } = render(<BrowserToolSidebar state={state} preview={controller()} width={480} running onClose={() => {}} />)
     const activity = container.querySelector('.browser-tool-sidebar__action-row[data-live]')!

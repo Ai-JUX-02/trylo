@@ -71,6 +71,8 @@ export function createToolingFacade(client: ServicesClient) {
     nativeBrowserControl: (scope: string, heldByUser: boolean) => client.request('tooling.nativeBrowserControl', { scope, heldByUser }),
     nativeBrowserSelect: (scope: string, label: string) => client.request('tooling.nativeBrowserSelect', { scope, label }),
     nativeBrowserCreate: (scope: string) => client.request('tooling.nativeBrowserCreate', { scope }),
+    nativeBrowserLayout: (scope: string, bounds: import('../host-adapter/native-browser').NativeBrowserBounds | undefined, visible: boolean) => client.request('tooling.nativeBrowserLayout', { scope, bounds, visible }),
+    nativeBrowserViewport: (scope: string, label: string, viewport: import('../host-adapter/native-browser').NativeBrowserViewportRequest) => client.request('tooling.nativeBrowserViewport', { scope, label, viewport }),
     /**
      * Compose one run's tool Profile, or `null` when the tool plane cannot
      * answer. Never rejects.

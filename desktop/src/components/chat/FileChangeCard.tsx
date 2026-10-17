@@ -18,12 +18,13 @@ import {
   Ban,
   FilePlus2,
   FilePenLine,
+  FileMinus2,
   type LucideIcon,
 } from 'lucide-react';
 
 import type { ToolMessage } from './types';
 import { toolEventStatus, toolEventVerb } from './tool-event-presentation';
-import { computeFileChange, displayPathParts } from './file-change';
+import { computeFileChange, computeFileChanges, displayPathParts, type FileChange } from './file-change';
 
 /** Cap rendered diff lines per card so a brand-new 3000-line file
  *  doesn't eat the conversation. The badges still show true totals. */
@@ -52,17 +53,42 @@ const ACTIVITY_VERB: Record<string, string> = {
   NotebookEdit: 'Editing',
 };
 
+function pendingChangeNotice(message: ToolMessage): string | null {
+  if (message.status === 'done') return null;
+  if (message.status === 'error') {
+    return /^(apply_patch|applypatch)$/i.test(message.tool)
+      ? '修改失败；部分文件可能已写入。以下为请求内容，请结合错误结果核对。'
+      : '修改失败，以下为拟修改内容。';
+  }
+  return message.status === 'interrupted'
+    ? '修改已中断，请核对文件当前内容。' : '拟修改内容，等待工具完成。';
+}
+
+function changeVerb(change: FileChange, tool: string): string {
+  if (change.operation === 'deleted') return '删除';
+  if (change.operation === 'moved') return '移动';
+  if (change.operation === 'overwritten') return '覆盖写入';
+  if (change.isNew) return '新建';
+  return toolEventVerb(tool);
+}
+
 export interface FileChangeCardProps {
   readonly message: ToolMessage;
+  readonly change?: FileChange;
   readonly variant?: 'event';
   /** Workspace root — relativises the shown path and names the project. */
   readonly workspacePath?: string;
   readonly onOpenFile?: (path: string) => void;
 }
 
+export function FileChangeCards(props: FileChangeCardProps): ReactElement {
+  const changes = computeFileChanges(props.message.tool, props.message.input, props.message.outputContent);
+  return <>{changes.map((change, index) => <FileChangeCard {...props} key={`${change.path}-${index}`} change={change} />)}</>;
+}
+
 export function FileChangeCard(props: FileChangeCardProps): ReactElement | null {
   const m = props.message;
-  const change = computeFileChange(m.tool, m.input);
+  const change = props.change ?? computeFileChange(m.tool, m.input, m.outputContent);
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
   const [showAll, setShowAll] = useState(false);
   if (!change) return null;
@@ -75,7 +101,7 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
   };
 
   const StatusIcon = STATUS_ICON[m.status];
-  const Icon = change.isNew ? FilePlus2 : FilePenLine;
+  const Icon = change.isNew ? FilePlus2 : change.operation === 'deleted' ? FileMinus2 : FilePenLine;
   const parts = displayPathParts(change.path, props.workspacePath);
   const fileName = parts.relative.split('/').pop() ?? parts.relative;
   const dir = parts.relative.includes('/')
@@ -85,6 +111,12 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
 
   const visibleLines = showAll ? change.lines : change.lines.slice(0, MAX_DIFF_LINES);
   const hiddenCount = change.lines.length - visibleLines.length;
+  const statsKnown = change.basis !== 'content';
+  const caption = change.basis === 'content' ? '写入内容'
+    : change.basis === 'result' ? '实际结果 · 文件行号'
+      : '请求修改片段 · 行号仅作补丁或片段参考';
+  const numberLabel = change.lineNumbers === 'file' ? '文件' : '片段';
+  const notice = pendingChangeNotice(m);
 
   return (
     <div
@@ -107,21 +139,22 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
         <span className="fchange__icon" aria-hidden="true">
           <Icon size={14} strokeWidth={2.2} />
         </span>
-        {props.variant === 'event' && <span className="fchange__verb">{toolEventVerb(m.tool)}</span>}
+        {props.variant === 'event' && <span className="fchange__verb">{changeVerb(change, m.tool)}</span>}
         <span className="fchange__project">{parts.project}</span>
         <span className="fchange__path" title={change.path}>
           <span className="fchange__dir">{dir ? `${dir}/` : ''}</span>
           <span className="fchange__file">{fileName}</span>
+          {change.fromPath && <span className="fchange__dir">{` ← ${change.fromPath}`}</span>}
           {change.isNew && props.variant !== 'event' && <span className="fchange__newtag">new</span>}
         </span>
-        <span className="fchange__stats">
+        {statsKnown && <span className="fchange__stats">
           <span className="fchange__add" title="Lines added">
-            +{change.additions}
+            {change.truncated ? '≥' : ''}+{change.additions}
           </span>
           <span className="fchange__del" title="Lines removed">
-            −{change.deletions}
+            {change.truncated ? '≥' : ''}−{change.deletions}
           </span>
-        </span>
+        </span>}
         {m.durationMs !== undefined && m.status !== 'running' && (
           <span className="fchange__time">{(m.durationMs / 1000).toFixed(1)}{props.variant === 'event' ? ' 秒' : 's'}</span>
         )}
@@ -139,17 +172,18 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
       <div className={`disclosure${open ? ' disclosure--open' : ''}`}>
         <div className="disclosure__inner">
           <div className="fchange__body">
-            {m.status !== 'done' && <div className="fchange__notice">{m.status === 'error' ? '修改失败，以下为拟修改内容。' : m.status === 'interrupted' ? '修改已中断，请核对文件当前内容。' : '拟修改内容，等待工具完成。'}</div>}
+            {notice && <div className="fchange__notice">{notice}</div>}
             {m.status === 'error' && (m.outputError || m.outputText) && <pre className="fchange__error" role="alert">{m.outputError || m.outputText}</pre>}
-            {props.variant === 'event' && <div className="fchange__diff-header"><span>{parts.relative}</span><span className="fchange__stats"><span className="fchange__add">+{change.additions}</span><span className="fchange__del">−{change.deletions}</span></span></div>}
-            {props.variant === 'event' && <div className="fchange__diff-caption">修改片段 · 行号相对每个片段</div>}
+            {props.variant === 'event' && <div className="fchange__diff-header"><span>{parts.relative}</span>{statsKnown && <span className="fchange__stats"><span className="fchange__add">{change.truncated ? '≥' : ''}+{change.additions}</span><span className="fchange__del">{change.truncated ? '≥' : ''}−{change.deletions}</span></span>}</div>}
+            <div className="fchange__diff-caption">{caption}{change.truncated ? ' · 部分 diff，统计仅含已提供片段' : ''}</div>
+            {change.note && <div className="fchange__notice">{change.note}</div>}
             <div className="fchange__diff">
               {visibleLines.map((line, i) => (
                 <div
                   key={i}
                   className={`fchange__diff-line fchange__diff-line--${line.kind}`}
                 >
-                  {props.variant === 'event' && <><span className="fchange__line-number" aria-label="原片段行号">{line.oldNo}</span><span className="fchange__line-number" aria-label="新片段行号">{line.newNo}</span></>}
+                  {props.variant === 'event' && <><span className="fchange__line-number" aria-label={`原${numberLabel}行号`}>{line.oldNo}</span><span className="fchange__line-number" aria-label={`新${numberLabel}行号`}>{line.newNo}</span></>}
                   <span className="fchange__diff-gutter">
                     {line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '}
                   </span>
@@ -160,7 +194,7 @@ export function FileChangeCard(props: FileChangeCardProps): ReactElement | null 
                 <button type="button" className="fchange__diff-more" onClick={() => setShowAll(true)}>显示剩余 {hiddenCount} 行</button>
               )}
             </div>
-            {props.onOpenFile && <button type="button" className="fchange__open" onClick={() => props.onOpenFile?.(change.path)}>打开文件</button>}
+            {props.onOpenFile && change.operation !== 'deleted' && <button type="button" className="fchange__open" onClick={() => props.onOpenFile?.(change.path)}>打开文件</button>}
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import type { ChatMessage, TextMessage, ThinkingMessage } from './types';
 import type { TextEvent, ThinkingEvent } from '../../host-adapter/loop-events';
 import { eventMessageId, findStreamMessage, lastUserIndex, streamSource } from './message-identity';
-import { freezeTurnTimer, hasAssistantOutputInTurn } from './turn-timer';
 
 function mergeSnapshot(previous: string, incoming: string, partial: boolean): string {
   if (!partial || previous.length === 0) return incoming;
@@ -43,9 +42,7 @@ export function applyThinking(messages: ChatMessage[], event: ThinkingEvent): Ch
     };
     return messages.map((message, position) => position === index ? updated : message);
   }
-  const next = hasAssistantOutputInTurn(messages, boundary)
-    ? messages : freezeTurnTimer(messages, boundary, event.ts);
-  return [...next, {
+  return [...messages, {
     id: eventMessageId(messages, event, 'thinking'),
     phaseId: eventMessageId(messages, event, 'phase'),
     kind: 'thinking', role: 'assistant', createdAt: event.ts,
@@ -78,9 +75,7 @@ export function applyText(messages: ChatMessage[], event: TextEvent): ChatMessag
     };
     return messages.map((message, position) => position === index ? updated : message);
   }
-  const next = hasAssistantOutputInTurn(messages, boundary)
-    ? messages : freezeTurnTimer(messages, boundary, event.ts);
-  return [...next, {
+  return [...messages, {
     id: eventMessageId(messages, event, 'text'), kind: 'text', role: 'assistant',
     createdAt: event.ts, text, partial: event.partial === true,
     turnId: messages[boundary]?.id, streamSource: streamSource(event),

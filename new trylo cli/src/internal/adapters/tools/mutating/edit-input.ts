@@ -1,4 +1,5 @@
 import type { JsonObject } from "../../../protocol/envelope.js";
+import { lineEndingMatch } from "./edit-text-match.js";
 
 export type EditInput =
   | { readonly kind: "patch"; readonly patch: string }
@@ -12,7 +13,7 @@ export function readEditInput(args: JsonObject): EditInput {
   const newString = args["new_string"];
   const invalid = (message: string): EditInput => ({ kind: "invalid", code: "invalid_arguments", message });
   if (patch !== undefined) {
-    if (oldString !== undefined || newString !== undefined) return invalid("edit_file accepts patch or old_string/new_string, never both");
+    if (oldString !== undefined || newString !== undefined) return invalid("edit_file accepts patch or old_string/new_string, never both. For patch mode omit old_string and new_string entirely, including empty placeholders; for replacement mode omit patch. No file was changed.");
     return typeof patch === "string" && patch.trim().length > 0
       ? { kind: "patch", patch }
       : invalid("edit_file requires a non-empty patch");
@@ -29,7 +30,16 @@ export function replaceExactText(source: string, oldString: string, newString: s
   | { readonly ok: true; readonly content: string }
   | { readonly ok: false; readonly code: string; readonly message: string } {
   const at = source.indexOf(oldString);
-  if (at < 0) return { ok: false, code: "edit_match_not_found", message: "edit_match_not_found: old_string does not occur exactly; use the actual text from read_file. No file was changed." };
-  if (source.indexOf(oldString, at + 1) >= 0) return { ok: false, code: "edit_match_ambiguous", message: "edit_match_ambiguous: old_string matches more than once; include more surrounding context. No file was changed." };
+  if (at < 0) {
+    const match = lineEndingMatch(source, oldString, newString);
+    if (match.kind === "matched") return { ok: true, content: match.content };
+    if (match.kind === "ambiguous") return ambiguousMatch();
+    return { ok: false, code: "edit_match_not_found", message: "edit_match_not_found: old_string does not match, even after CRLF/LF normalization. Use the actual text from read_file or patch mode with surrounding context. No file was changed." };
+  }
+  if (source.indexOf(oldString, at + 1) >= 0) return ambiguousMatch();
   return { ok: true, content: source.slice(0, at) + newString + source.slice(at + oldString.length) };
+}
+
+function ambiguousMatch(): { readonly ok: false; readonly code: string; readonly message: string } {
+  return { ok: false, code: "edit_match_ambiguous", message: "edit_match_ambiguous: old_string matches more than once; include more surrounding context. No file was changed." };
 }

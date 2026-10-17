@@ -149,6 +149,28 @@ beforeEach(() => {
 });
 
 describe('probeCliRuntimeKind', () => {
+  it('can prove runtime identity from help alone without a redundant version process', async () => {
+    const promise = probeCliRuntimeKind({ entryScript: V1_ENTRY, preferredProbe: 'help', timeoutMs: 200 });
+    const id = await waitForSpawn(0);
+    h.finish(id, V1_HELP, 0);
+    const result = await promise;
+    expect(result).toMatchObject({ ok: true, kind: 'trylo-v1' });
+    expect(h.record.spawns).toHaveLength(1);
+    expect(h.spawnArgs(0)).toEqual([V1_ENTRY, '--help']);
+  });
+  it('help-first still reports a mismatched legacy runtime instead of trusting the preference', async () => {
+    const promise = probeCliRuntimeKind({ entryScript: V1_ENTRY, preferredProbe: 'help' });
+    await driveSpawns([{ lines: LEGACY_HELP, code: 0 }]);
+    expect(await promise).toMatchObject({ ok: true, kind: 'legacy' });
+    expect(h.record.spawns).toHaveLength(1);
+  });
+  it('help-first falls back to version only when help cannot establish identity', async () => {
+    const promise = probeCliRuntimeKind({ entryScript: V1_ENTRY, preferredProbe: 'help' });
+    await driveSpawns([{ lines: ['Usage: an unknown program'], code: 0 },
+      { lines: ['2.1.88-trylo (Claude Code)'], code: 0 }]);
+    expect(await promise).toMatchObject({ ok: true, kind: 'legacy' });
+    expect(h.spawnArgs(1)).toEqual([V1_ENTRY, '--version']);
+  });
   it('recognises the legacy CLI from its version banner, in one spawn', async () => {
     const promise = probeCliRuntimeKind({ entryScript: LEGACY_ENTRY, nodeProgram: 'node' });
     await driveSpawns([{ lines: ['2.1.88-trylo (Claude Code)'], code: 0 }]);

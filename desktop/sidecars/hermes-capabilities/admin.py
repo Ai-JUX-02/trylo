@@ -211,6 +211,7 @@ def get_detail(subsystem: str, pending_id: str) -> str:
     payload = rec.get("payload") or {}
     detail = _memory_detail(rec) if subsystem == "memory" else _skill_detail(rec)
     return ok(
+        {"payload": payload},
         id=pending_id,
         subsystem=subsystem,
         action=rec.get("action") or payload.get("action"),

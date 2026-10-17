@@ -17,6 +17,8 @@
 // Unknown / malformed lines are REJECTED with a reason, not dropped —
 // a silent drop is how a real protocol drift becomes an invisible bug.
 
+import { isFileMutationFacts, normalizeFileMutationFacts, type FileMutationFact } from '../tooling/file-mutation-facts';
+
 /** Additive V1 vocabulary; compact carries real maintenance/gap outcomes. */
 export const CLI_V1_EVENT_TYPES = [
   'run_start',
@@ -77,6 +79,7 @@ export type CliV1Event =
       readonly code?: string;
       /** Elapsed time between the CLI's matching journal envelopes. */
       readonly durationMs?: number;
+      readonly fileChanges?: readonly FileMutationFact[];
     }
   | { readonly type: 'warning'; readonly code: string; readonly message: string }
   | { readonly type: 'usage'; readonly usage: CliV1Usage }
@@ -183,7 +186,8 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
         (raw.message === undefined || typeof raw.message === 'string') &&
         (raw.name === undefined || isNonEmptyString(raw.name)) &&
         (raw.code === undefined || isNonEmptyString(raw.code)) &&
-        (raw.durationMs === undefined || isDuration(raw.durationMs))
+        (raw.durationMs === undefined || isDuration(raw.durationMs)) &&
+        (raw.fileChanges === undefined || isFileMutationFacts(raw.fileChanges))
       );
     case 'warning':
       // `message` may legitimately be empty — the captured golden traces
@@ -239,6 +243,9 @@ export function parseCliV1Event(line: string): CliV1ParseResult {
   }
   if (!fieldsAreValid(type, parsed)) {
     return { ok: false, reason: 'invalid_fields', raw: truncate(trimmed) };
+  }
+  if (type === 'tool_result' && parsed.fileChanges !== undefined) {
+    parsed.fileChanges = normalizeFileMutationFacts(parsed.fileChanges);
   }
   return { ok: true, event: parsed as unknown as CliV1Event };
 }

@@ -25,12 +25,39 @@ export async function walkWorkspaceFiles(params: WalkParams): Promise<WalkStats>
   let entriesVisited = 0;
   let stopped = false;
   const reasons = new Set<string>();
+  async function visitFile(absolute: string, relative: string): Promise<void> {
+    if (params.accepts !== undefined && !params.accepts(absolute)) return;
+    if (filesScanned >= params.maxFiles) {
+      reasons.add("file_limit");
+      stopped = true;
+      return;
+    }
+    filesScanned += 1;
+    stopped = await params.onFile({ absolute, relative }) === false;
+  }
   async function visit(dir: string, relative: string, depth: number): Promise<void> {
     if (stopped || params.signal.aborted) return;
     let entries;
     try {
       entries = await params.reader.readDir(dir);
-    } catch {
+    } catch (error) {
+      // A named file is a search target too. Only ENOTDIR establishes that
+      // case; missing/inaccessible directories keep their incomplete result.
+      if (depth === 0 && error instanceof Error && "code" in error && error.code === "ENOTDIR") {
+        try {
+          await params.reader.statBytes(dir);
+        } catch {
+          // ENOTDIR can also mean a nonexistent child below a file. Never
+          // advertise that lexical path as an existing glob result.
+          reasons.add("unreadable_file");
+          return;
+        }
+        entriesVisited += 1;
+        if (params.visible === undefined || await params.visible(dir, false)) {
+          await visitFile(dir, dir.split(/[/\\]/).at(-1) ?? dir);
+        }
+        return;
+      }
       // Keep partial results, but do not claim the unreadable subtree was searched.
       reasons.add("unreadable_directory");
       return;
@@ -52,14 +79,7 @@ export async function walkWorkspaceFiles(params: WalkParams): Promise<WalkStats>
         else await visit(absolute, child, depth + 1);
         continue;
       }
-      if (params.accepts !== undefined && !params.accepts(absolute)) continue;
-      if (filesScanned >= params.maxFiles) {
-        reasons.add("file_limit");
-        stopped = true;
-        return;
-      }
-      filesScanned += 1;
-      stopped = await params.onFile({ absolute, relative: child }) === false;
+      await visitFile(absolute, child);
     }
   }
   await visit(params.rootAbsolute, "", 0);

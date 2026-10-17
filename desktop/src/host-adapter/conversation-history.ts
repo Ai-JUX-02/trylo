@@ -6,6 +6,7 @@ import {
 } from '../managed-work/managed-child-binding';
 import type { ManagedChildBinding } from '../managed-work/managedWorkTypes';
 import type { ChatMessage, ToolMessage } from '../components/chat/types';
+import { isTurnTiming } from '../components/chat/types';
 import type { CodeMode, FilePath, TopLevelMode } from './types';
 import type { TryloMode, TryloSession } from './trylo-api';
 import type { StoredConversationResults } from '../results/conversation-result-types';
@@ -143,6 +144,9 @@ function safeMessages(value: unknown): readonly ChatMessage[] {
       && typeof message.kind === 'string'
       && typeof message.role === 'string'
       && typeof message.createdAt === 'number';
+  }).map(message => {
+    if (message.kind !== 'text' || message.turnTiming === undefined || isTurnTiming(message.turnTiming)) return message;
+    return { ...message, turnTiming: undefined };
   });
 }
 

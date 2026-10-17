@@ -28,9 +28,9 @@ pub struct NativeTab { pub label: String, pub marker: String, pub popup: bool }
 #[serde(rename_all = "camelCase")]
 pub struct NativeSession {
     pub scope: String, pub cdp_port: u16, pub tabs: Vec<NativeTab>, pub active_label: String,
-    #[serde(skip)] bounds: Bounds,
+    bounds: Bounds,
     #[serde(skip)] visible: bool,
-    #[serde(skip)] zoom: f64,
+    zoom: f64,
     #[serde(skip)] next_tab: u64,
 }
 #[derive(Default)]
@@ -356,6 +356,15 @@ pub async fn native_browser_command(webview: Webview, command: NativeCommand) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn service_host_receives_geometry_and_zoom_but_not_presentation_internals() {
+        let session = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![], active_label: "tab".into(),
+            bounds: Bounds::default(), visible: true, zoom: 1.5, next_tab: 2 };
+        let value = serde_json::to_value(session).unwrap();
+        assert_eq!(value["bounds"]["width"], 480.0);
+        assert_eq!(value["zoom"], 1.5);
+        assert!(value.get("visible").is_none());
+        assert!(value.get("nextTab").is_none());
+    }
     #[test] fn resizing_only_changes_bounds_and_restoring_a_hidden_view_reapplies_them() {
         let tab = NativeTab { label: "browser-one".into(), marker: "about:blank".into(), popup: false };
         let previous = NativeSession { scope: "one".into(), cdp_port: 9000, tabs: vec![tab.clone()], active_label: tab.label.clone(),

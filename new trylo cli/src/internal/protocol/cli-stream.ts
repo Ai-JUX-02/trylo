@@ -35,6 +35,15 @@ export function isCliStreamEventType(value: string): value is CliStreamEventType
  * Wire shape of one CLI stream line. Every field is derived from the core
  * envelope; no CLI code may invent a value the journal does not contain.
  */
+/** Bounded committed-file metadata; absent on older v1 producers. */
+export type CliFileMutation = {
+  readonly path: string;
+  readonly kind: "created" | "overwritten" | "patched" | "deleted" | "moved";
+  readonly from?: string;
+  readonly preview?: string;
+  readonly truncated?: boolean;
+};
+
 export type CliStreamEvent =
   | { readonly type: "run_start"; readonly sessionId: string; readonly turnId: string; readonly providerId: string; readonly model: string; readonly operation?: "compact"; readonly contextWindow?: number }
   | { readonly type: "message_start" }
@@ -61,6 +70,7 @@ export type CliStreamEvent =
       readonly code?: string;
       /** Elapsed time between matching tool-use/result journal envelopes. */
       readonly durationMs?: number;
+      readonly fileChanges?: ReadonlyArray<CliFileMutation>;
     }
   | { readonly type: "warning"; readonly code: string; readonly message: string }
   | { readonly type: "usage"; readonly usage: CliUsage }

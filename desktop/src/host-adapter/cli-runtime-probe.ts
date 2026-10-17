@@ -157,6 +157,9 @@ export function probeResultOfBanners(args: {
 
 export interface ProbeCliRuntimeKindArgs {
   readonly entryScript: string;
+  /** Selects the cheapest authoritative banner for a known protocol. It never
+   * changes classification: an unexpected runtime still reports its real kind. */
+  readonly preferredProbe?: 'help' | 'version';
   /** Pinned Node from the same resolution as the entry, when there is one. */
   readonly nodeProgram?: string;
   /**
@@ -297,21 +300,22 @@ export async function probeCliRuntimeKind(
     return { ok: false, code: 'not_found', detail: `no file at ${missing}` };
   }
 
-  const version = await runReadOnly(command, [...prefix, '--version'], 'trylo-cli-kind-probe', timeoutMs);
-  if (!version.ok) return version;
-  if (classifyLegacyVersion(version.stdout) !== null) {
-    return probeResultOfBanners({ versionBanner: version.stdout, exitCode: version.exitCode });
-  }
-  const help = await runReadOnly(command, [...prefix, '--help'], 'trylo-cli-kind-probe-help', timeoutMs);
-  // A failed `--help` is NOT "unrecognised": it never answered. Returning the
-  // typed failure keeps "we could not find out" distinct from "it answered
-  // and we do not know it" — the same distinction the session probe makes
-  // between `false` and `null`, and the WP's own test matrix forbids
-  // collapsing a timeout into an ordinary verdict.
-  if (!help.ok) return help;
+  const helpFirst = args.preferredProbe === 'help';
+  const first = await runReadOnly(command, [...prefix, helpFirst ? '--help' : '--version'],
+    'trylo-cli-kind-probe', timeoutMs);
+  if (!first.ok) return first;
+  const initial = probeResultOfBanners({
+    versionBanner: helpFirst ? '' : first.stdout,
+    ...(helpFirst ? { helpBanner: first.stdout } : {}), exitCode: first.exitCode,
+  });
+  if (initial.ok) return initial;
+  const second = await runReadOnly(command, [...prefix, helpFirst ? '--version' : '--help'],
+    'trylo-cli-kind-probe-fallback', timeoutMs);
+  // A failed fallback is unknown-state, never a successful classification.
+  if (!second.ok) return second;
   return probeResultOfBanners({
-    versionBanner: version.stdout,
-    helpBanner: help.stdout,
-    exitCode: version.exitCode,
+    versionBanner: helpFirst ? second.stdout : first.stdout,
+    helpBanner: helpFirst ? first.stdout : second.stdout,
+    exitCode: helpFirst ? second.exitCode : first.exitCode,
   });
 }

@@ -193,7 +193,7 @@ async function collectPaths(
       signal,
       visible,
       onFile(file) {
-        const relative = prefix === "" ? file.relative : `${prefix}/${file.relative}`;
+        const relative = prefix === "" ? file.relative : file.absolute === rootAbsolute ? prefix : `${prefix}/${file.relative}`;
         if (seen.has(relative)) {
           return true;
         }

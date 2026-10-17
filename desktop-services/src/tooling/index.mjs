@@ -205,6 +205,8 @@ export function createToolingServices(options = {}) {
     nativeBrowserControl: params => nativeBrowser.control(params),
     nativeBrowserSelect: params => nativeBrowser.select(params),
     nativeBrowserCreate: params => nativeBrowser.create(params),
+    nativeBrowserLayout: params => nativeBrowser.layout(params),
+    nativeBrowserViewport: params => nativeBrowser.viewport(params),
     nativeBrowserCommandResult: params => nativeBrowser.commandResult(params),
 
     /** `tooling.resolveProfile` — compose a Profile for one run. */

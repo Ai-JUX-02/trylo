@@ -90,7 +90,7 @@ it('production controller, registry, CLI, journal and chat reducer complete two 
   expect(controller.getViewState().running).toBe(false);
   const written = applyEvents([], events).find(m => m.kind === 'tool' && m.tool === 'Write');
   expect(written).toMatchObject({ kind: 'tool', status: 'done', input: { file_path: 'fixture-output.txt' } });
-  if (written?.kind === 'tool') expect(computeFileChange(written.tool, written.input)).toMatchObject({ path: 'fixture-output.txt', additions: 1 });
+  if (written?.kind === 'tool') expect(computeFileChange(written.tool, written.input, written.outputContent)).toMatchObject({ path: 'fixture-output.txt', additions: 1 });
   const journals = readdirSync(join(home, 'sessions'));
   const second = deferred<void>();
   await controller.run({ ...request(events, second), permissionLevel: 'workspace_write' });
@@ -175,7 +175,9 @@ it('local model stream preserves public summaries, progress, patch effects and t
   const events: LoopEvent[] = [];
   const terminal = deferred<void>();
   try {
-    await controller.run({ ...request(events, terminal, 'openai-compatible'), permissionLevel: 'workspace_write',
+    // This scenario explicitly exercises approval; workspace_write may now
+    // auto-allow an in-workspace add/update patch under the current host policy.
+    await controller.run({ ...request(events, terminal, 'openai-compatible'), permissionLevel: 'ask',
       prompt: 'Read proof.txt, patch before to after, then report the result.',
       settings: { cliPath: cli, cliNodeProgram: process.execPath, cwd: workspace, cliRuntimeProtocol: 'trylo-v1',
         providerId: 'openai-compatible', apiFormat: 'openai', apiHost: `http://127.0.0.1:${address.port}/v1`,

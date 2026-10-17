@@ -72,6 +72,7 @@
 }
 
 .message--assistant .message__bubble {
+  width: 100%;
   padding: 0;
   background: transparent;
 }
@@ -146,18 +147,53 @@
 /* Final answers are the turn's visual conclusion, so they use the normal body
    size rather than the compact process-text size. */
 .message--assistant .message__text {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.8;
 }
 
 /* Markdown supplies paragraphs and lists; source separator newlines must not
    become extra rendered rows. Fenced code keeps its own pre-wrap rule below. */
-.message__text--markdown { white-space: normal; }
+.message__text--markdown {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--fg) 91%, var(--bg));
+}
+.message__text--markdown p { margin: 0.85em 0; }
+.message__text--markdown ul,
+.message__text--markdown ol { margin: 0.8em 0 1.1em; padding-left: 1.65em; }
+.message__text--markdown li { padding-left: 0.2em; }
+.message__text--markdown li + li { margin-top: 0.65em; }
+.message__text--markdown li > p { margin: 0.4em 0; }
+.message__text--markdown li :is(ul, ol) { margin: 0.4em 0; }
+.message__text--markdown li li + li { margin-top: 0.25em; }
+.message__text--markdown li::marker { color: var(--fg-muted); font-size: 0.92em; }
+.message__text--markdown strong { color: var(--fg); font-weight: 600; }
+
+/* Final-answer headings use their own reading scale instead of the global
+   display sizes. Section spacing carries the hierarchy without heavy type. */
+.message__text--markdown :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--fg);
+  line-height: 1.45;
+  font-weight: 600;
+  margin: 1.65em 0 0.7em;
+}
+.message__text--markdown h1 { font-size: 23px; }
+.message__text--markdown h2 { font-size: 19px; }
+.message__text--markdown h3 { font-size: 17px; }
+.message__text--markdown :is(h4, h5, h6) { font-size: 16px; }
+.message__text--markdown blockquote {
+  margin: 1em 0;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+.message__text--markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.8em 0;
+}
 .message__text--markdown > :first-child { margin-top: 0; }
 .message__text--markdown > :last-child { margin-bottom: 0; }
-.message__text--markdown p { margin: 0.34em 0; }
-.message__text--markdown ul,
-.message__text--markdown ol { margin: 0.34em 0; padding-left: 1.4em; }
 
 /* Round-3 P1-7: the conversation timeline scrolls VERTICALLY only.
  *
@@ -175,17 +211,17 @@
  */
 .message__text--markdown pre {
   max-width: 100%;
-  margin: 0.4em 0;
-  padding: 8px 10px;
+  margin: 1em 0;
+  padding: 16px 18px;
   overflow-x: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
-  background: var(--bg-elevated, rgba(20, 20, 20, 0.6));
+  background: color-mix(in srgb, var(--fg) 3%, var(--bg));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
   border-radius: var(--radius-sm, 4px);
   font-size: 0.88em;
-  line-height: 1.45;
+  line-height: 1.65;
 }
 
 /* Inline code inherits the bubble's wrapping intent, but a run-long token
@@ -195,6 +231,13 @@
 .message__bubble code {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.message__text--markdown :not(pre) > code {
+  font-size: 0.86em;
+  padding: 0.12em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
 }
 
 /* A fenced block inside a <pre> must not double-wrap into another box. */
@@ -227,17 +270,6 @@
   border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
   background: color-mix(in srgb, var(--brand-soft) 21%, transparent);
 }
-
-.message__text h1,
-.message__text h2,
-.message__text h3 {
-  font-weight: 600;
-  margin: 0.48em 0 0.22em;
-}
-
-.message__text h1 { font-size: var(--text-xl); }
-.message__text h2 { font-size: var(--text-lg); }
-.message__text h3 { font-size: var(--text-base); }
 
 /* v1.16.3: inline-edit UI. When a user message is
    being edited, the <p> swaps for a <textarea> +

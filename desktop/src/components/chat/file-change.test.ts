@@ -34,11 +34,11 @@ describe('computeFileChange', () => {
     expect(change!.lines.some((l) => l.kind === 'add' && l.text === 'line4')).toBe(true);
   });
 
-  it('treats Write as a new file with pure additions', () => {
+  it('treats a confirmed new Write as pure additions', () => {
     const change = computeFileChange('Write', {
       file_path: '/repo/src/new.ts',
       content: 'a\nb\nc\n',
-    });
+    }, [{ type: 'structured', schema: 'trylo.file-changes.v1', value: [{ path: '/repo/src/new.ts', kind: 'created' }] }]);
     expect(change).not.toBeNull();
     expect(change!.isNew).toBe(true);
     expect(change!.additions).toBe(3);

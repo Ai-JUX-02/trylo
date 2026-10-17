@@ -1,53 +1,21 @@
 import { EXIT_CODES, type ExitCode } from "../../protocol/cli-stream.js";
 import type { LearningSwitch, ParsedCommand } from "./args.js";
-import {
-  handleAuthList,
-  handleAuthStatus,
-  handleAuthSwitch,
-  handleAuthDelete,
-  handleLogin,
-  handleLogout,
-} from "./commands-auth.js";
 import { configValueView, loadConfig, type ConfigLoadIo } from "./config-load.js";
 import type { CliContext } from "./context.js";
 import { completionScript } from "./completion.js";
-import {
-  handleMcpAdd,
-  handleMcpList,
-  handleMcpRemove,
-  handleMcpSetEnabled,
-  handleMcpStatus,
-} from "./commands-mcp.js";
-import {
-  handleProvidersAdd,
-  handleProvidersConfig,
-  handleProvidersEdit,
-  handleProvidersList,
-  handleProvidersModels,
-  handleProvidersRemove,
-  handleProvidersSwitch,
-} from "./commands-providers.js";
 import type { CliSink } from "./render.js";
 import { reportFailure } from "./run-failure.js";
 import { tryloHome } from "./session-paths.js";
 import { handleSessionList as handleSessionListEnriched, reportLastFailure, resolveLastSession } from "./session-list.js";
-import {
-  handleSessionArchive,
-  handleSessionExport,
-  handleSessionFork,
-  handleSessionInfo,
-  handleSessionRemove,
-  handleSessionRename,
-} from "./commands-session.js";
 import { familyHelp, USAGE, VERSION } from "./usage.js";
-import { runFamilyCommand } from "./family-entries.js";
 
 /**
  * Command handlers.
  *
  * Every handler returns an exit code and writes only through the injected
  * context, so the same code path is exercised by in-process tests and by the
- * real binary. Nothing here reaches for `process`.
+ * real binary. Management families load only when selected: a runtime probe
+ * or Desktop run must not load OAuth, MCP administration, or the daemon.
  */
 
 export function sinkFor(ctx: CliContext): CliSink {
@@ -124,17 +92,17 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
     case "session_list":
       return handleSessionList(ctx, parsed.json, parsed.search, parsed.all);
     case "session_info":
-      return handleSessionInfo(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionInfo(ctx, parsed.options);
     case "session_fork":
-      return handleSessionFork(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionFork(ctx, parsed.options);
     case "session_rename":
-      return handleSessionRename(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionRename(ctx, parsed.options);
     case "session_export":
-      return handleSessionExport(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionExport(ctx, parsed.options);
     case "session_archive":
-      return handleSessionArchive(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionArchive(ctx, parsed.options);
     case "session_remove":
-      return handleSessionRemove(ctx, parsed.options);
+      return (await import("./commands-session.js")).handleSessionRemove(ctx, parsed.options);
     case "session_reconcile": {
       const { reconcile, reportReconcile } = await import("./session-reconcile.js");
       const request = {
@@ -167,27 +135,27 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
       return handleRun(ctx, parsed.options, sink);
     }
     case "login":
-      return handleLogin(ctx, parsed.options);
+      return (await import("./commands-auth.js")).handleLogin(ctx, parsed.options);
     case "logout":
-      return handleLogout(ctx, parsed.options);
+      return (await import("./commands-auth.js")).handleLogout(ctx, parsed.options);
     case "auth_status":
-      return handleAuthStatus(ctx, parsed.json);
+      return (await import("./commands-auth.js")).handleAuthStatus(ctx, parsed.json);
     case "auth_list":
-      return handleAuthList(ctx, parsed.json, parsed.project);
+      return (await import("./commands-auth.js")).handleAuthList(ctx, parsed.json, parsed.project);
     case "auth_switch":
-      return handleAuthSwitch(ctx, parsed.options);
+      return (await import("./commands-auth.js")).handleAuthSwitch(ctx, parsed.options);
     case "auth_delete":
-      return handleAuthDelete(ctx, parsed.options);
+      return (await import("./commands-auth.js")).handleAuthDelete(ctx, parsed.options);
     case "mcp_add":
-      return handleMcpAdd(ctx, parsed.options);
+      return (await import("./commands-mcp.js")).handleMcpAdd(ctx, parsed.options);
     case "mcp_list":
-      return handleMcpList(ctx, parsed.json);
+      return (await import("./commands-mcp.js")).handleMcpList(ctx, parsed.json);
     case "mcp_status":
-      return handleMcpStatus(ctx, parsed.json);
+      return (await import("./commands-mcp.js")).handleMcpStatus(ctx, parsed.json);
     case "mcp_remove":
-      return handleMcpRemove(ctx, parsed.options);
+      return (await import("./commands-mcp.js")).handleMcpRemove(ctx, parsed.options);
     case "mcp_set_enabled":
-      return handleMcpSetEnabled(ctx, parsed.options, parsed.enabled);
+      return (await import("./commands-mcp.js")).handleMcpSetEnabled(ctx, parsed.options, parsed.enabled);
     case "checkpoint_list": {
       const { handleCheckpointList } = await import("./commands-checkpoint.js");
       return handleCheckpointList(ctx, parsed.options);
@@ -225,19 +193,19 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
       return handleReview(ctx, parsed.options);
     }
     case "providers_list":
-      return handleProvidersList(ctx, { json: parsed.json });
+      return (await import("./commands-providers.js")).handleProvidersList(ctx, { json: parsed.json });
     case "providers_models":
-      return handleProvidersModels(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersModels(ctx, parsed.options);
     case "providers_switch":
-      return handleProvidersSwitch(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersSwitch(ctx, parsed.options);
     case "providers_add":
-      return handleProvidersAdd(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersAdd(ctx, parsed.options);
     case "providers_remove":
-      return handleProvidersRemove(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersRemove(ctx, parsed.options);
     case "providers_edit":
-      return handleProvidersEdit(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersEdit(ctx, parsed.options);
     case "providers_config":
-      return handleProvidersConfig(ctx, parsed.options);
+      return (await import("./commands-providers.js")).handleProvidersConfig(ctx, parsed.options);
     case "completion":
       ctx.stdout(completionScript(parsed.shell));
       return EXIT_CODES.OK;
@@ -271,7 +239,7 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
     }
     case "family":
       // The family answers for its own verbs, in its own words (`family-entries.ts`).
-      return await runFamilyCommand(parsed.word, ctx, parsed.args);
+      return (await import("./family-entries.js")).runFamilyCommand(parsed.word, ctx, parsed.args);
     case "repl": {
       const { handleReplEntry } = await import("./tui/entry.js");
       return handleReplEntry(ctx, sink, parsed.learning);

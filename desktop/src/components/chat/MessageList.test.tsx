@@ -2,7 +2,7 @@ import { forwardRef, type ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
-import type { ChatMessage } from './types';
+import type { ChatMessage, TextMessage } from './types';
 
 // Adversarial hook: lets tests assert on the raw Virtuoso props — notably
 // `computeItemKey` output, which must stay UNIQUE (React keys) even when a
@@ -38,7 +38,7 @@ import { MessageList } from './MessageList';
 import type { ListItem } from './MessageList';
 import { normalizeMessageIds } from './message-identity';
 
-function user(id: string, text: string, createdAt: number): ChatMessage {
+function user(id: string, text: string, createdAt: number): TextMessage {
   return {
     id,
     kind: 'text',
@@ -50,6 +50,30 @@ function user(id: string, text: string, createdAt: number): ChatMessage {
 }
 
 describe('MessageList turn projection', () => {
+  it('keeps live Work reasoning open before any tool call exists', () => {
+    const view = render(<MessageList surface="work" running messages={[
+      user('reasoning-user', 'continue', 1000),
+      { id: 'reasoning', kind: 'thinking', role: 'assistant', createdAt: 1010,
+        summary: '分析', preview: '正在逐步分析任务', fullLength: 8, partial: true, turn: 1 },
+    ]} />);
+    expect(view.container.querySelector('.code-reasoning__head')?.getAttribute('aria-expanded')).toBe('true');
+    view.unmount();
+  });
+  it('places each completed duration after its answer, without a live user counter', () => {
+    const messages: ChatMessage[] = [
+      { ...user('timed', 'question', 1000), turnTiming: { elapsedMs: 90000, outcome: 'completed' } },
+      { id: 'final-answer', kind: 'text', role: 'assistant', text: 'final answer', createdAt: 91000 },
+    ];
+    for (const surface of ['code', 'work'] as const) {
+      const view = render(<MessageList messages={messages} surface={surface} />);
+      const answer = screen.getByText('final answer');
+      const duration = screen.getByText('本轮用时 1:30');
+      expect(answer.compareDocumentPosition(duration) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      view.rerender(<MessageList messages={messages} running surface={surface} />);
+      expect(screen.queryByText('本轮用时 1:30')).toBeNull();
+      view.unmount();
+    }
+  });
   it('keeps context measurements out of visible rows on Code and Work', () => {
     const messages: ChatMessage[] = [user('context-user', 'continue', 1),
       { id: 'context-only', kind: 'notice', role: 'system', text: '', createdAt: 2, contextTokens: 6000 },

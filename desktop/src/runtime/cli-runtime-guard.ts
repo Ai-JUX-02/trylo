@@ -45,6 +45,7 @@ export interface VerifyCliRuntimeInput {
   /** Test seam. Defaults to the real read-only probe. */
   readonly probe?: (args: {
     readonly entryScript: string;
+    readonly preferredProbe?: 'help' | 'version';
     readonly nodeProgram?: string;
     readonly timeoutMs?: number;
   }) => Promise<CliRuntimeProbeResult>;
@@ -110,6 +111,7 @@ export async function verifyCliRuntime(
       : entry;
     const probed = await probe({
       entryScript: effective,
+      ...(kind === 'trylo-v1' ? { preferredProbe: 'help' as const } : {}),
       ...(input.nodeProgram ? { nodeProgram: input.nodeProgram } : {}),
       ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
     });

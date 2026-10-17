@@ -28,18 +28,7 @@
 // a switch case is a Rules of Hooks violation and
 // crashes the message tree.
 //
-// v1.16.4.1: <TurnProgress /> moved OUT of ThinkingCard
-// and INTO the user message row, right after the
-// user bubble. Reason: the timer must appear the MOMENT
-// the user sends — before any thinking event arrives —
-// and it must keep appearing even if the model produces
-// NO thinking for the turn (text-only models, very
-// short replies). Putting it in ThinkingCard meant
-// "no thinking card → no timer" which is exactly the
-// "用户一发消息，计时UI 不出现" symptom. The new
-// layout: user bubble + a small TurnProgress row
-// underneath, both reading from the user message's
-// own `turnStartedAt` / `finalElapsedMs` / isActive.
+// Whole-turn duration is rendered by MessageList after the final turn content.
 
 import { memo, useEffect, useState, type ReactElement } from 'react';
 import { Rocket } from 'lucide-react';
@@ -47,11 +36,10 @@ import ReactMarkdown from 'react-markdown';
 import { AnswerLink } from './AnswerLink';
 import type { ChatMessage } from './types';
 import { ToolCard } from './ToolCard';
-import { FileChangeCard } from './FileChangeCard';
-import { computeFileChange, fileChangeTool } from './file-change';
+import { FileChangeCards } from './FileChangeCard';
+import { computeFileChanges } from './file-change';
 import { ThinkingCard } from './ThinkingCard';
 import { CompactionCard } from './CompactionCard';
-import { TurnProgress } from './TurnProgress';
 import { ErrorCard } from './ErrorCard';
 // 2026-08-29 (Work workflow UI refactor, spec §3.1):
 // the WorkWorkflowCard was the hierarchy container for
@@ -243,9 +231,6 @@ function MessageImpl(props: MessageProps): ReactElement {
       return <DeliverableProgressPanel key={m.id} message={m} />;
     }
     case 'text': {
-      const showTurnTimer =
-        isUser &&
-        (props.turnStartedAt !== null && props.turnStartedAt !== undefined);
       return (
         <div
           className={`message message--${isUser ? 'user' : 'assistant'}`}
@@ -345,27 +330,7 @@ function MessageImpl(props: MessageProps): ReactElement {
                 <AssistantAnswer text={m.text} onOpenArtifact={props.onOpenArtifact} artifactHost={props.artifactHost} />
               )}
             </div>
-            {/* v1.16.4.1: TurnProgress lives on the
-                user message row, NOT inside ThinkingCard.
-                This is the single visible "the model is
-                working" indicator for the turn. It reads
-                turnStartedAt + finalElapsedMs + isActive
-                from this very user message and freezes on
-                the first non-empty thinking/text event
-                (see events.ts `freezeTurnTimer`). It
-                appears the MOMENT the user sends — even
-                before the first thinking event arrives,
-                even on text-only models. When the user
-                edits a past message, the user message
-                re-stamps turnStartedAt and the timer
-                re-appears for the new turn. */}
-            {showTurnTimer && (
-              <TurnProgress
-                turnStartedAt={props.turnStartedAt ?? null}
-                finalElapsedMs={props.finalElapsedMs}
-                isActive={props.isTurnActive === true}
-              />
-            )}
+
           </div>
         </div>
       );
@@ -375,9 +340,9 @@ function MessageImpl(props: MessageProps): ReactElement {
       // green +N / red -N + line diff); everything else uses ToolCard.
       // Fall back to ToolCard when the input shape isn't recognised so no
       // tool call ever renders blank.
-      if (fileChangeTool(m.tool) !== null && computeFileChange(m.tool, m.input) !== null) {
+      if (computeFileChanges(m.tool, m.input, m.outputContent).length > 0) {
         return (
-          <FileChangeCard
+          <FileChangeCards
               variant="event"
             key={m.id}
             message={m}

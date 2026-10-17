@@ -300,16 +300,18 @@ function oldBlockOf(hunk: PatchHunk): readonly string[] {
  * Location search, then nothing else: the hunk either fits the file exactly or
  * it is refused. The nearest match to the declared line wins when context is
  * ambiguous, which keeps the result deterministic instead of "whichever one the
- * search happened to see first".
+ * search happened to see first". Rangeless hunks search only the unconsumed
+ * suffix: otherwise a repeated line earlier in the file wins every time and
+ * produces a false overlap despite a valid match after the previous hunk.
  */
-function locate(lines: readonly string[], hunk: PatchHunk): number | undefined {
+function locate(lines: readonly string[], hunk: PatchHunk, searchStart = 0): number | undefined {
   const block = oldBlockOf(hunk);
   if (block.length === 0) {
-    return Math.min(Math.max(hunk.oldStart, 0), lines.length);
+    return Math.min(Math.max(hunk.oldStart, searchStart), lines.length);
   }
   const declared = Math.max(0, hunk.oldStart - 1);
   let best: number | undefined;
-  for (let start = 0; start + block.length <= lines.length; start += 1) {
+  for (let start = searchStart; start + block.length <= lines.length; start += 1) {
     let matches = true;
     for (let offset = 0; offset < block.length; offset += 1) {
       if (lines[start + offset] !== block[offset]) {
@@ -336,7 +338,10 @@ export function applyPatch(source: PreparedSource, hunks: readonly PatchHunk[]):
   const out: Array<{ readonly text: string; readonly ending: string }> = [];
   let cursor = 0;
   for (const hunk of hunks) {
-    const at = locate(source.lines, hunk);
+    const searchStart = hunk.oldCount === undefined ? cursor : 0;
+    // A backward-only match is retained solely to report the ordering error;
+    // it must never be applied over a previously consumed source region.
+    const at = locate(source.lines, hunk, searchStart) ?? locate(source.lines, hunk);
     if (at === undefined) {
       const wanted = oldBlockOf(hunk)[0] ?? "";
       return fail(
@@ -345,7 +350,7 @@ export function applyPatch(source: PreparedSource, hunks: readonly PatchHunk[]):
       );
     }
     if (at < cursor) {
-      return fail("patch_hunk_mismatch", `patch_hunk_mismatch: hunk ${hunk.index} overlaps the previous hunk`);
+      return fail("patch_hunk_mismatch", `patch_hunk_mismatch: hunk ${hunk.index} overlaps the previous hunk (starts at original line ${at + 1}, before line ${cursor + 1}). Send hunks in file order and merge shared context into one hunk, or use a unique old_string/new_string edit. No file was changed.`);
     }
     for (let index = cursor; index < at; index += 1) {
       out.push({ text: source.lines[index] ?? "", ending: source.endings[index] ?? "\n" });

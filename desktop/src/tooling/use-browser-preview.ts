@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ServiceManager } from '../services-host/service-manager'
 import type { NativeBrowserState, ViewportActionEvent, ViewportFrameEvent, ViewportInputParams, ViewportStatusEvent } from '../services-host/methods'
-import { nativeBrowserCommand, nativeBrowserScope, onNativeBrowserPage, onNativeBrowserControls, type NativeBrowserBounds, type NativeBrowserCommand } from '../host-adapter/native-browser'
+import { nativeBrowserCommand, nativeBrowserScope, onNativeBrowserPage, onNativeBrowserControls, type NativeBrowserBounds, type NativeBrowserCommand, type NativeBrowserViewportRequest } from '../host-adapter/native-browser'
 import type { ToolingFacade } from './tooling-facade'
 import { createNativeLayoutQueue } from './native-browser-layout'
 
@@ -28,6 +28,7 @@ export interface BrowserPreviewController {
   readonly setViewportSize: (size: { readonly width: number; readonly height: number }) => void
   readonly setBounds: (bounds: NativeBrowserBounds, visible: boolean) => Promise<void>
   readonly setZoom: (zoom: number) => Promise<void>
+  readonly setPageViewport?: (viewport: NativeBrowserViewportRequest) => Promise<void>
   readonly takeControl: () => Promise<void>
   readonly releaseControl: () => Promise<void>
   readonly selectTab: (label: string) => Promise<void>
@@ -56,13 +57,28 @@ export function useBrowserPreview(options: {
   const visibleRef = useRef(visible); visibleRef.current = visible
   const generation = useRef(0)
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot
+  const facadeRef = useRef(facade); facadeRef.current = facade
+  const applyRef = useRef<(state: NativeBrowserState) => void>(() => {})
   const layoutQueue = useRef<ReturnType<typeof createNativeLayoutQueue>>()
-  if (!layoutQueue.current) layoutQueue.current = createNativeLayoutQueue(nativeBrowserCommand, requested => requested === scopeRef.current && visibleRef.current)
+  if (!layoutQueue.current) layoutQueue.current = createNativeLayoutQueue(async command => {
+    const host = facadeRef.current
+    if (!host) {
+      if (!command.visible) { await nativeBrowserCommand(command); return }
+      throw new Error('浏览器服务尚未连接')
+    }
+    const epoch = generation.current
+    const state = await host.nativeBrowserLayout(command.scope, command.bounds, command.visible === true)
+    if (generation.current === epoch) applyRef.current(state)
+  }, requested => requested === scopeRef.current && visibleRef.current)
   const layout = useCallback((command: NativeBrowserCommand) => layoutQueue.current!(command), [])
   const apply = useCallback((state: NativeBrowserState): void => {
     if (state.scope !== scopeRef.current) return
+    const previous = snapshotRef.current
+    if (previous?.scope === state.scope && previous.revision !== undefined && state.revision !== undefined && state.revision < previous.revision) return
+    snapshotRef.current = state
     setSnapshot(state); setStatus(state.state); setDetail(state.detail)
   }, [])
+  applyRef.current = apply
   const fail = useCallback((error: unknown): void => {
     setStatus('error'); setDetail(error instanceof Error ? error.message : String(error))
   }, [])
@@ -73,6 +89,7 @@ export function useBrowserPreview(options: {
         // A previous host cannot settle the replacement host's startup.
         // Its late response/timeout still carries the same conversation.
         generation.current++
+        snapshotRef.current = undefined; setSnapshot(undefined)
         setStatus('error'); setDetail('浏览器服务已断开')
       }
       setReady(health === 'ready')
@@ -93,11 +110,26 @@ export function useBrowserPreview(options: {
       if (event.scope !== scopeRef.current) return
       if (event.error) setDetail(event.error)
       if (event.label && event.label !== snapshotRef.current?.activeLabel) return
-      if (event.zoom && Number.isFinite(event.zoom)) setZoomValue(event.zoom)
+      if (event.zoom && Number.isFinite(event.zoom)) {
+        const epoch = generation.current
+        const failed = (error: unknown): void => { if (scopeRef.current === event.scope && generation.current === epoch) fail(error) }
+        const fixed = snapshotRef.current?.viewport
+        if (fixed?.mode === 'fixed' && facadeRef.current && event.zoom !== 1) {
+          const label = snapshotRef.current!.activeLabel, host = facadeRef.current
+          void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: 1 }).then(() => host.nativeBrowserViewport(event.scope, label, fixed)).then(apply).catch(failed)
+        } else {
+          setZoomValue(event.zoom)
+          // Native keyboard zoom is also reflected in the host's geometry.
+          if (facadeRef.current) {
+            const host = facadeRef.current
+            void nativeBrowserCommand({ scope: event.scope, operation: 'zoom', zoom: event.zoom }).then(() => host.nativeBrowserState(event.scope)).then(apply).catch(failed)
+          }
+        }
+      }
       if (event.key === 'Escape') window.dispatchEvent(new Event('trylo:exit-browser-fullscreen'))
     }).then(unsubscribe => { if (disposed) unsubscribe(); else off = unsubscribe }).catch(fail)
     return () => { disposed = true; off() }
-  }, [fail])
+  }, [apply, fail])
   const start = useCallback(async (): Promise<void> => {
     if (!facade || !options.conversationId || !ready) return
     const requested = scope, epoch = generation.current
@@ -111,7 +143,7 @@ export function useBrowserPreview(options: {
   }, [facade, options.projectRoot, options.conversationId, ready, scope, apply, fail, layout])
   useEffect(() => {
     generation.current++
-    setSnapshot(undefined); setStatus('stopped'); setDetail(''); setZoomValue(1)
+    snapshotRef.current = undefined; setSnapshot(undefined); setStatus('stopped'); setDetail(''); setZoomValue(1)
     return () => { if (scope) void layout({ scope, operation: 'layout', visible: false }).catch(() => {}) }
   }, [scope, layout])
   useEffect(() => { if (visible && ready && scope) void start() }, [visible, ready, scope, start])
@@ -142,8 +174,20 @@ export function useBrowserPreview(options: {
     apply(await facade.nativeBrowserState(scope))
   }, [scope, facade, apply])
   const setZoom = useCallback(async (value: number): Promise<void> => {
-    await nativeBrowserCommand({ scope, operation: 'zoom', zoom: value }); if (scopeRef.current === scope) setZoomValue(value)
-  }, [scope])
+    if (snapshotRef.current?.viewport?.mode === 'fixed') throw new Error('固定页面尺寸使用适应展示比例')
+    await nativeBrowserCommand({ scope, operation: 'zoom', zoom: value })
+    if (scopeRef.current !== scope) return
+    setZoomValue(value)
+    if (facade) apply(await facade.nativeBrowserState(scope))
+  }, [scope, facade, apply])
+  const setPageViewport = useCallback(async (viewport: NativeBrowserViewportRequest): Promise<void> => {
+    if (!facade || !scope || !snapshotRef.current) throw new Error('浏览器尚未连接')
+    const epoch = generation.current, label = snapshotRef.current.activeLabel
+    const state = await facade.nativeBrowserViewport(scope, label, viewport)
+    if (scopeRef.current !== scope || generation.current !== epoch) return
+    apply(state)
+    if (state.viewport?.mode === 'fixed') setZoomValue(1)
+  }, [scope, facade, apply])
   const takeControl = useCallback(async (): Promise<void> => {
     if (!facade || !scope) throw new Error('浏览器尚未连接')
     const state = await facade.nativeBrowserControl(scope, true)
@@ -172,5 +216,5 @@ export function useBrowserPreview(options: {
   }, [setBounds, fail])
   return { scope, status, detail, url: snapshot?.tabs.find(tab => tab.label === snapshot.activeLabel)?.url ?? '',
     nativeState: snapshot, zoom, latestFrame: null, frameSeq: 0, start, stop, navigate, input,
-    setVisible, setViewportSize, setBounds, setZoom, takeControl, releaseControl, selectTab, createTab, navigation, closeTab }
+    setVisible, setViewportSize, setBounds, setZoom, setPageViewport, takeControl, releaseControl, selectTab, createTab, navigation, closeTab }
 }

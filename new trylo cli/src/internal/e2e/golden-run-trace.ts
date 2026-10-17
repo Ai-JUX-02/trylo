@@ -26,6 +26,11 @@ export const GOLDEN_RUN_TRACE: ReadonlyArray<Record<string, unknown>> = [
     output: "wrote fixture-output.txt (27 bytes, created)",
     truncated: false,
     name: "write_file",
+    fileChanges: [{
+      path: "fixture-output.txt",
+      kind: "created",
+      preview: "--- /dev/null\n+++ b/fixture-output.txt\n@@ -1,0 +1,1 @@\n+the fixture wrote this line\n",
+    }],
     durationMs: 0,
   },
   {

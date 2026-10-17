@@ -1,43 +1,27 @@
 // Trylo Desktop — file-change model for IDE-style edit cards.
 //
-// Pure projection from a file-mutating tool invocation (Edit / MultiEdit /
-// Write / NotebookEdit) to the data an IDE-style change card needs:
+// Projection from file tool requests and optional committed results to:
 //   - the changed file path
 //   - added / removed line counts (the green "+N" / red "-N" badges)
 //   - a line-level diff for the expandable body
 //
-// Line diff is a classic LCS over lines — exact old/new strings are small
-// (a hunk, or a full new file for Write) so O(n*m) is fine.
+// Patch parsing is linear. Legacy old/new snippets use a line LCS;
+// writes without a before image remain content, never invented additions.
 
-export type FileChangeTool = 'edit' | 'multiedit' | 'write' | 'notebookedit';
-
-export interface DiffLine {
-  readonly kind: 'add' | 'del' | 'context';
-  readonly text: string;
-  readonly oldNo?: number;
-  readonly newNo?: number;
-}
-
-export interface FileChange {
-  /** Absolute file path as emitted by the tool. */
-  readonly path: string;
-  /** True for Write (no pre-existing content replaced). */
-  readonly isNew: boolean;
-  readonly additions: number;
-  readonly deletions: number;
-  /** Flattened diff lines across all hunks (MultiEdit). */
-  readonly lines: readonly DiffLine[];
-  /** Number of hunks (1 for Edit/Write, N for MultiEdit). */
-  readonly hunks: number;
-}
+import type { ToolResultContent } from '../../tooling/tool-result-content';
+import { fileMutationFacts, type FileMutationFact } from '../../tooling/file-mutation-facts';
+import { changeFromLines, codexPatchChanges, contentChange, unifiedPatchChange } from './file-change-patch';
+import type { DiffLine, FileChange, FileChangeTool } from './file-change-types';
+export type { DiffLine, FileChange, FileChangeTool } from './file-change-types';
 
 /** Normalise the raw tool name to a supported file-change tool, or null
  *  when the invocation doesn't mutate a single file. */
 export function fileChangeTool(tool: string): FileChangeTool | null {
   const t = String(tool || '').toLowerCase();
-  if (t === 'edit') return 'edit';
+  if (t === 'edit' || t === 'edit_file') return 'edit';
   if (t === 'multiedit') return 'multiedit';
-  if (t === 'write') return 'write';
+  if (t === 'write' || t === 'write_file') return 'write';
+  if (t === 'apply_patch' || t === 'applypatch') return 'patch';
   if (t === 'notebookedit' || t === 'notebook_edit') return 'notebookedit';
   return null;
 }
@@ -45,7 +29,7 @@ export function fileChangeTool(tool: string): FileChangeTool | null {
 /** Split into lines, dropping the single trailing empty element produced
  *  by a terminating newline (so "a\n" counts as one line). */
 function splitLines(s: string): string[] {
-  const lines = s.split('\n');
+  const lines = s.replace(/\r\n/g, '\n').split('\n');
   if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;
 }
@@ -101,7 +85,7 @@ function diffLines(oldStr: string, newStr: string): DiffLine[] {
 }
 
 function asRecord(input: unknown): Record<string, unknown> | null {
-  return typeof input === 'object' && input !== null
+  return typeof input === 'object' && input !== null && !Array.isArray(input)
     ? (input as Record<string, unknown>)
     : null;
 }
@@ -112,11 +96,6 @@ function extractPath(obj: Record<string, unknown>): string | null {
 }
 
 function extractEdits(tool: FileChangeTool, obj: Record<string, unknown>): EditPair[] | null {
-  if (tool === 'write') {
-    const content = obj['content'];
-    if (typeof content !== 'string') return null;
-    return [{ oldStr: '', newStr: content }];
-  }
   if (tool === 'multiedit') {
     const rawEdits = obj['edits'];
     if (!Array.isArray(rawEdits)) return null;
@@ -144,33 +123,51 @@ function extractEdits(tool: FileChangeTool, obj: Record<string, unknown>): EditP
 // virtualized list. events.ts keeps the `input` object identity stable across
 // status updates (it spreads the old message), so memoizing on input identity
 // turns repeats into lookups without any per-message bookkeeping.
-const fileChangeCache = new WeakMap<object, { tool: FileChangeTool; change: FileChange | null }>();
+const fileChangeCache = new WeakMap<object, { tool: FileChangeTool; content: unknown; changes: readonly FileChange[] }>();
 
 /** Project a tool invocation to its FileChange, or null when the input
  *  shape isn't a recognised file mutation. */
 export function computeFileChange(
   toolName: string,
   input: unknown,
+  content?: readonly ToolResultContent[],
 ): FileChange | null {
-  const tool = fileChangeTool(toolName);
-  if (!tool) return null;
-  const obj = asRecord(input);
-  if (!obj) return null;
-  const cached = fileChangeCache.get(obj);
-  if (cached && cached.tool === tool) return cached.change;
-  const change = computeFileChangeUncached(tool, obj);
-  fileChangeCache.set(obj, { tool, change });
-  return change;
+  return computeFileChanges(toolName, input, content)[0] ?? null;
 }
 
-function computeFileChangeUncached(
+export function computeFileChanges(toolName: string, input: unknown, content?: readonly ToolResultContent[]): readonly FileChange[] {
+  const tool = fileChangeTool(toolName);
+  if (!tool) return [];
+  const obj = asRecord(input) ?? {};
+  const cached = fileChangeCache.get(obj);
+  if (cached && cached.tool === tool && cached.content === content) return cached.changes;
+  const requested = requestedChanges(tool, obj);
+  const facts = fileMutationFacts(content);
+  const changes = facts?.length ? facts.map(fact => committedChange(fact, requested)) : requested;
+  fileChangeCache.set(obj, { tool, content, changes });
+  return changes;
+}
+
+function requestedChanges(
   tool: FileChangeTool,
   obj: Record<string, unknown>,
-): FileChange | null {
+): readonly FileChange[] {
+  if (tool === 'patch') return typeof obj.patch === 'string' ? codexPatchChanges(obj.patch) : [];
   const path = extractPath(obj);
-  if (!path) return null;
+  if (!path) return [];
+  if (tool === 'edit' && typeof obj.patch === 'string') {
+    const change = unifiedPatchChange(path, obj.patch);
+    return change ? [change] : [];
+  }
+  if (tool === 'write') return typeof obj.content === 'string'
+    ? [contentChange(path, obj.content, '缺少修改前快照，仅展示写入内容，无法计算增删。')] : [];
+  if (tool === 'notebookedit' && typeof obj.new_source === 'string') {
+    const note = obj.edit_mode === 'delete' ? '删除单元；缺少修改前单元快照，无法展示删除 diff。'
+      : '单元写入内容；缺少修改前单元快照，无法计算文件 diff。';
+    return [contentChange(path, obj.new_source, note, 'cell')];
+  }
   const pairs = extractEdits(tool, obj);
-  if (!pairs) return null;
+  if (!pairs) return [];
 
   const lines: DiffLine[] = [];
   let additions = 0;
@@ -182,14 +179,25 @@ function computeFileChangeUncached(
       lines.push(line);
     }
   }
-  return {
-    path,
-    isNew: tool === 'write' && deletions === 0,
-    additions,
-    deletions,
-    lines,
-    hunks: pairs.length,
-  };
+  return [changeFromLines(path, lines, { additions, deletions, hunks: pairs.length })];
+}
+
+function committedChange(fact: FileMutationFact, requested: readonly FileChange[]): FileChange {
+  const samePath = (path: string) => path.replace(/\\/g, '/') === fact.path.replace(/\\/g, '/');
+  const proposed = requested.find(change => samePath(change.path));
+  const preview = fact.kind !== 'overwritten' && fact.preview ? unifiedPatchChange(fact.path, fact.preview, 'result') : null;
+  if (preview) return { ...preview, operation: fact.kind, isNew: fact.kind === 'created', fromPath: fact.from, truncated: fact.truncated || preview.truncated };
+  if (fact.kind === 'created' && proposed?.basis === 'content') {
+    return changeFromLines(fact.path, proposed.lines.map(line => ({ ...line, kind: 'add' })), {
+      operation: 'created', isNew: true, basis: 'result', lineNumbers: 'file', truncated: fact.truncated,
+    });
+  }
+  if (fact.kind === 'overwritten' && proposed) {
+    return contentChange(fact.path, proposed.lines.filter(line => line.kind !== 'del' && line.kind !== 'hunk').map(line => line.text).join('\n'),
+      '已覆盖文件；缺少修改前快照，仅展示写入内容，无法计算增删。', 'overwritten');
+  }
+  if (proposed) return { ...proposed, operation: fact.kind, isNew: fact.kind === 'created', fromPath: fact.from ?? proposed.fromPath };
+  return contentChange(fact.path, '', '工具已报告文件变更，但缺少前后内容，无法展示 diff。', fact.kind);
 }
 
 /** Split an absolute path into [projectHint, relativeOrTail] for display.

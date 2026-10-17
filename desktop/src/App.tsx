@@ -118,6 +118,8 @@ import { WorkResultContent, latestRunArtifactCount } from './components/chat/Wor
 // Round-3 (P1-9): the observer that leaves a closing record when a run is
 // stopped by hand. See src/components/chat/run-terminal-notice.ts.
 import { createTerminalNoticeObserver } from './components/chat/run-terminal-notice'
+import { createTurnTimingObserver } from './components/chat/turn-timing-observer'
+import { finalizeTurnTimer } from './components/chat/turn-timer'
 // Round-3 (P0-5): the interrupt outcome is reason-typed, not a boolean.
 // See src/runtime/steer-delivery.ts.
 import {
@@ -1568,15 +1570,7 @@ function App(): ReactElement {
     window.addEventListener('pagehide', onPageHide)
     return () => window.removeEventListener('pagehide', onPageHide)
   }, [supervisor])
-  // v1.16.4: `turnStartedAt` is GONE from top-level
-  // state. Each user message now carries its own
-  // `turnStartedAt` + `finalElapsedMs`; events.ts
-  // stamps the freeze on first output. MessageList
-  // does the per-turn lookup. This is what makes
-  // multiple turns coexist independently — the
-  // previous global state was the root cause of the
-  // "second turn sends and the first row's spinner
-  // pauses weirdly" bug.
+  // Send anchors and settled totals belong to their user turns, never global state.
   const [peekFile, setPeekFile] = useState<{ path: string; content: string } | null>(null)
   // v1.16.5: Phase 2.5 收口 — Work sub-app can request
   // the Settings modal (e.g. when the user has no API
@@ -2188,12 +2182,26 @@ function App(): ReactElement {
       ),
     [codeProjector, companion, remoteController, userLearningLifecycle],
   )
-  // The terminal record rides on top so it never alters what the projectors
-  // write — it is a closing RECORD for a run whose visible tail stopped
-  // mid-sentence. See run-terminal-notice.ts (Round-3 P1-9).
+  // Capture terminal time before asynchronous artifact/learning projection.
+  // The closing cancellation notice remains independent of duration.
+  const turnTimingObserver = useMemo(
+    () =>
+      createTurnTimingObserver((scope, update) => {
+        if (scope.conversationId) updateMessagesAt(scope.projectRoot, scope.conversationId, update)
+      }),
+    [updateMessagesAt],
+  )
   const codeLifecycleObserver = useMemo(
-    () => composeLifecycleObservers(codeLifecycleObserverBase, terminalNoticeObserver),
-    [codeLifecycleObserverBase, terminalNoticeObserver],
+    () =>
+      composeLifecycleObservers(
+        turnTimingObserver,
+        composeLifecycleObservers(codeLifecycleObserverBase, terminalNoticeObserver),
+      ),
+    [codeLifecycleObserverBase, terminalNoticeObserver, turnTimingObserver],
+  )
+  const workLifecycleObserver = useMemo(
+    () => composeLifecycleObservers(turnTimingObserver, userLearningLifecycle),
+    [userLearningLifecycle, turnTimingObserver],
   )
 
   useEffect(() => {
@@ -2980,7 +2988,7 @@ function App(): ReactElement {
                     currentSettings.workCad,
                   ),
                   toolRuntime: gateRuntime,
-                  lifecycleObserver: userLearningLifecycle,
+                  lifecycleObserver: workLifecycleObserver,
                   onEvents: (events) => {
                     sensitiveWindowWatcherRef.current?.(events, sessionId)
                     // §18.3 wrong_window_dispatch_count: pair intent receipts
@@ -3056,7 +3064,7 @@ function App(): ReactElement {
           // P0-A §3.3-5: the run uses the exact runtime the capability gate
           // resolved (single resolve — the gate and the run cannot disagree).
           toolRuntime: gateRuntime,
-          lifecycleObserver: userLearningLifecycle,
+          lifecycleObserver: workLifecycleObserver,
           onEvents: (events) => {
             // PR-6 偏差③收口: an elevated/UAC window observed in a tool
             // result withdraws the screen-consent lease BEFORE the batch is
@@ -3108,7 +3116,7 @@ function App(): ReactElement {
         // eslint-disable-next-line no-console
         console.error('[trylo] work send failed', err)
         updateMessagesAt(root, sessionId, (prev) => [
-          ...prev,
+          ...finalizeTurnTimer(prev, turnId, Date.now(), 'failed'),
           {
             id: `err-${now.toString(36)}`,
             kind: 'error',
@@ -3131,6 +3139,7 @@ function App(): ReactElement {
       userLearning,
       workProjector,
       workMessages,
+      workLifecycleObserver,
       openSettings,
       workRunning,
       setWorkInput,
@@ -3615,6 +3624,7 @@ function App(): ReactElement {
             partial: false,
             turnStartedAt: newStartedAt,
             finalElapsedMs: undefined,
+            turnTiming: undefined,
           },
         ]
       })
@@ -3659,7 +3669,7 @@ function App(): ReactElement {
         console.error('[trylo] onSaveEdit: spawn failed', err)
         const reason = err instanceof Error ? err.message : String(err)
         updateMessagesAt(workspaceRootAtEdit, sessionIdAtEdit, (prev) => [
-          ...finalizeLatestTurnTimer(prev),
+          ...finalizeLatestTurnTimer(prev, Date.now(), 'failed'),
           {
             id: `code-start-error-${Date.now().toString(36)}`,
             kind: 'notice',
@@ -3689,24 +3699,13 @@ function App(): ReactElement {
 
   // Automatic compaction uses the CLI request budget, never a UI percentage.
 
-  // v1.15.8: stop button. v1 just clears UI state — the
-  // underlying CLI process keeps running until the Rust
-  // process_spawn sees its stdout close (Phase 3: wire
-  // process_stop to actually kill the child).
-  //
-  // v1.16.4: there is no top-level `turnStartedAt` to
-  // clear anymore — the per-turn timer lives on the
-  // user message and freezes on first output. The
-  // stop button just marks the chat as no longer
-  // running; any in-flight user message keeps its
-  // `finalElapsedMs` (frozen at first output) and is
-  // simply no longer the "active" turn.
+  // Stop settles this turn and terminates its conversation-owned child.
   const onStop = useCallback((): void => {
     // v1.16.6 (M4-A): scoped to the VISIBLE Code conversation only.
     // Freeze the per-turn timer, then terminate THIS conversation's
     // CLI — every other conversation's run keeps going. Pure
     // navigation no longer routes through this.
-    setMessages((prev) => finalizeLatestTurnTimer(prev))
+    setMessages((prev) => finalizeLatestTurnTimer(prev, Date.now(), 'cancelled'))
     try {
       const traceId = tracesByConversationRef.current.get(
         conversationTraceKey(currentWorkspaceKey, codeSessionId ?? ''),
@@ -5007,7 +5006,7 @@ function App(): ReactElement {
           // timer and surface the real failure in the conversation; a console-
           // only error makes the composer appear permanently unresponsive.
           updateMessagesAt(workspaceRootAtSend, sessionIdAtSend, (prev) => [
-            ...finalizeLatestTurnTimer(prev),
+            ...finalizeLatestTurnTimer(prev, Date.now(), 'failed'),
             {
               id: `code-start-error-${Date.now().toString(36)}`,
               kind: 'notice',

@@ -18,6 +18,7 @@
 //      it still work; missing duration and tool lists are never guessed.
 
 import type { LoopEvent } from './loop-events';
+import { FILE_MUTATION_SCHEMA } from '../tooling/file-mutation-facts';
 import { parseCliV1Event, type CliV1Event, type CliV1Rejected, type CliV1Usage } from './trylo-v1-protocol';
 import { desktopV1Tool } from './trylo-v1-tool';
 import { ThinkScrubber } from './think-scrubber';
@@ -383,6 +384,7 @@ export class TryloV1EventAdapter {
         tool: name,
         ok,
         output: event.output,
+        ...(event.fileChanges === undefined ? {} : { content: [{ type: 'structured' as const, schema: FILE_MUTATION_SCHEMA, value: event.fileChanges }] }),
         truncated: event.truncated,
         ...(ok ? {} : { error: event.message || event.code || event.output || `tool failed (${event.status})` }),
         // Measured when we saw the matching tool_use; 0 when we didn't

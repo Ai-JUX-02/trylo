@@ -37,6 +37,16 @@
 .browser-tool-sidebar .browser-tool-sidebar__tabs button[aria-selected='true'] { background: var(--bg-panel); color: var(--fg); box-shadow: inset 0 -2px var(--brand); }
 .browser-tool-sidebar .browser-tool-sidebar__tabs .browser-tool-sidebar__new-tab { flex: none; width: 28px; display: grid; place-items: center; padding: 0; }
 .browser-tool-sidebar__picture { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; background: var(--bg); }
+.browser-viewport-controls { flex: none; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--bg-panel); font-size: 11px; }
+.browser-viewport-controls__row, .browser-viewport-controls__custom { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.browser-viewport-controls select, .browser-viewport-controls input { min-width: 0; border: 1px solid var(--border); border-radius: 4px; padding: 4px 5px; background: var(--bg); color: var(--fg); font: inherit; }
+.browser-viewport-controls select { max-width: 108px; }
+.browser-viewport-controls__dimensions { color: var(--fg); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.browser-viewport-controls__scale { margin-left: auto; color: var(--fg-muted); white-space: nowrap; }
+.browser-viewport-controls__custom { margin-top: 6px; }
+.browser-viewport-controls__custom input { width: 70px; flex: 1; }
+.browser-viewport-controls__custom button { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+.browser-viewport-controls .browser-tool-sidebar__reason { padding: 6px 0 0; }
 .browser-tool-sidebar__empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px; font-size: 13px; color: var(--fg-muted); }
 .browser-tool-sidebar__controls { display: flex; align-items: center; gap: 8px; flex: none; min-height: 44px; padding: 6px 10px; border-top: 1px solid var(--border); }
 .browser-tool-sidebar__owner { font-size: 10px; line-height: 14px; color: var(--fg-muted); }

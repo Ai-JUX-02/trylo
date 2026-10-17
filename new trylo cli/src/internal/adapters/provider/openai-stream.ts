@@ -4,17 +4,26 @@ import { createOpenAiTranslator } from "./openai-translate.js";
 import { isDoneFrame, parseSseFrames, type SseFrame } from "./sse.js";
 
 /** Coalesce wire fragments without changing text, arguments, or block ordering. */
-export function translateBody(body: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ProviderEvent> {
-  return coalesceDeltas(decodeBody(body, signal));
+export async function* translateBody(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+): AsyncGenerator<ProviderEvent> {
+  const reader = body.getReader();
+  yield* coalesceDeltas(decodeBody(reader, signal), async () => {
+    try {
+      await reader.cancel();
+    } catch {
+      /* A just-completed read may already have released the lock. */
+    }
+  });
 }
 
 /** Hold finish for trailing usage, stop at [DONE], and release the HTTP reader. */
 async function* decodeBody(
-  body: ReadableStream<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
   signal: AbortSignal,
 ): AsyncGenerator<CoalesceEvent> {
   const translator = createOpenAiTranslator();
-  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let sawAny = false;
@@ -47,8 +56,7 @@ async function* decodeBody(
           yield event;
         }
       }
-      // Chunk boundaries are not semantic flush points. The coalescer delivers
-      // the first delta immediately, then bounds later fragments by content.
+      // The coalescer bounds later fragments by both content and time.
     }
   } catch {
     bodyClosed = true;
@@ -111,4 +119,3 @@ function translateFrame(
     ];
   }
 }
-

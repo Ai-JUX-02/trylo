@@ -68,6 +68,7 @@ it('starts repeated keyed OpenAI turns without redundant credential subprocesses
       JSON.stringify({ measurements, requests: requests.length, resumed: service.argv.some(args => args.includes('--resume')),
         processesRemaining: service.children.size }, null, 2));
     expect(measurements.map(row => row.statusSubprocesses)).toEqual([0, 0, 0]);
+    expect(measurements[0]?.subprocesses).toBe(2);
     expect(measurements.slice(1).map(row => row.subprocesses)).toEqual([1, 1]);
     expect(service.children.size).toBe(0);
   } finally {

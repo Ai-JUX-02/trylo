@@ -38,6 +38,28 @@ async function stopChild(child: ChildProcessWithoutNullStreams) {
   await exited
 }
 
+async function repositoryBrowserEntry(): Promise<string> {
+  const registryPath = path.resolve('../tool-sources.json')
+  const config: unknown = JSON.parse(await fs.readFile(registryPath, 'utf8'))
+  if (!config || typeof config !== 'object' || !('tools' in config)) {
+    throw new Error('Repository tool registry is missing its tools declaration')
+  }
+  const tools = config.tools
+  if (!tools || typeof tools !== 'object' || !('playwright' in tools)) {
+    throw new Error('Repository tool registry does not declare Playwright')
+  }
+  const browser = tools.playwright
+  if (!browser || typeof browser !== 'object' || !('entry' in browser)
+    || typeof browser.entry !== 'string' || !('policy' in browser) || browser.policy !== 'repository-local') {
+    throw new Error('Repository Playwright entry must be a repository-local path')
+  }
+  const root = path.dirname(registryPath)
+  const entry = path.resolve(root, browser.entry)
+  if (!entry.startsWith(root + path.sep)) throw new Error('Repository Playwright entry escaped the checkout')
+  await fs.access(entry)
+  return entry
+}
+
 async function hostFixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'trylo-native-startup-'))
   const marker = 'about:blank#trylo-native-native-root'
@@ -125,7 +147,7 @@ describe('native browser startup lifecycle', () => {
     act(() => f.emit('after-replay'))
     const ensures = () => vi.mocked(nativeBrowserCommand).mock.calls.filter(([command]) => command.operation === 'ensure')
     await waitFor(() => expect(ensures()).toHaveLength(1))
-    expect(f.invoke).toHaveBeenCalledTimes(1)
+    expect(f.invoke.mock.calls.filter(([, args]) => JSON.parse(String(args?.frame)).method === 'tooling.nativeBrowserCommandResult')).toHaveLength(1)
     unmount()
     vi.mocked(nativeBrowserCommand).mockClear()
     act(() => f.emit('after-unmount'))
@@ -144,8 +166,9 @@ describe('native browser startup lifecycle', () => {
       return facade.current
     }, { wrapper })
     try {
-      // Use the repository's pinned MCP, without installing or altering it.
-      await f.client.request('tooling.setLocalOverride', { id: 'playwright', path: path.resolve('../new_tool/browser/playwright-mcp/cli.js') })
+      // Use the declared entry in both development and public source checkouts.
+      // Preparation remains explicit; the test never downloads or installs tools.
+      await f.client.request('tooling.setLocalOverride', { id: 'playwright', path: await repositoryBrowserEntry() })
       // The first send must create the browser without opening the sidebar.
       const runtime = await act(() => within(result.current.resolveProfile({ surface: 'work', projectRoot: f.root, projectKey: f.root, conversationId: 'one', computerUse: false, permissionLevel: 'workspace_write' })))
       expect(vi.mocked(nativeBrowserCommand).mock.calls.filter(([command]) => command.operation === 'ensure')).toHaveLength(1)

@@ -29,7 +29,7 @@ import { toPersistedToolResultContent } from '../../tooling/tool-result-content'
 import { isTeamSeatId } from '../../surfaces/shared/seats';
 import { eventMessageId, lastUserIndex } from './message-identity';
 import { applyText, applyThinking } from './stream-message-reducer';
-import { finalizeLatestTurnTimer, freezeTurnTimer, hasAssistantOutputInTurn } from './turn-timer';
+import { finalizeLatestTurnTimer } from './turn-timer';
 import { applyCompact, applyCompactionTrigger } from './compaction-message-reducer';
 export { finalizeLatestTurnTimer } from './turn-timer';
 
@@ -90,20 +90,13 @@ function applyToolUse(msgs: ChatMessage[], e: ToolUseEvent): ChatMessage[] {
   // there; the final reply becomes a fresh bubble that
   // renders *after* the tool flow.
   //
-  // v1.16.4: also stamp turnId. The freeze trigger
-  // (turnStartedAt → finalElapsedMs) lives on the
-  // FIRST non-empty thinking/text event, not on
-  // tool_use — by the time a tool fires the spinner
-  // is already gone in the user's view.
+  // Tool calls retain the user turn identity; elapsed time settles only at terminal.
   const lastUserIdx = lastUserIndex(msgs);
   const turnId = lastUserIdx >= 0 ? msgs[lastUserIdx]?.id : undefined;
   if (msgs.slice(lastUserIdx + 1).some(message => message.kind === 'tool'
     && (e.id !== '' ? message.toolCallId === e.id
       : message.id === eventMessageId(msgs, e, 'tool-')))) return msgs;
-  const withFrozenTimer = hasAssistantOutputInTurn(msgs, lastUserIdx)
-    ? msgs
-    : freezeTurnTimer(msgs, lastUserIdx, e.ts);
-  const frozen: ChatMessage[] = withFrozenTimer.map((m, i) => {
+  const frozen: ChatMessage[] = msgs.map((m, i) => {
     if (i > lastUserIdx && m.kind === 'text' && m.role === 'assistant' && !m.frozen) {
       return { ...m, frozen: true };
     }
@@ -430,7 +423,10 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     // v1.15.7: drop all the bookkeeping / lifecycle /
     // metadata events. Phase 3 can re-introduce them
     // in a side panel if needed.
-    case 'loop_end':    return finalizeLatestTurnTimer(msgs, e.ts);
+    case 'loop_end':    return finalizeLatestTurnTimer(msgs, e.ts,
+      e.reason === 'cancelled' || e.reason === 'abort' ? 'cancelled'
+        : e.isError ? 'failed' : 'completed');
+    case 'aborted': return finalizeLatestTurnTimer(msgs, e.ts, e.reason === 'user' ? 'cancelled' : 'failed');
     case 'subagent':    return applySubagent(msgs, e);
     case 'session_start':
     case 'loop_start':
@@ -448,7 +444,6 @@ function applyOne(msgs: ChatMessage[], e: LoopEvent): ChatMessage[] {
     case 'todo_updated':
     case 'memory_updated':
     case 'plan_mode_transition':
-    case 'aborted':
     case 'loop_started':
     case 'budget_breached':
     case 'loop_finished':

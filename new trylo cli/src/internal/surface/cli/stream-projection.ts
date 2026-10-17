@@ -1,5 +1,6 @@
 import type { Envelope, JsonObject, JsonValue } from "../../protocol/envelope.js";
 import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
+import { projectFileMutations } from "./file-mutation-projection.js";
 
 /**
  * The envelope -> CLI event translator, kept as one bounded state machine.
@@ -145,6 +146,7 @@ function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEven
   const code = text(envelope.payload, "code");
   const reason = failureReason(envelope.payload);
   const elapsed = started === undefined ? undefined : Date.parse(envelope.timestamp) - started.timestamp;
+  const fileChanges = envelope.payload.status === "succeeded" ? projectFileMutations(name, envelope.payload.value) : undefined;
   return {
     type: "tool_result", toolCallId,
     status: text(envelope.payload, "status"),
@@ -153,6 +155,7 @@ function projectToolResult(state: BlockState, envelope: Envelope): CliStreamEven
     ...(reason === "" ? {} : { message: reason }),
     ...(name === "" ? {} : { name }),
     ...(code === "" ? {} : { code }),
+    ...(fileChanges === undefined ? {} : { fileChanges }),
     ...(elapsed === undefined || !Number.isFinite(elapsed) ? {} : { durationMs: Math.max(0, elapsed) }),
   };
 }

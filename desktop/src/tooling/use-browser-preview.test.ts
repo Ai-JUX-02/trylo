@@ -19,22 +19,36 @@ function fixture() {
   const state: NativeBrowserState = { ok: true, scope: '["d:/task","one"]', state: 'running', detail: '', control: 'agent', inFlight: 0, activeLabel: 'one', tabs: [{ id: 'real-target', label: 'one', title: 'Page', url: 'https://page.test' }] }
   const open = vi.fn(async () => state)
   const control = vi.fn(async (_scope: string, held: boolean) => ({ ...state, control: held ? 'pending' as const : 'agent' as const, inFlight: held ? 1 : 0 }))
-  const facade = { connectNativeBridge: () => () => {}, nativeBrowserOpen: open, nativeBrowserControl: control, nativeBrowserState: vi.fn(async () => state), nativeBrowserSelect: vi.fn(async () => state), nativeBrowserCreate: vi.fn(async () => state) } as unknown as ToolingFacade
+  const layout = vi.fn(async (_scope: string, _bounds: unknown, _visible: boolean) => state)
+  const viewport = vi.fn(async (_scope: string, _label: string, _viewport: unknown) => state)
+  const facade = { nativeBrowserLayout: layout, nativeBrowserViewport: viewport, connectNativeBridge: () => () => {}, nativeBrowserOpen: open, nativeBrowserControl: control, nativeBrowserState: vi.fn(async () => state), nativeBrowserSelect: vi.fn(async () => state), nativeBrowserCreate: vi.fn(async () => state) } as unknown as ToolingFacade
   const manager = { currentHealth: 'starting', onHealth: (fn: typeof health) => { health = fn; return () => {} }, client: { onEvent: (name: string, fn: (data: unknown) => void) => { events.set(name, fn); return () => events.delete(name) } } } as unknown as ServiceManager
-  return { facade, manager, open, control, events, state, ready: () => health('ready'), setHealth: (value: ServiceHealth) => health(value) }
+  return { facade, manager, open, control, layout, viewport, events, state, ready: () => health('ready'), setHealth: (value: ServiceHealth) => health(value) }
 }
 describe('native browser controller', () => {
+  it('uses one viewport owner and ignores a late older layout snapshot', async () => {
+    const f = fixture()
+    const { result } = renderHook(() => useBrowserPreview({ facade: f.facade, serviceManager: f.manager, projectRoot: 'D:/task', conversationId: 'one' }))
+    act(() => f.ready()); await waitFor(() => expect(result.current.status).toBe('running'))
+    const fixed = { ...f.state, revision: 10, viewport: { mode: 'fixed' as const, width: 1440, height: 900, scale: .25 } }
+    f.viewport.mockResolvedValueOnce(fixed)
+    await act(() => result.current.setPageViewport!({ mode: 'fixed', width: 1440, height: 900 }))
+    expect(f.viewport).toHaveBeenCalledWith(f.state.scope, 'one', { mode: 'fixed', width: 1440, height: 900 })
+    act(() => f.events.get('tooling.nativeBrowserState')?.({ ...f.state, revision: 9 }))
+    expect(result.current.nativeState?.viewport).toEqual(fixed.viewport)
+    await expect(result.current.setZoom(2)).rejects.toThrow('固定页面尺寸')
+  })
   it('coalesces a rapid drag at the real controller instead of replaying every native size', async () => {
     const f = fixture()
     const { result } = renderHook(() => useBrowserPreview({ facade: f.facade, serviceManager: f.manager, projectRoot: 'D:/task', conversationId: 'one' }))
     act(() => f.ready()); await waitFor(() => expect(result.current.status).toBe('running'))
     let finish: () => void = () => {}
-    vi.mocked(nativeBrowserCommand).mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ scope: f.state.scope, cdpPort: 9000, tabs: [], activeLabel: 'one' }) }))
+    f.layout.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve(f.state) }))
     const first = result.current.setBounds({ x: 700, y: 100, width: 320, height: 600 }, true)
-    await waitFor(() => expect(nativeBrowserCommand).toHaveBeenCalledWith(expect.objectContaining({ bounds: expect.objectContaining({ width: 320 }) })))
+    await waitFor(() => expect(f.layout).toHaveBeenCalledWith(f.state.scope, expect.objectContaining({ width: 320 }), true))
     const drag = Array.from({ length: 120 }, (_, index) => result.current.setBounds({ x: 700, y: 100, width: 321 + index, height: 600 }, true))
     finish(); await act(async () => { await Promise.all([first, ...drag]) })
-    expect(vi.mocked(nativeBrowserCommand).mock.calls.filter(([command]) => command.bounds?.y === 100).map(([command]) => command.bounds?.width)).toEqual([320, 440])
+    expect(f.layout.mock.calls.filter(([, bounds]) => (bounds as { y?: number })?.y === 100).map(([, bounds]) => (bounds as { width: number }).width)).toEqual([320, 440])
   })
   it('does not overwrite a recovered connection with an old startup timeout', async () => {
     const f = fixture()
@@ -81,12 +95,12 @@ describe('native browser controller', () => {
     act(() => f.ready()); await waitFor(() => expect(result.current.status).toBe('running'))
     const bounds = { x: 800, y: 70, width: 480, height: 640 }
     await act(() => result.current.setBounds(bounds, true))
-    expect(nativeBrowserCommand).toHaveBeenCalledWith({ scope: f.state.scope, operation: 'layout', bounds, visible: true })
+    expect(f.layout).toHaveBeenCalledWith(f.state.scope, bounds, true)
     await act(() => result.current.setZoom(2))
     expect(nativeBrowserCommand).toHaveBeenCalledWith({ scope: f.state.scope, operation: 'zoom', zoom: 2 })
     expect(result.current.zoom).toBe(2)
     await act(() => result.current.stop())
-    expect(nativeBrowserCommand).toHaveBeenCalledWith({ scope: f.state.scope, operation: 'layout', visible: false })
+    expect(f.layout).toHaveBeenCalledWith(f.state.scope, undefined, false)
     expect(result.current.nativeState?.tabs).toHaveLength(1)
   })
   it('rejects stale conversation events and hides the old native view on a switch', async () => {
@@ -99,7 +113,7 @@ describe('native browser controller', () => {
     vi.mocked(f.facade.nativeBrowserState).mockImplementationOnce(() => new Promise<NativeBrowserState>((_resolve, reject) => { rejectOld = reject }))
     act(() => page({ scope: f.state.scope, label: 'one' }))
     rerender({ id: 'two' })
-    await waitFor(() => expect(nativeBrowserCommand).toHaveBeenCalledWith({ scope: f.state.scope, operation: 'layout', visible: false }))
+    await waitFor(() => expect(f.layout).toHaveBeenCalledWith(f.state.scope, undefined, false))
     act(() => f.events.get('tooling.nativeBrowserState')?.({ ...f.state, control: 'user', tabs: [{ ...f.state.tabs[0]!, url: 'https://stale.test' }] }))
     expect(result.current.url).not.toBe('https://stale.test')
     await act(async () => { rejectOld(new Error('old browser read failed')); await Promise.resolve() })
@@ -110,14 +124,14 @@ describe('native browser controller', () => {
     const { result, rerender } = renderHook(({ id }) => useBrowserPreview({ facade: f.facade, serviceManager: f.manager, projectRoot: 'D:/task', conversationId: id }), { initialProps: { id: 'one' } })
     act(() => f.ready()); await waitFor(() => expect(result.current.status).toBe('running'))
     let finish: () => void = () => {}
-    vi.mocked(nativeBrowserCommand).mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ scope: f.state.scope, cdpPort: 9000, tabs: [], activeLabel: 'one' }) }))
+    f.layout.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve(f.state) }))
     const first = result.current.setBounds({ x: 800, y: 70, width: 480, height: 640 }, true)
-    await waitFor(() => expect(nativeBrowserCommand).toHaveBeenCalledWith(expect.objectContaining({ bounds: expect.objectContaining({ x: 800 }) })))
+    await waitFor(() => expect(f.layout).toHaveBeenCalledWith(f.state.scope, expect.objectContaining({ x: 800 }), true))
     const late = result.current.setBounds({ x: 900, y: 70, width: 480, height: 640 }, true)
     rerender({ id: 'two' }); finish()
     await act(async () => { await first; await late })
-    expect(nativeBrowserCommand).not.toHaveBeenCalledWith(expect.objectContaining({ scope: f.state.scope, visible: true, bounds: expect.objectContaining({ x: 900 }) }))
-    await waitFor(() => expect(nativeBrowserCommand).toHaveBeenCalledWith({ scope: f.state.scope, operation: 'layout', visible: false }))
+    expect(f.layout).not.toHaveBeenCalledWith(f.state.scope, expect.objectContaining({ x: 900 }), true)
+    await waitFor(() => expect(f.layout).toHaveBeenCalledWith(f.state.scope, undefined, false))
   })
   it('surfaces native startup failure without falling back to screenshot preview', async () => {
     const f = fixture(); f.open.mockRejectedValueOnce(new Error('native host unavailable'))

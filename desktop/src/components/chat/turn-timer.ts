@@ -1,47 +1,37 @@
-import type { ChatMessage, TextMessage } from './types';
-import { lastUserIndex } from './message-identity';
+import type { ChatMessage, TextMessage, TurnTiming } from './types'
+import { lastUserIndex } from './message-identity'
 
-export function hasAssistantOutputInTurn(
-  msgs: readonly ChatMessage[],
-  lastUserIdx: number,
-): boolean {
-  for (let i = msgs.length - 1; i > lastUserIdx; i--) {
-    const m = msgs[i];
-    if (!m) continue;
-    if (m.kind === 'thinking' || (m.kind === 'text' && m.role === 'assistant')) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** Compute and stamp `finalElapsedMs` on the user
- *  message that started the current turn. Idempotent
- *  if already set (we don't overwrite a frozen
- *  value). Returns the (possibly unchanged) array.
- *  Pure — no React state. */
-export function freezeTurnTimer(
-  msgs: readonly ChatMessage[],
-  lastUserIdx: number,
-  nowTs: number,
-): ChatMessage[] {
-  if (lastUserIdx < 0) return [...msgs];
-  const u = msgs[lastUserIdx];
-  if (!u || u.kind !== 'text' || u.role !== 'user') return [...msgs];
-  if (u.finalElapsedMs !== undefined) return [...msgs];
-  const started = u.turnStartedAt;
-  if (started === undefined) return [...msgs];
-  const elapsed = Math.max(0, nowTs - started);
-  const updated: TextMessage = { ...u, finalElapsedMs: elapsed };
-  const out: ChatMessage[] = [...msgs];
-  out[lastUserIdx] = updated;
-  return out;
-}
-
+/** One terminal record per user turn. Old first-output durations are never
+ * promoted to full execution times. */
 export function finalizeLatestTurnTimer(
   msgs: readonly ChatMessage[],
   nowTs: number = Date.now(),
+  outcome: TurnTiming['outcome'] = 'interrupted',
 ): ChatMessage[] {
-  return freezeTurnTimer(msgs, lastUserIndex(msgs), nowTs);
+  return finalizeTurnTimer(msgs, msgs[lastUserIndex(msgs)]?.id ?? '', nowTs, outcome)
 }
 
+/** Lifecycle observers settle by identity, so a late terminal cannot stamp a
+ * newer turn after the user navigates or sends another message. */
+export function finalizeTurnTimer(
+  msgs: readonly ChatMessage[],
+  turnId: string,
+  nowTs: number,
+  outcome: TurnTiming['outcome'],
+): ChatMessage[] {
+  const index = msgs.findIndex((message) => message.id === turnId)
+  const user = msgs[index]
+  if (
+    !user ||
+    user.kind !== 'text' ||
+    user.role !== 'user' ||
+    user.turnStartedAt === undefined ||
+    user.turnTiming
+  )
+    return [...msgs]
+  const updated: TextMessage = {
+    ...user,
+    turnTiming: { elapsedMs: Math.max(0, nowTs - user.turnStartedAt), outcome },
+  }
+  return msgs.map((message, position) => (position === index ? updated : message))
+}

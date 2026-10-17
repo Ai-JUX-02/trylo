@@ -249,6 +249,11 @@
   color: var(--ink-mute);
 }
 
+.fchange__diff-line--hunk {
+  color: var(--ink-mute);
+  background: var(--bg);
+}
+
 .fchange__diff-more {
   padding: 4px 10px;
   color: var(--ink-mute);

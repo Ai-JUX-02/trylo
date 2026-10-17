@@ -33,6 +33,22 @@ function user(id: string, text: string, createdAt: number): ChatMessage {
 }
 
 describe('conversation history', () => {
+  it('restores whole-turn timing and drops malformed timing without promoting legacy values', () => {
+    const created = createConversation(emptyWorkspaceHistory(), { kind: 'code', now: 100 });
+    const base = created.history.conversations[created.session.id]!;
+    const normalize = (turnTiming: unknown) => normalizeWorkspaceHistory({
+      ...created.history,
+      conversations: { [created.session.id]: { ...base, messages: [
+        { ...user('u', 'continue', 100), turnStartedAt: 100, finalElapsedMs: 17000, turnTiming },
+      ] } },
+    }).conversations[created.session.id]!.messages[0];
+    const timing = { elapsedMs: 91000, outcome: 'completed' };
+    expect(normalize(timing)).toMatchObject({ turnTiming: timing });
+    for (const invalid of [null, { elapsedMs: -1, outcome: 'completed' }, { elapsedMs: 1, outcome: 'unknown' }, 'bad']) {
+      expect(normalize(invalid)).toMatchObject({ finalElapsedMs: 17000 });
+      expect(normalize(invalid)).toHaveProperty('turnTiming', undefined);
+    }
+  });
   it('keeps Code and Work conversations side by side', () => {
     const code = createConversation(emptyWorkspaceHistory(), {
       kind: 'code', codeMode: 'agent', now: 100,

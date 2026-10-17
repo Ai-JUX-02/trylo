@@ -18,6 +18,8 @@
 //      last line of defence that strips any raw/base64-carrying block
 //      before it can reach a `ToolMessage` and the conversation history.
 
+import { FILE_MUTATION_SCHEMA, normalizeFileMutationFacts } from './file-mutation-facts';
+
 /** §7: reference to binary bytes stored OUTSIDE the session JSON. The
  *  metadata (including the absolute cache path) is what gets persisted;
  *  the bytes live in the ephemeral tool cache with a 24 h TTL. */
@@ -38,6 +40,12 @@ export type ToolResultContent =
   | { readonly type: 'resource'; readonly uri: string; readonly mimeType?: string; readonly text?: string; readonly ref?: BinaryRef }
   | { readonly type: 'resource_link'; readonly uri: string; readonly name: string; readonly mimeType?: string }
   | { readonly type: 'structured'; readonly value: unknown; readonly schema?: string };
+
+function persistedStructuredBlock(value: unknown, schema: unknown): ToolResultContent | undefined {
+  const facts = schema === FILE_MUTATION_SCHEMA ? normalizeFileMutationFacts(value) : undefined;
+  if (schema === FILE_MUTATION_SCHEMA && facts === undefined) return undefined;
+  return { type: 'structured', value: facts ?? value, ...(typeof schema === 'string' ? { schema } : {}) };
+}
 
 /** Transient content: raw base64 still in memory, pre-store. Emitted by
  *  the stream translator, materialized into `ToolResultContent` by the
@@ -276,7 +284,10 @@ export function toPersistedToolResultContent(
         out.push(block);
         break;
       case 'structured':
-        out.push(block);
+        {
+          const structured = persistedStructuredBlock(block.value, block.schema);
+          if (structured) out.push(structured);
+        }
         break;
     }
   }
@@ -349,11 +360,8 @@ export function normalizePersistedToolResultContent(value: unknown): readonly To
       }
       case 'structured': {
         if (!('value' in item)) break;
-        out.push({
-          type: 'structured',
-          value: item['value'],
-          ...(typeof item['schema'] === 'string' ? { schema: item['schema'] } : {}),
-        });
+        const structured = persistedStructuredBlock(item['value'], item['schema']);
+        if (structured) out.push(structured);
         break;
       }
       default:

@@ -15,6 +15,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import { Message } from './Message';
 import { StreamingIndicator } from './StreamingIndicator';
+import { TurnProgress } from './TurnProgress';
 import {
   createFollowController,
   shouldForceTailPin,
@@ -98,7 +99,12 @@ type CodeProcessItem = {
   readonly active: boolean;
 };
 
-export type ListItem = ChatMessage | CodeProcessItem;
+type TurnTimingItem = {
+  readonly kind: '__turn_timing';
+  readonly id: string;
+  readonly user: TextMessage;
+};
+export type ListItem = ChatMessage | CodeProcessItem | TurnTimingItem;
 
 function isCodeProcessItem(item: ListItem): item is CodeProcessItem {
   return item.kind === '__code_process';
@@ -398,14 +404,16 @@ export function MessageList(props: MessageListProps): ReactElement {
           if (!message) continue;
           const wphase = wPhaseAtIndex.get(index);
           if (wphase) {
-            // Fold the Work tool/thinking transcript per phase: it stays open
-            // only while the turn is live AND this phase still has a
-            // running/pending tool. Once the phase's tools complete it collapses
+            // Keep the active Work reasoning or tool phase open. A phase
+            // with only thinking must stream before any tool is called. Once the phase's tools complete it collapses
             // (green ✓) rather than staying expanded+spinning until the entire
             // task finishes. Whole-task end (`running` false) also collapses it.
             const phaseHasActiveTool = wphase.entries.some(
               (e): boolean => e.kind === 'tool' && (e.status === 'running' || e.status === 'pending'),
             );
+            const phaseTail = wphase.entries.at(-1);
+            const phaseHasLiveReasoning = phaseTail === turnMsgs.at(-1)
+              && phaseTail?.kind === 'thinking' && phaseTail.partial === true;
             result.push({
               kind: '__code_process',
               // See the Code branch: firstIndex keeps keys unique when the
@@ -414,13 +422,18 @@ export function MessageList(props: MessageListProps): ReactElement {
               turnId: currentTurn.turnId,
               phaseId: wphase.phaseId,
               entries: wphase.entries,
-              active: props.running === true && phaseHasActiveTool,
+              active: props.running === true && (phaseHasActiveTool || phaseHasLiveReasoning),
             });
             continue;
           }
           if (message.kind === 'tool' || message.kind === 'thinking') continue;
           result.push(message);
         }
+      }
+      const user = turnMsgs.find((message): message is TextMessage =>
+        message.kind === 'text' && message.role === 'user');
+      if (user?.turnTiming && !turnMetaByTurnId.get(currentTurn.turnId)?.isActive) {
+        result.push({ kind: '__turn_timing', id: `turn-timing:${currentTurn.turnId}`, user });
       }
       currentTurn = null;
     };
@@ -598,6 +611,10 @@ export function MessageList(props: MessageListProps): ReactElement {
         scrollerRef={attachScroller}
         data={items}
         itemContent={(_index, item) => {
+          if (item.kind === '__turn_timing') {
+            return <TurnProgress key={item.id} turnStartedAt={item.user.turnStartedAt ?? null}
+              timing={item.user.turnTiming} isActive={false} />;
+          }
           if (isCodeProcessItem(item)) {
             const meta = turnMetaByTurnId.get(item.turnId);
             return (

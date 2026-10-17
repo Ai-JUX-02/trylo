@@ -1281,6 +1281,7 @@ export interface ServiceEventMap {
 export type ServiceEventTopic = keyof ServiceEventMap;
 
 export interface NativeBrowserState {
+  readonly revision?: number;
   readonly ok: boolean;
   readonly scope: string;
   readonly state: 'running' | 'error';
@@ -1288,6 +1289,7 @@ export interface NativeBrowserState {
   readonly control: 'agent' | 'pending' | 'user';
   readonly inFlight: number;
   readonly activeLabel: string;
+  readonly viewport?: import('../host-adapter/native-browser').NativeBrowserViewport;
   readonly tabs: readonly { readonly id: string; readonly label: string; readonly title: string; readonly url: string; readonly popup?: boolean }[];
 }
 
@@ -1357,6 +1359,8 @@ export interface ServiceMethodMap {
   readonly 'tooling.nativeBrowserControl': { params: { readonly scope: string; readonly heldByUser: boolean }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserSelect': { params: { readonly scope: string; readonly label: string }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserCreate': { params: { readonly scope: string }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserLayout': { params: { readonly scope: string; readonly bounds?: import('../host-adapter/native-browser').NativeBrowserBounds; readonly visible: boolean }; result: NativeBrowserState };
+  readonly 'tooling.nativeBrowserViewport': { params: { readonly scope: string; readonly label: string; readonly viewport: import('../host-adapter/native-browser').NativeBrowserViewportRequest }; result: NativeBrowserState };
   readonly 'tooling.nativeBrowserCommandResult': { params: { readonly id: string; readonly result?: import('../host-adapter/native-browser').NativeBrowserRecord; readonly error?: string }; result: { readonly ok: boolean } };
   readonly 'tooling.viewportResize': { params: ViewportResizeParams; result: ViewportResizeResult };
   readonly 'tooling.viewportNavigate': { params: { readonly url: string }; result: ViewportNavigateResult };

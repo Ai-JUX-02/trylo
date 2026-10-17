@@ -195,6 +195,8 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
     .register('tooling', 'nativeBrowserControl', params => tooling.nativeBrowserControl(params))
     .register('tooling', 'nativeBrowserSelect', params => tooling.nativeBrowserSelect(params))
     .register('tooling', 'nativeBrowserCreate', params => tooling.nativeBrowserCreate(params))
+    .register('tooling', 'nativeBrowserLayout', params => tooling.nativeBrowserLayout(params))
+    .register('tooling', 'nativeBrowserViewport', params => tooling.nativeBrowserViewport(params))
     .register('tooling', 'nativeBrowserCommandResult', params => tooling.nativeBrowserCommandResult(params))
     .register('tooling', 'health', (params) => tooling.health(params))
     .register('tooling', 'listProfiles', () => tooling.listProfiles())

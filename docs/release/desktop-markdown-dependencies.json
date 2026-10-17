@@ -1,0 +1,923 @@
+{
+  "direct": "remark-gfm@4.0.1",
+  "tier": "isolated Desktop Markdown rendering",
+  "lockSha256": "c499f47a1aa5a15f9d8e12cdc433950b6f9ae13bca8895887345f35c432a833c",
+  "packages": [
+    {
+      "name": "@types/debug",
+      "version": "4.1.13",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/ms"
+      ]
+    },
+    {
+      "name": "@types/mdast",
+      "version": "4.0.4",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist"
+      ]
+    },
+    {
+      "name": "@types/ms",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "@types/unist",
+      "version": "3.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "@ungap/structured-clone",
+      "version": "1.3.3",
+      "license": "ISC",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "bail",
+      "version": "2.0.2",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "ccount",
+      "version": "2.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "character-entities",
+      "version": "2.0.2",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "debug",
+      "version": "4.4.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "LICENSE"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "ms"
+      ]
+    },
+    {
+      "name": "decode-named-character-reference",
+      "version": "1.3.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "character-entities"
+      ]
+    },
+    {
+      "name": "dequal",
+      "version": "2.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "devlop",
+      "version": "1.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "dequal"
+      ]
+    },
+    {
+      "name": "escape-string-regexp",
+      "version": "5.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "is-plain-obj",
+      "version": "4.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "longest-streak",
+      "version": "3.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "markdown-table",
+      "version": "3.0.4",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "mdast-util-find-and-replace",
+      "version": "3.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "escape-string-regexp",
+        "unist-util-is",
+        "unist-util-visit-parents"
+      ]
+    },
+    {
+      "name": "mdast-util-from-markdown",
+      "version": "2.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "@types/unist",
+        "decode-named-character-reference",
+        "devlop",
+        "mdast-util-to-string",
+        "micromark",
+        "micromark-util-decode-numeric-character-reference",
+        "micromark-util-decode-string",
+        "micromark-util-normalize-identifier",
+        "micromark-util-symbol",
+        "micromark-util-types",
+        "unist-util-stringify-position"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm",
+      "version": "3.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "mdast-util-from-markdown",
+        "mdast-util-gfm-autolink-literal",
+        "mdast-util-gfm-footnote",
+        "mdast-util-gfm-strikethrough",
+        "mdast-util-gfm-table",
+        "mdast-util-gfm-task-list-item",
+        "mdast-util-to-markdown"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm-autolink-literal",
+      "version": "2.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "ccount",
+        "devlop",
+        "mdast-util-find-and-replace",
+        "micromark-util-character"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm-footnote",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "devlop",
+        "mdast-util-from-markdown",
+        "mdast-util-to-markdown",
+        "micromark-util-normalize-identifier"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm-strikethrough",
+      "version": "2.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "mdast-util-from-markdown",
+        "mdast-util-to-markdown"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm-table",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "devlop",
+        "markdown-table",
+        "mdast-util-from-markdown",
+        "mdast-util-to-markdown"
+      ]
+    },
+    {
+      "name": "mdast-util-gfm-task-list-item",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "devlop",
+        "mdast-util-from-markdown",
+        "mdast-util-to-markdown"
+      ]
+    },
+    {
+      "name": "mdast-util-phrasing",
+      "version": "4.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "unist-util-is"
+      ]
+    },
+    {
+      "name": "mdast-util-to-markdown",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "@types/unist",
+        "longest-streak",
+        "mdast-util-phrasing",
+        "mdast-util-to-string",
+        "micromark-util-decode-string",
+        "unist-util-visit",
+        "zwitch"
+      ]
+    },
+    {
+      "name": "mdast-util-to-string",
+      "version": "4.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/mdast"
+      ]
+    },
+    {
+      "name": "micromark",
+      "version": "4.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/debug",
+        "debug",
+        "decode-named-character-reference",
+        "devlop",
+        "micromark-core-commonmark",
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-chunked",
+        "micromark-util-combine-extensions",
+        "micromark-util-decode-numeric-character-reference",
+        "micromark-util-encode",
+        "micromark-util-normalize-identifier",
+        "micromark-util-resolve-all",
+        "micromark-util-sanitize-uri",
+        "micromark-util-subtokenize",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-core-commonmark",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "decode-named-character-reference",
+        "devlop",
+        "micromark-factory-destination",
+        "micromark-factory-label",
+        "micromark-factory-space",
+        "micromark-factory-title",
+        "micromark-factory-whitespace",
+        "micromark-util-character",
+        "micromark-util-chunked",
+        "micromark-util-classify-character",
+        "micromark-util-html-tag-name",
+        "micromark-util-normalize-identifier",
+        "micromark-util-resolve-all",
+        "micromark-util-subtokenize",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm",
+      "version": "3.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "micromark-extension-gfm-autolink-literal",
+        "micromark-extension-gfm-footnote",
+        "micromark-extension-gfm-strikethrough",
+        "micromark-extension-gfm-table",
+        "micromark-extension-gfm-tagfilter",
+        "micromark-extension-gfm-task-list-item",
+        "micromark-util-combine-extensions",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-autolink-literal",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-sanitize-uri",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-footnote",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-core-commonmark",
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-normalize-identifier",
+        "micromark-util-sanitize-uri",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-strikethrough",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-util-chunked",
+        "micromark-util-classify-character",
+        "micromark-util-resolve-all",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-table",
+      "version": "2.1.2",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-tagfilter",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-task-list-item",
+      "version": "2.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-factory-destination",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-factory-label",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-factory-space",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-factory-title",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-factory-whitespace",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-factory-space",
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-character",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-chunked",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-symbol"
+      ]
+    },
+    {
+      "name": "micromark-util-classify-character",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-combine-extensions",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-chunked",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-decode-numeric-character-reference",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-symbol"
+      ]
+    },
+    {
+      "name": "micromark-util-decode-string",
+      "version": "2.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-decode-numeric-character-reference",
+        "micromark-util-symbol",
+        "decode-named-character-reference"
+      ]
+    },
+    {
+      "name": "micromark-util-encode",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "micromark-util-html-tag-name",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "micromark-util-normalize-identifier",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-symbol"
+      ]
+    },
+    {
+      "name": "micromark-util-resolve-all",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-sanitize-uri",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "micromark-util-character",
+        "micromark-util-encode",
+        "micromark-util-symbol"
+      ]
+    },
+    {
+      "name": "micromark-util-subtokenize",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "devlop",
+        "micromark-util-chunked",
+        "micromark-util-symbol",
+        "micromark-util-types"
+      ]
+    },
+    {
+      "name": "micromark-util-symbol",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "micromark-util-types",
+      "version": "2.0.0",
+      "license": "MIT",
+      "licenseFiles": [],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "ms",
+      "version": "2.1.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license.md"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "remark-gfm",
+      "version": "4.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "mdast-util-gfm",
+        "micromark-extension-gfm",
+        "remark-parse",
+        "remark-stringify",
+        "unified"
+      ]
+    },
+    {
+      "name": "remark-parse",
+      "version": "11.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "mdast-util-from-markdown",
+        "micromark-util-types",
+        "unified"
+      ]
+    },
+    {
+      "name": "remark-stringify",
+      "version": "11.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": false,
+      "runtimeDependencies": [
+        "@types/mdast",
+        "mdast-util-to-markdown",
+        "unified"
+      ]
+    },
+    {
+      "name": "trough",
+      "version": "2.2.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    },
+    {
+      "name": "unified",
+      "version": "11.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist",
+        "@ungap/structured-clone",
+        "bail",
+        "devlop",
+        "is-plain-obj",
+        "trough",
+        "vfile"
+      ]
+    },
+    {
+      "name": "unist-util-is",
+      "version": "6.0.1",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist"
+      ]
+    },
+    {
+      "name": "unist-util-stringify-position",
+      "version": "4.0.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist"
+      ]
+    },
+    {
+      "name": "unist-util-visit",
+      "version": "5.1.0",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist",
+        "unist-util-is",
+        "unist-util-visit-parents"
+      ]
+    },
+    {
+      "name": "unist-util-visit-parents",
+      "version": "6.0.2",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist",
+        "unist-util-is"
+      ]
+    },
+    {
+      "name": "vfile",
+      "version": "6.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist",
+        "vfile-message"
+      ]
+    },
+    {
+      "name": "vfile-message",
+      "version": "4.0.3",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": [
+        "@types/unist",
+        "unist-util-stringify-position"
+      ]
+    },
+    {
+      "name": "zwitch",
+      "version": "2.0.4",
+      "license": "MIT",
+      "licenseFiles": [
+        "license"
+      ],
+      "previouslyLocked": true,
+      "runtimeDependencies": []
+    }
+  ],
+  "coreTypeLeak": false,
+  "replacement": "remove remark plugin; keep ReactMarkdown plain CommonMark renderer",
+  "licenseTextMissingFromExistingInstallation": [
+    "micromark@4.0.0",
+    "micromark-core-commonmark@2.0.0",
+    "micromark-factory-destination@2.0.0",
+    "micromark-factory-label@2.0.0",
+    "micromark-factory-space@2.0.0",
+    "micromark-factory-title@2.0.0",
+    "micromark-factory-whitespace@2.0.0",
+    "micromark-util-character@2.0.0",
+    "micromark-util-chunked@2.0.0",
+    "micromark-util-classify-character@2.0.0",
+    "micromark-util-combine-extensions@2.0.0",
+    "micromark-util-decode-numeric-character-reference@2.0.0",
+    "micromark-util-encode@2.0.0",
+    "micromark-util-html-tag-name@2.0.0",
+    "micromark-util-normalize-identifier@2.0.0",
+    "micromark-util-resolve-all@2.0.0",
+    "micromark-util-sanitize-uri@2.0.0",
+    "micromark-util-subtokenize@2.0.0",
+    "micromark-util-symbol@2.0.0",
+    "micromark-util-types@2.0.0"
+  ],
+  "scope": "source publication does not redistribute node_modules; final binary notice assembly remains separate"
+}

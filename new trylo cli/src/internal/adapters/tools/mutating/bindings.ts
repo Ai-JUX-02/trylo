@@ -48,7 +48,7 @@ export const WRITE_FILE_BINDING: ToolBinding = {
 export const EDIT_FILE_BINDING: ToolBinding = {
   name: EDIT_FILE_TOOL,
   description:
-    "Edit one existing file. Prefer old_string/new_string: copy exact source text from read_file, include enough context to match exactly once, and supply different replacement text. Missing or ambiguous matches leave the file unchanged. Alternatively supply a unified diff in patch: @@\n-old line\n+new line\n, preserving indentation after each diff prefix. Use one edit format per call. *** Begin Patch belongs to apply_patch, not this tool. Surrounding BOM and line endings are preserved.",
+    "Edit one existing file. Prefer old_string/new_string: copy exact source text from read_file, include enough context to match exactly once, and supply different replacement text. Missing or ambiguous matches leave the file unchanged. Alternatively supply a unified diff in patch: @@\n-old line\n+new line\n, preserving indentation after each diff prefix. Send hunks in file order; merge shared context. Use one edit format per call: patch mode must omit old_string and new_string entirely, including empty placeholders; replacement mode must omit patch. *** Begin Patch belongs to apply_patch, not this tool. Surrounding BOM and line endings are preserved.",
   sideEffect: "workspace_write",
   parameters: {
     type: "object",

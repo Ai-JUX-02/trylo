@@ -147,5 +147,5 @@
 }
 
 /* Keep every virtualized row in the same column as the composer. */
-.conversation-row, .message-list__footer-stack { width:100%; max-width:calc(var(--conversation-width) + 30px); margin-inline:auto; }
+.conversation-row, .message-list__footer-stack { width:100%; max-width:var(--conversation-width); margin-inline:auto; }
 .message-list { padding:22px 32px 0; }

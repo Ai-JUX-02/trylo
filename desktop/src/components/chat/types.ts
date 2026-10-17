@@ -45,6 +45,20 @@ export interface MessageBase {
   readonly streamSource?: StreamSource;
 }
 
+/** Recorded only at the authoritative end of a user turn. Older
+ * finalElapsedMs values measured first output and cannot be migrated as totals. */
+export interface TurnTiming {
+  readonly elapsedMs: number;
+  readonly outcome: 'completed' | 'failed' | 'cancelled' | 'interrupted';
+}
+
+export function isTurnTiming(value: unknown): value is TurnTiming {
+  if (!value || typeof value !== 'object') return false;
+  const timing = value as Partial<TurnTiming>;
+  return typeof timing.elapsedMs === 'number' && Number.isFinite(timing.elapsedMs) && timing.elapsedMs >= 0
+    && ['completed', 'failed', 'cancelled', 'interrupted'].includes(timing.outcome ?? '');
+}
+
 export interface TextMessage extends MessageBase {
   readonly kind: 'text';
   readonly text: string;
@@ -68,21 +82,11 @@ export interface TextMessage extends MessageBase {
    *  becomes a fresh text bubble rendered after the
    *  tool result. */
   readonly frozen?: boolean;
-  // v1.16.4: per-turn timer anchor. `turnStartedAt` is
-  // stamped on the USER message at the moment they hit
-  // send (or save after an edit). The TurnProgress row
-  // reads it from the user message — never from a
-  // top-level state — so multiple turns coexist
-  // independently. When the first model output arrives
-  // for this turn, events.ts sets `finalElapsedMs` and
-  // the spinner freezes at "已工作 0:12" forever.
-  // For edit-and-resend, the existing user message's
-  // `turnStartedAt` is REPLACED with the new click-
-  // send time, and the previous `finalElapsedMs` is
-  // cleared (we're starting a new turn on the same
-  // user bubble).
+  /** Send time for this user turn, reset on edit-and-resend. */
   readonly turnStartedAt?: number;
+  /** Legacy first-output elapsed. Preserved for history compatibility only. */
   readonly finalElapsedMs?: number;
+  readonly turnTiming?: TurnTiming;
   /**
    * Round-3 (P0-5): set ONLY on a user bubble produced by the explicit
    * mid-run interrupt ("立即打断"). Such a bubble is an INTERVENTION inside

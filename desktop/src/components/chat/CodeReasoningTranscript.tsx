@@ -9,10 +9,10 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { AlertCircle, Ban, ChevronRight, Clock3, FileEdit, FileText, Globe, Hand, Keyboard, Loader, MousePointer2, ScanEye, Search, Terminal, Wrench, type LucideIcon } from 'lucide-react';
 import { ToolCard } from './ToolCard';
-import { FileChangeCard } from './FileChangeCard';
+import { FileChangeCards } from './FileChangeCard';
 import { EventReasoningNote } from './EventReasoningNote';
 import { toolEventVerb } from './tool-event-presentation';
-import { computeFileChange } from './file-change';
+import { computeFileChanges } from './file-change';
 import { targetResultFactsOf, type TargetResultFacts } from '../../tooling/classifiers/windows-mcp-classifier';
 import type { ThinkingMessage, ToolMessage } from './types';
 
@@ -83,7 +83,7 @@ function compactPhaseLabel(text: string): string {
 const PHASE_TOOL_ICONS: Readonly<Record<string, LucideIcon>> = {
   read: FileText, read_file: FileText, readfile: FileText,
   grep: Search, glob: Search, search: Search, list: Search,
-  edit: FileEdit, multiedit: FileEdit, write: FileEdit, write_file: FileEdit,
+  edit: FileEdit, edit_file: FileEdit, apply_patch: FileEdit, applypatch: FileEdit, multiedit: FileEdit, write: FileEdit, write_file: FileEdit,
   notebookedit: FileEdit, notebook_edit: FileEdit,
   bash: Terminal, shell: Terminal, exec: Terminal, execute: Terminal,
   webfetch: Globe, websearch: Globe, fetch: Globe, navigate: Globe,
@@ -229,8 +229,8 @@ function CodeReasoningTranscriptImpl(
               if (entry.kind === 'tool') {
                 return (
                   <div key={entry.id} className="code-reasoning__tool">
-                    {computeFileChange(entry.tool, entry.input)
-                      ? <FileChangeCard variant="event" message={entry} workspacePath={props.workspacePath} onOpenFile={props.onOpenArtifact} />
+                    {computeFileChanges(entry.tool, entry.input, entry.outputContent).length > 0
+                      ? <FileChangeCards variant="event" message={entry} workspacePath={props.workspacePath} onOpenFile={props.onOpenArtifact} />
                       : <ToolCard variant="event" message={entry} />}
                   </div>
                 );

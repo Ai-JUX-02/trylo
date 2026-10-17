@@ -3,11 +3,15 @@ import { listen } from '@tauri-apps/api/event'
 import { isTauri } from './tauri-detect'
 
 export interface NativeBrowserBounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+export type NativeBrowserViewportRequest = { readonly mode: 'panel' } | { readonly mode: 'fixed'; readonly width: number; readonly height: number; readonly mobile?: boolean }
+export type NativeBrowserViewport = { readonly mode: 'panel'; readonly scale: number; readonly width?: number; readonly height?: number } | { readonly mode: 'fixed'; readonly scale: number; readonly width: number; readonly height: number; readonly mobile?: boolean; readonly deviceScaleFactor?: number }
 export interface NativeBrowserRecord {
   readonly scope: string
   readonly cdpPort: number
   readonly tabs: readonly { readonly label: string; readonly marker: string; readonly popup?: boolean }[]
   readonly activeLabel: string
+  readonly bounds?: NativeBrowserBounds
+  readonly zoom?: number
 }
 export interface NativeBrowserCommand {
   readonly scope: string

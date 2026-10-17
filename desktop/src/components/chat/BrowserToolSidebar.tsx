@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Globe, X, RotateCw, Maximize2, Minimize2, MousePointer2, ArrowLeft, ArrowRight, Plus, LoaderCircle, Check } from 'lucide-react'
 import { PreviewImage } from './PreviewImage'
 import { PreviewZoom } from './PreviewZoom'
+import { BrowserViewportControls } from './BrowserViewportControls'
 import type { BrowserPreviewController } from '../../tooling/use-browser-preview'
 import type { PreviewAction, ToolPreviewState } from '../../tooling/tool-preview-state'
 import { browserActionDuration, type BrowserReplay, type BrowserReplayEntry } from '../../tooling/use-browser-replay'
@@ -161,6 +162,9 @@ export function BrowserToolSidebar(props: {
         {preview?.closeTab && <button type="button" className="browser-tool-sidebar__close-tab" aria-label={`关闭标签页：${tab.title}`} onClick={() => void run(() => preview.closeTab!(tab.label))}><X size={12} /></button>}</div>)}
       <button type="button" className="browser-tool-sidebar__new-tab" aria-label="新建浏览器标签页" onClick={() => void run(preview!.createTab)}><Plus size={14} /></button>
     </div>}
+    {!replaying && preview && native && <BrowserViewportControls key={`${native.scope}:${native.activeLabel}`} viewport={native.viewport}
+      disabled={!connected || native.inFlight > 0 || !preview.setPageViewport}
+      onChange={request => preview.setPageViewport!(request)} />}
     <div className="browser-tool-sidebar__picture" ref={pictureRef} data-native={!replaying || undefined}>
       {replay ? <PreviewImage src={replay.entry.src} alt={`第 ${replay.action.stepIndex ?? ''} 项操作的历史画面`} empty="历史画面不可用" frameGeometry={replay.entry.geometry} />
         : !connected ? <div className="browser-tool-sidebar__empty"><Globe size={30} strokeWidth={1.25} /><span>{empty}</span></div>
@@ -170,7 +174,8 @@ export function BrowserToolSidebar(props: {
       {replaying ? <button type="button" className="browser-tool-sidebar__control" onClick={() => setSelected(undefined)}><ArrowLeft size={14} />回到实时</button>
         : <>
           <button type="button" className="browser-tool-sidebar__control" disabled={!connected} onClick={() => void run(native?.control === 'agent' ? preview!.takeControl : preview!.releaseControl)}>{native?.control === 'user' ? '交回智能体' : native?.control === 'pending' ? '取消接管' : '我接管'}</button>
-          <div className="browser-tool-sidebar__zoom"><PreviewZoom value={preview?.zoom ?? 1} onChange={value => { if (value !== 'fit') void run(() => preview!.setZoom(value)) }} showFit={false} disabled={!connected} label="网页缩放" /></div>
+          {native?.viewport?.mode === 'fixed' ? <span className="browser-viewport-controls__scale">适应展示 · 页面 100%</span>
+            : <div className="browser-tool-sidebar__zoom"><PreviewZoom value={preview?.zoom ?? 1} onChange={value => { if (value !== 'fit') void run(() => preview!.setZoom(value)) }} showFit={false} disabled={!connected} label="网页缩放" /></div>}
         </>}
     </div>
     <footer className="browser-tool-sidebar__history">

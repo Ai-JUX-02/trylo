@@ -13,7 +13,7 @@ const userTurn: ChatMessage = {
 }
 
 describe('per-turn timer finalization', () => {
-  it('freezes on a tool when the model emits no text or thinking first', () => {
+  it('does not settle elapsed time on a tool invocation', () => {
     const event: ToolUseEvent = {
       type: 'tool_use',
       seq: 1,
@@ -24,7 +24,7 @@ describe('per-turn timer finalization', () => {
       input: { file_path: 'a.ts' },
     }
     const out = applyEvents([userTurn], [event])
-    expect((out[0] as TextMessage).finalElapsedMs).toBe(500)
+    expect((out[0] as TextMessage).turnTiming).toBeUndefined()
   })
 
   it('freezes on loop_end when a run produced no visible output', () => {
@@ -39,7 +39,7 @@ describe('per-turn timer finalization', () => {
       finalResult: '',
     }
     const out = applyEvents([userTurn], [event])
-    expect((out[0] as TextMessage).finalElapsedMs).toBe(1500)
+    expect((out[0] as TextMessage).turnTiming).toEqual({ elapsedMs: 1500, outcome: 'cancelled' })
   })
 
   it('ignores empty text protocol frames', () => {

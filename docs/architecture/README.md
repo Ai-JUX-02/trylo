@@ -1,5 +1,7 @@
 # Trylo 产品源码架构
 
+> 2026-10-17：同步浏览器固定视口、用户学习文档阅读、turn 全程计时、文件改动事实与 CLI 流/文件工具修复。源码所有权、v1 增量字段和本轮验证见[同步交接](<../../new trylo cli/docs/02-分期工程产出/P08-Desktop切换与Parity/2026-10-17-源码同步交接.md>)；目录迁移仍按下述目标单独推进。
+
 > 2026-10-16：当前源码默认 trylo-v1。新增[逐请求上下文、工具历史与预算边界](context-and-budgets.md)，说明请求所有权、并行结果保护、思考续接和验证范围。发行状态见[当前源码快照](../release/CURRENT_SOURCE_CHECKPOINT.md)。
 
 > Current source decision (2026-10-15): main working-tree fixes are synchronized, trylo-v1 is the default, and legacy CLI source/engine staging are excluded. [Synchronization record](../release/MAIN_SOURCE_SYNC_2026_10_15.md). Earlier R3 artifact notes describe their historical download, not this source default.
