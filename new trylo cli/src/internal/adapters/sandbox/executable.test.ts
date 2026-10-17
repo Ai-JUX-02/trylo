@@ -221,3 +221,19 @@ test("the host environment reader carries the variables a child needs", () => {
   const environment = hostProcessEnvironment();
   assert.equal(typeof environment["PATH"] === "string" || environment["Path"] === "string", true);
 });
+
+test("Windows child PATH aliases preserve arbitrary environment-name casing", { skip: process.platform !== "win32" }, () => {
+  const pathEntries = Object.entries(process.env).filter(([name]) => name.toLowerCase() === "path");
+  try {
+    for (const name of ["path", "pAtH", "Path", "PATH"]) {
+      for (const key of Object.keys(process.env).filter(key => key.toLowerCase() === "path")) delete process.env[key];
+      process.env[name] = "C:\\fixture bin;C:\\Windows";
+      const environment = hostProcessEnvironment();
+      assert.equal(environment["PATH"], "C:\\fixture bin;C:\\Windows", name);
+      assert.equal(environment["Path"], environment["PATH"], name);
+    }
+  } finally {
+    for (const key of Object.keys(process.env).filter(key => key.toLowerCase() === "path")) delete process.env[key];
+    for (const [key, value] of pathEntries) process.env[key] = value;
+  }
+});

@@ -1,0 +1,299 @@
+{
+  "initialBaseline": "8045443bc297d17cd207e1a8d57c8914cccbd590",
+  "baseline": "87bb99fba19e4406a6c7f4f787998d6eaa2e99d7",
+  "branch": "codex/tools-context-debug",
+  "fullVerify": {
+    "status": "pass",
+    "duration": "133.44s",
+    "tests": 4177,
+    "pass": 4171,
+    "fail": 0,
+    "skipped": 6,
+    "topLevelTestNames": 4007,
+    "contractTests": 38
+  },
+  "redProof": {
+    "baseline": "8045443bc297d17cd207e1a8d57c8914cccbd590",
+    "unchangedSourceOnLatest": true,
+    "summaryAndCancellation": {
+      "tests": 20,
+      "pass": 11,
+      "fail": 9
+    },
+    "windowsPath": {
+      "tests": 14,
+      "pass": 12,
+      "fail": 2
+    }
+  },
+  "focusedGreen": {
+    "summaryIntegration": {
+      "tests": 40,
+      "pass": 40
+    },
+    "path": {
+      "tests": 14,
+      "pass": 14
+    },
+    "toolsAndContext": {
+      "tests": 116,
+      "pass": 113,
+      "skip": 3
+    },
+    "desktopContracts": {
+      "tests": 152,
+      "pass": 151,
+      "skip": 1
+    },
+    "desktopRealModel": {
+      "tests": 6,
+      "pass": 1,
+      "skip": 5
+    },
+    "desktopTypecheck": "pass"
+  },
+  "live": [
+    {
+      "name": "small",
+      "requests": 5,
+      "window": 128000,
+      "usage": {
+        "inputTokens": 12885,
+        "outputTokens": 337
+      },
+      "runs": [
+        {
+          "label": "file-tool-loop",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 49507,
+          "firstEventMs": 333,
+          "firstVisibleMs": 5823,
+          "toolWaitMs": 130,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 10119,
+            "outputTokens": 310,
+            "totalTokens": 10429
+          }
+        },
+        {
+          "label": "new-process-resume",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 3256,
+          "firstEventMs": 338,
+          "firstVisibleMs": 3190,
+          "toolWaitMs": 0,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 2766,
+            "outputTokens": 27,
+            "totalTokens": 2793
+          }
+        }
+      ],
+      "summaryRequests": [],
+      "pairingFailures": [],
+      "verification": {
+        "exactBytes": true,
+        "resumedAccurate": true,
+        "toolNames": [
+          "read_file",
+          "read_file",
+          "read_file",
+          "edit_file",
+          "read_file"
+        ],
+        "readAfterEdit": true
+      }
+    },
+    {
+      "name": "cross-extractive",
+      "requests": 20,
+      "window": 7500,
+      "usage": {
+        "inputTokens": 85523,
+        "outputTokens": 2283
+      },
+      "runs": [
+        {
+          "label": "cross-compaction",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 33202,
+          "firstEventMs": 323,
+          "firstVisibleMs": 3664,
+          "toolWaitMs": 62,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 28706,
+            "outputTokens": 667,
+            "totalTokens": 29373
+          }
+        },
+        {
+          "label": "resume-after-compaction",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 6504,
+          "firstEventMs": 338,
+          "firstVisibleMs": 3854,
+          "toolWaitMs": 9,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 6771,
+            "outputTokens": 91,
+            "totalTokens": 6862
+          }
+        },
+        {
+          "label": "independent-verification-correction",
+          "exitCode": 1,
+          "timedOut": false,
+          "totalMs": 69819,
+          "firstEventMs": 340,
+          "firstVisibleMs": 3318,
+          "toolWaitMs": 91,
+          "status": "failed",
+          "usage": {
+            "inputTokens": 50046,
+            "outputTokens": 1525,
+            "totalTokens": 51571
+          }
+        },
+        {
+          "label": "resume-after-correction",
+          "exitCode": 1,
+          "timedOut": false,
+          "totalMs": 488,
+          "firstEventMs": 412,
+          "toolWaitMs": 0,
+          "status": "failed",
+          "usage": {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "totalTokens": 0
+          }
+        }
+      ],
+      "summaryRequests": [],
+      "pairingFailures": [],
+      "verification": {
+        "exactBytes": false,
+        "resumedAccurate": false,
+        "completedCompactions": 2,
+        "wireCompactedRequests": 8,
+        "writeExecutions": 1
+      },
+      "repairVerification": {
+        "exactBytes": false,
+        "actualSha256": "afde32e936daa33381ec831e95521e0bffc5ef0526f682908381f4deadf26747",
+        "resumedAccurate": false
+      }
+    },
+    {
+      "name": "cross-model",
+      "requests": 10,
+      "window": 7500,
+      "usage": {
+        "inputTokens": 34432,
+        "outputTokens": 1748
+      },
+      "runs": [
+        {
+          "label": "cross-compaction",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 131534,
+          "firstEventMs": 316,
+          "firstVisibleMs": 29485,
+          "toolWaitMs": 57,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 24518,
+            "outputTokens": 467,
+            "totalTokens": 24985
+          }
+        },
+        {
+          "label": "resume-after-compaction",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 3219,
+          "firstEventMs": 319,
+          "firstVisibleMs": 2764,
+          "toolWaitMs": 0,
+          "status": "completed",
+          "usage": {
+            "inputTokens": 2831,
+            "outputTokens": 60,
+            "totalTokens": 2891
+          }
+        }
+      ],
+      "summaryRequests": [
+        {
+          "number": 3,
+          "totalMs": 59498,
+          "finishReason": "length",
+          "outputTokens": 1024
+        },
+        {
+          "number": 6,
+          "totalMs": 8859,
+          "finishReason": "stop",
+          "outputTokens": 197
+        }
+      ],
+      "pairingFailures": [],
+      "verification": {
+        "exactBytes": true,
+        "resumedAccurate": true,
+        "completedCompactions": 2,
+        "wireCompactedRequests": 6,
+        "writeExecutions": 1
+      }
+    },
+    {
+      "name": "desktop",
+      "requests": 4,
+      "window": 128000,
+      "usage": {
+        "inputTokens": 31735,
+        "outputTokens": 132
+      },
+      "runs": [
+        {
+          "label": "desktop-controller-real-model",
+          "exitCode": 0,
+          "timedOut": false,
+          "totalMs": 13002
+        }
+      ],
+      "summaryRequests": [],
+      "pairingFailures": [],
+      "verification": {
+        "approvalRequests": 1,
+        "resumed": true,
+        "secondToolCalls": 0,
+        "processesRemaining": 0
+      }
+    }
+  ],
+  "actualRemoteRequests": 39,
+  "skipNames": [
+    "a link out of the workspace is refused even when writes are allowed # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+    "a POSIX ledger is written 0600 and a loosened one is reported insecure # SKIP POSIX mode bits are not observable on win32; recorded in AUTH-QUALITY-AUDIT.md",
+    "writing through a file symlink that points outside is refused # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+    "creating parents never follows a symlinked directory out of the workspace # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+    "writing through a link that leaves the workspace never reaches the target # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+    "a link that cannot be resolved is refused rather than trusted lexically # SKIP the platform refused to create the symlink, so this escape case cannot run here"
+  ],
+  "limitations": [
+    "Default extractive long-fact task failed after two compactions; bounded correction also failed. No policy rewrite in this fix.",
+    "No per-summary idle deadline added; cancellation is proved, external live deadlines are enforced.",
+    "AMD reasoning=false; native continuation is synthetic-contract evidence only.",
+    "Native Tauri UI, installer, external browser window and real MCP were not tested."
+  ]
+}
