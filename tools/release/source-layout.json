@@ -320,6 +320,26 @@
       "source": "docs/fixtures/p08-cli-v1/legacy-read-parity.md",
       "target": "docs/fixtures/p08-cli-v1/legacy-read-parity.md",
       "reason": "Controlled synthetic protocol-parity fixture required by the synced test; no legacy engine source or binary."
+    },
+    {
+      "source": "new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe",
+      "target": "native/pty/win-x64/trylo-pty.exe",
+      "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
+    },
+    {
+      "source": "new trylo cli/vendor-bin/pty/README.md",
+      "target": "native/pty/README.md",
+      "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
+    },
+    {
+      "source": "scripts/setup-cli-native.mjs",
+      "target": "scripts/setup-cli-native.mjs",
+      "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
+    },
+    {
+      "source": "docs/development/build-from-source.md",
+      "target": "docs/development/build-from-source.md",
+      "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
     }
   ],
   "excludedRoots": [

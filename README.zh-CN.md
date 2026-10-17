@@ -47,3 +47,7 @@ Windows Desktop preview: [download and checksums](result/desktop/).
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
 
 当前主库同步与验证：[当前快照与验证](docs/release/CURRENT_SOURCE_CHECKPOINT.md)。现有 Desktop R3 下载保持不变。
+
+## 公开源码构建前置条件
+
+Windows x64 / Node >=22：先从仓库根目录运行 `node scripts/setup-cli-native.mjs --install`，再在本目录 `npm ci` 和 `npm run build`。PTY 固定制品随库提供，沙箱 helper 按固定版本和摘要显式获取；构建本身不会自动下载。详见[源码构建说明](docs/development/build-from-source.md)。其他平台 PTY 和完整 Desktop 安装包不在本轮验收范围。

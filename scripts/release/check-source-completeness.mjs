@@ -34,6 +34,19 @@ function json(relative) {
 }
 const layout = json('tools/release/source-layout.json');
 for (const entry of layout?.extraFiles ?? []) requireFile(entry.source);
+// The source checkout includes this exact first-party helper. Downloaded sandbox
+// helpers stay outside Git and are checked by setup-cli-native.mjs instead.
+const ptyProvenance = json('new trylo cli/vendor-bin/pty/PROVENANCE.json');
+const ptyArtifact = ptyProvenance?.artifacts?.['trylo-pty-win-x64'];
+const ptyRelative = 'new trylo cli/vendor-bin/pty/win-x64/trylo-pty.exe';
+if (ptyArtifact?.path !== 'vendor-bin/pty/win-x64/trylo-pty.exe') failures.push('invalid PTY artifact path');
+else {
+  const helper = requireFile(ptyRelative);
+  if (helper) {
+    const bytes = readFileSync(helper);
+    if (bytes.length !== ptyArtifact.bytes || createHash('sha256').update(bytes).digest('hex') !== ptyArtifact.sha256) failures.push('PTY helper differs from provenance');
+  }
+}
 const config = json('desktop/src-tauri/tauri.conf.json');
 for (const icon of config?.bundle?.icon ?? []) requireFile(`desktop/src-tauri/${icon}`);
 const distribution = json('desktop/distribution.json');

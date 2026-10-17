@@ -29,7 +29,7 @@ The product architecture treats user learning, agent learning, and execution as 
 
 Each application retains its existing manifest and lockfile. In the new CLI directory, install the locked dependencies with `npm ci`; `npx tsc -p tsconfig.json --noEmit` checks the TypeScript source.
 
-Full CLI packaging also needs the pinned sandbox/native helper inputs recorded with their provenance. Desktop packaging stages the CLI, Node, services, and native sidecars. Some of these acquisition/build steps still depend on local inputs and are being made reproducible. The repository is not yet a one-command clean-clone release build.
+For a Windows x64 CLI build, first run `node scripts/setup-cli-native.mjs --install` from the repository root, then `npm ci` and `npm run build` inside `new trylo cli`. The tracked PTY helper and digest-verified sandbox download are documented in [source build instructions](docs/development/build-from-source.md). Desktop packaging stages the CLI, Node, services, and native sidecars. Some of these acquisition/build steps still depend on local inputs and are being made reproducible. The repository is not yet a one-command clean-clone release build.
 
 ## Current limits
 

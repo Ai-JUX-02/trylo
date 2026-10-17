@@ -6,6 +6,10 @@ Status / 状态：Alpha 源码快照；目录迁移、干净克隆原生组装�
 
 源码默认使用新版 trylo-v1 CLI，保留显式外部旧协议兼容。旧 CLI 源码与引擎不进入公库。现有 Desktop 下载与 APK 保持原发行产物，本轮没有替换安装包。
 
+## 原生构建输入补充（2026-10-17）
+
+补齐 Windows x64 PTY 固定制品，并提供 `scripts/setup-cli-native.mjs` 获取已有 sandbox-runtime 0.0.73 的两份固定沙箱 helper。源码发布无需携带依赖缓存和完整安装包；必需输入的来源、校验及 Desktop 尚未关闭的组装问题见[源码构建说明](../development/build-from-source.md)。本补充不改变工具、上下文或学习语义。
+
 ## Current changes / 当前变更
 
 - 浏览器固定桌面/移动视口、页面缩放与输入映射，同页目标继续受会话归属和用户接管约束。
