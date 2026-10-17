@@ -66,7 +66,7 @@ export async function emitCompactionFor(
   options?: { readonly force?: boolean },
 ): Promise<CompactionGapOutcome> {
   const outcome = await runCompactionFor(promptContextFor(engine, ports.compaction, ports.tools), {
-    ...options, signal: engine.abort.signal, onStart: tokensBefore => emitRaw(engine, "observation", {
+    ...options, signal: engine.compactionSignal, onStart: tokensBefore => emitRaw(engine, "observation", {
       component: "compaction", status: "started", tokensBefore,
     }),
   });

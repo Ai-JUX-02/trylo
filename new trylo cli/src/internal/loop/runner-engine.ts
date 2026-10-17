@@ -41,6 +41,8 @@ export type Engine = {
   checksums: string[];
   journal: ReturnType<typeof createExecutionJournal>;
   abort: AbortController;
+  /** Inert summary calls may stop immediately without interrupting tool writes. */
+  readonly compactionSignal: AbortSignal;
   boundAttempt?: string;
   cancelAfter?: "streaming";
   sawText: boolean;
@@ -153,6 +155,8 @@ export async function assembleEngine(
     checksums: [],
     journal: createExecutionJournal(),
     abort,
+    compactionSignal: request.cancelSignal === undefined ? abort.signal
+      : AbortSignal.any([abort.signal, request.cancelSignal]),
     sawText: false,
     model: request.model ?? "default",
     budget: request.budget ?? {},

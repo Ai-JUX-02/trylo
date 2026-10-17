@@ -57,10 +57,12 @@ export function hostProcessEnvironment(): Readonly<Record<string, string | undef
   // presents as a broken install. Both spellings name the same directory
   // list, so the copy carries both — reading stays case-insensitive, and no
   // caller has to know which spelling the parent happened to keep.
-  if (typeof env["PATH"] !== "string" && typeof env["Path"] === "string") {
-    env["PATH"] = env["Path"];
-  } else if (typeof env["Path"] !== "string" && typeof env["PATH"] === "string") {
-    env["Path"] = env["PATH"];
+  const pathKey = process.platform === "win32"
+    ? Object.keys(env).find(name => name.toLowerCase() === "path") : undefined;
+  const executablePath = env["PATH"] ?? env["Path"] ?? (pathKey === undefined ? undefined : env[pathKey]);
+  if (executablePath !== undefined) {
+    env["PATH"] ??= executablePath;
+    env["Path"] ??= executablePath;
   }
   return env;
 }

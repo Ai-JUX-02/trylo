@@ -99,6 +99,58 @@ test("a provider error falls back to the extractive digest", async () => {
   assert.equal(await summarize(ITEMS), summarizeTranscript(ITEMS));
 });
 
+test("partial model text followed by a provider error falls back without adopting partial output", async () => {
+  const { port } = scriptedProvider([
+    { type: "text_delta", blockId: "s", text: "Only a partial summary arrived." },
+    { type: "error", class: "network", retryable: false, phase: "after_stream_started", message: "fixture interruption" },
+  ]);
+  const summarize = createModelSummarizer({ provider: port, model: "fixture" });
+  assert.equal(await summarize(ITEMS), summarizeTranscript(ITEMS));
+});
+
+test("partial model text without a finish is not a completed summary", async () => {
+  const { port } = scriptedProvider([
+    { type: "text_delta", blockId: "s", text: "The stream ended before its terminal event." },
+  ]);
+  assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), summarizeTranscript(ITEMS));
+});
+
+test("a length-limited model summary falls back even when its partial text validates", async () => {
+  const { port } = scriptedProvider([
+    { type: "text_delta", blockId: "s", text: "A short valid-looking fragment." },
+    { type: "finish", reason: "length", rawReason: "length", requiresFollowUp: false },
+  ]);
+  assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), summarizeTranscript(ITEMS));
+});
+
+test("a cancellation acknowledgement after partial text cannot publish that text", async () => {
+  const { port } = scriptedProvider([
+    { type: "text_delta", blockId: "s", text: "An unfinished summary before cancellation." },
+    { type: "cancel_ack" },
+  ]);
+  assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), summarizeTranscript(ITEMS));
+});
+
+test("cancellation between text and finish invalidates the authored summary", async () => {
+  const cancel = new AbortController();
+  const port: ProviderPort = { async *stream() {
+    yield { type: "text_delta", blockId: "s", text: "A summary cancelled before commit." };
+    cancel.abort();
+    yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
+  } };
+  assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS, undefined, cancel.signal), summarizeTranscript(ITEMS));
+});
+
+test("tool or filtered finishes cannot complete a tool-free summary request", async () => {
+  for (const reason of ["tool_calls", "content_filter", "error", "other"] as const) {
+    const { port } = scriptedProvider([
+      { type: "text_delta", blockId: "s", text: "Unfinished model authoring." },
+      { type: "finish", reason, rawReason: reason, requiresFollowUp: false },
+    ]);
+    assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), summarizeTranscript(ITEMS), reason);
+  }
+});
+
 test("empty model text falls back to the extractive digest", async () => {
   const { port } = scriptedProvider(textEvents("   "));
   const summarize = createModelSummarizer({ provider: port, model: "m" });
@@ -117,4 +169,39 @@ test("a model summary carrying an absolute path falls back", async () => {
   const { port } = scriptedProvider(textEvents("edited /home/ana/app.ts and moved it"));
   const summarize = createModelSummarizer({ provider: port, model: "m" });
   assert.equal(await summarize(ITEMS), summarizeTranscript(ITEMS));
+});
+
+test("an unexpected provider exception is propagated with the original failure", async () => {
+  const failure = new Error("fixture port violation");
+  const port: ProviderPort = { async *stream() {
+    yield { type: "text_delta", blockId: "s", text: "Not a successful summary." };
+    throw failure;
+  } };
+  await assert.rejects(createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), error => error === failure);
+});
+
+test("normal finish closes the stream without waiting for late usage or EOF", async () => {
+  let closed = false;
+  let consumedLateUsage = false;
+  const port: ProviderPort = { async *stream() {
+    try {
+      yield { type: "text_delta", blockId: "s", text: "A complete safe summary." };
+      yield { type: "finish", reason: "stop", rawReason: "stop", requiresFollowUp: false };
+      consumedLateUsage = true;
+    } finally { closed = true; }
+  } };
+  assert.equal(await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS), "A complete safe summary.");
+  assert.equal(closed, true);
+  assert.equal(consumedLateUsage, false);
+});
+
+test("failed authoring retains the previous valid summary in its extractive fallback", async () => {
+  const previousSummary = "Keep the verified result and do not edit unrelated files.";
+  const { port, captured } = scriptedProvider([
+    { type: "error", class: "network", retryable: false, phase: "before_headers", message: "fixture failure" },
+  ]);
+  const summary = await createModelSummarizer({ provider: port, model: "fixture" })(ITEMS, previousSummary);
+  assert.equal(summary, summarizeTranscript(ITEMS, { previousSummary }));
+  assert.ok(summary.includes(previousSummary));
+  assert.ok(captured[0]!.request.messages[1]!.content.includes(previousSummary));
 });

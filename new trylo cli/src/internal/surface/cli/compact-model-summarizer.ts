@@ -71,9 +71,11 @@ export function createModelSummarizer(
 }
 
 /**
- * One stream, all text, no tools. Anything that is not text (reasoning, tool
- * fragments, usage) is ignored; an error event or a stream that ends without
- * text yields "" — and "" fails `validateSummary`, so the caller falls back.
+ * One stream, no tools. Only an explicit normal stop commits the accumulated
+ * text. Errors, cancellation, truncated finishes and EOF discard it, because
+ * syntactically valid partial text does not prove completed authoring.
+ * Provider-port exceptions still propagate; they are not success or typed
+ * provider failures to silently turn into a summary.
  */
 async function requestSummary(
   input: ModelSummarizerInput,
@@ -97,13 +99,15 @@ async function requestSummary(
   if (signal?.aborted) return "";
   let text = "";
   for await (const event of input.provider.stream(request, signal ?? new AbortController().signal)) {
+    if (signal?.aborted) return "";
     if (event.type === "text_delta") {
       text += event.text;
       continue;
     }
-    if (event.type === "error" || event.type === "finish") {
-      break;
+    if (event.type === "error" || event.type === "cancel_ack") return "";
+    if (event.type === "finish") {
+      return event.reason === "stop" && !event.requiresFollowUp ? text.trim() : "";
     }
   }
-  return text.trim();
+  return "";
 }
