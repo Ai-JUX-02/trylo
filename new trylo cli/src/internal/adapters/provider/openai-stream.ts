@@ -75,7 +75,16 @@ async function* decodeBody(
     return;
   } finally {
     try {
-      if (!bodyClosed) await reader.cancel();
+      if (!bodyClosed) {
+        try {
+          await reader.cancel();
+        } catch (error) {
+          // Fetch may already have errored its body with this cancellation.
+          // Still release the lock; unrelated cleanup failures must propagate.
+          const abortedRead = signal.aborted && (error === signal.reason || (error instanceof Error && error.name === "AbortError"));
+          if (!abortedRead) throw error;
+        }
+      }
     } finally {
       reader.releaseLock();
     }

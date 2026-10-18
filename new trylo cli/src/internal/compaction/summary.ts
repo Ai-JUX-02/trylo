@@ -1,3 +1,4 @@
+import { toolOutputExcerpt } from "./tool-excerpt.js";
 import type { CompactFailure } from "../ports/compaction.js";
 import { SUMMARY_MAX_CHARS } from "../ports/compaction.js";
 import type { TranscriptItem } from "../protocol/transcript.js";
@@ -71,7 +72,7 @@ export function summarizeTranscript(
   const previous = options.previousSummary === undefined
     ? [] : scrubDisclosure(options.previousSummary).split("\n")
       .filter(line => line.trim().length > 0).map(line => fit(line, maxLineChars));
-  const lines = [...previous, ...items.map((item) => fit(scrubDisclosure(itemFragment(item)), maxLineChars))];
+  const lines = [...previous, ...items.map((item) => fit(summaryFragment(item, maxLineChars), maxLineChars))];
   return pruneToLimit(lines, maxChars);
 }
 
@@ -99,10 +100,27 @@ function itemFragment(item: TranscriptItem): string {
       // would suggest there is something here to read.
       return item.redacted ? "assistant_reasoning: [redacted]" : `assistant_reasoning: ${item.text}`;
     case "tool_call":
-      return `tool_call ${item.name} ${item.toolCallId}`;
+      return `tool_call ${item.name} ${item.toolCallId}${readSource(item)}`;
     case "tool_result":
       return `tool_result ${item.name} ${item.outcome}: ${item.output}`;
   }
+}
+
+/** Only inert read provenance is carried; arbitrary tool arguments may contain secrets. */
+function readSource(item: TranscriptItem & { kind: "tool_call" }): string {
+  if (item.name !== "read_file" || typeof item.arguments.path !== "string") return "";
+  const range = ["offset", "limit"].flatMap(key => {
+    const value = item.arguments[key];
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 ? [key + " " + value] : [];
+  });
+  return " path " + JSON.stringify(item.arguments.path) + (range.length ? " " + range.join(" ") : "");
+}
+
+/** Model authoring still receives raw text; only the stored default digest samples it. */
+function summaryFragment(item: TranscriptItem, maxChars: number): string {
+  if (item.kind !== "tool_result") return scrubDisclosure(itemFragment(item));
+  const prefix = scrubDisclosure(`tool_result ${item.name} ${item.toolCallId} ${item.outcome}: `);
+  return prefix + toolOutputExcerpt(scrubDisclosure(item.output), Math.max(0, maxChars - prefix.length));
 }
 
 function fit(text: string, maxLineChars: number): string {

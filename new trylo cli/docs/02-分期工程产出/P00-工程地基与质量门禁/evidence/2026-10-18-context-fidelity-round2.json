@@ -1,0 +1,600 @@
+{
+  "baseline": "067b054bcd6fd22690b0e3ae81bf6e721a057693",
+  "branch": "codex/context-fidelity-round2",
+  "sourceSha256": {
+    "src/internal/compaction/summary.ts": "e761b886bc53f4762141f0178dbf6c41aade64cb55cdd4eecb83e462d2c3a36c",
+    "src/internal/compaction/tool-excerpt.ts": "4043f6c4ca3d301d0bf97e3110b06ad18c7af5fe32346c15507150c45f1dc2db",
+    "src/internal/loop/prompt-view.ts": "6abc06d19424f347abed1b7b91a3fbf03b6f93377865245029ea9fa5cf58b35b",
+    "src/internal/adapters/provider/openai-stream.ts": "c1c21a6aa2749c59cde6c40e55bb02fd259c483fc85896bb970843c781943bab"
+  },
+  "regressions": {
+    "baseline": {
+      "tests": 16,
+      "pass": 10,
+      "fail": 6
+    },
+    "focused": {
+      "tests": 38,
+      "pass": 38,
+      "fail": 0
+    },
+    "toolsAndResume": {
+      "tests": 80,
+      "pass": 78,
+      "fail": 0,
+      "skipped": 2
+    }
+  },
+  "fullVerify": {
+    "status": "pass",
+    "steps": 11,
+    "contractTests": 38,
+    "topLevelNames": 4023,
+    "tests": 4193,
+    "pass": 4187,
+    "fail": 0,
+    "skipped": 6,
+    "duration": "144.32s",
+    "skips": [
+      "a link out of the workspace is refused even when writes are allowed # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+      "a POSIX ledger is written 0600 and a loosened one is reported insecure # SKIP POSIX mode bits are not observable on win32; recorded in AUTH-QUALITY-AUDIT.md",
+      "writing through a file symlink that points outside is refused # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+      "creating parents never follows a symlinked directory out of the workspace # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+      "writing through a link that leaves the workspace never reaches the target # SKIP the platform refused to create the symlink, so this escape case cannot run here",
+      "a link that cannot be resolved is refused rather than trusted lexically # SKIP the platform refused to create the symlink, so this escape case cannot run here"
+    ]
+  },
+  "actualRoundRequests": 17,
+  "roundRequestCap": 40,
+  "experimentRequestCap": 20,
+  "experimentTotalTimeoutMs": 240000,
+  "originalInputBytesMatch": true,
+  "observations": [
+    {
+      "label": "original-failed",
+      "baseline": "2230dd309fd483263c6a4e1c6ce68996b4a3a790",
+      "windows": [
+        {
+          "window": "w1",
+          "replacedFrom": 2,
+          "replacedTo": 50,
+          "rawMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "microMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "storedSummaryMarkers": [],
+          "storedSummaryChars": 962,
+          "rawReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "storedSummarySha256": "c2ecce6f970cada577ccd51872e034027758cb0f96fc92add7e9e087d8f625c4"
+        },
+        {
+          "window": "w2",
+          "replacedFrom": 73,
+          "replacedTo": 104,
+          "rawMarkers": [
+            "fact-B-862",
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "microMarkers": [
+            "fact-B-862",
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "storedSummaryMarkers": [
+            "fact-B-862",
+            "fact-C-953"
+          ],
+          "storedSummaryChars": 1686,
+          "rawReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "storedSummarySha256": "ce64d87d6754e8f0120f8393d108ea049d2f63ce9b73fc844de5538fd3a067d4"
+        }
+      ],
+      "expectedSha256": "248984c4cc2550887c1cc62adacb064527c1626997a26d0cd6a5af4a3ddda8a0",
+      "actualSha256": "afde32e936daa33381ec831e95521e0bffc5ef0526f682908381f4deadf26747",
+      "verification": {
+        "exactBytes": false,
+        "resumedAccurate": false,
+        "completedCompactions": 2,
+        "wireCompactedRequests": 8,
+        "writeExecutions": 1
+      },
+      "remoteUsage": {
+        "input": 35477,
+        "output": 758
+      },
+      "loopUsage": {
+        "input": 35477,
+        "output": 758
+      },
+      "runs": [
+        {
+          "label": "cross-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 323,
+          "firstVisibleMs": 3664,
+          "totalMs": 33202,
+          "toolWaitMs": 62
+        },
+        {
+          "label": "resume-after-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 338,
+          "firstVisibleMs": 3854,
+          "totalMs": 6504,
+          "toolWaitMs": 9
+        }
+      ],
+      "requestTelemetry": {
+        "count": 10,
+        "allHttp200": true,
+        "summaryRequests": 0,
+        "firstVisibleRangeMs": [
+          2334,
+          4230
+        ],
+        "totalRangeMs": [
+          2510,
+          6440
+        ]
+      },
+      "inputHashesMatchOriginal": true
+    },
+    {
+      "label": "current-main",
+      "baseline": "067b054bcd6fd22690b0e3ae81bf6e721a057693",
+      "windows": [
+        {
+          "window": "w1",
+          "replacedFrom": 2,
+          "replacedTo": 50,
+          "rawMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "microMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "storedSummaryMarkers": [
+            "fact-A-731"
+          ],
+          "storedSummaryChars": 1011,
+          "rawReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "storedSummarySha256": "7245c3460c52a16cde984834d7b5cfaf0cc0880dd409c2503777d9cabe68019d"
+        },
+        {
+          "window": "w2",
+          "replacedFrom": 73,
+          "replacedTo": 104,
+          "rawMarkers": [
+            "fact-B-862",
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "microMarkers": [
+            "fact-B-862",
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "storedSummaryMarkers": [
+            "fact-A-731",
+            "fact-B-862",
+            "fact-C-953"
+          ],
+          "storedSummaryChars": 1719,
+          "rawReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "storedSummarySha256": "f3088fdb63714bef7fa4104f72bdf7bcb2e5c4fe7916a3aef8436c7ee42ed3f6"
+        }
+      ],
+      "expectedSha256": "248984c4cc2550887c1cc62adacb064527c1626997a26d0cd6a5af4a3ddda8a0",
+      "actualSha256": "248984c4cc2550887c1cc62adacb064527c1626997a26d0cd6a5af4a3ddda8a0",
+      "verification": {
+        "exactBytes": true,
+        "resumedAccurate": true,
+        "completedCompactions": 2,
+        "wireCompactedRequests": 7,
+        "writeExecutions": 1
+      },
+      "remoteUsage": {
+        "input": 31719,
+        "output": 599
+      },
+      "loopUsage": {
+        "input": 31719,
+        "output": 599
+      },
+      "runs": [
+        {
+          "label": "cross-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 333,
+          "firstVisibleMs": 4783,
+          "totalMs": 28813,
+          "toolWaitMs": 57
+        },
+        {
+          "label": "resume-after-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 340,
+          "firstVisibleMs": 3408,
+          "totalMs": 6779,
+          "toolWaitMs": 9
+        }
+      ],
+      "requestTelemetry": {
+        "count": 9,
+        "allHttp200": true,
+        "summaryRequests": 0,
+        "firstVisibleRangeMs": [
+          2685,
+          5227
+        ],
+        "totalRangeMs": [
+          3023,
+          5924
+        ]
+      },
+      "inputHashesMatchOriginal": true
+    },
+    {
+      "label": "fixed",
+      "baseline": "067b054bcd6fd22690b0e3ae81bf6e721a057693",
+      "windows": [
+        {
+          "window": "w1",
+          "replacedFrom": 2,
+          "replacedTo": 47,
+          "rawMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "microMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "storedSummaryMarkers": [
+            "fact-A-731",
+            "fact-B-862"
+          ],
+          "storedSummaryChars": 877,
+          "rawReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 A.txt",
+            "资料 B.txt"
+          ],
+          "storedSummarySha256": "5f33d7d4274dbe54a68dce02e1ebce4313c91251ef38d156dff2b612703c4d04"
+        },
+        {
+          "window": "w2",
+          "replacedFrom": 70,
+          "replacedTo": 101,
+          "rawMarkers": [
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "microMarkers": [
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "storedSummaryMarkers": [
+            "fact-A-731",
+            "fact-B-862",
+            "fact-C-953",
+            "fact-D-164"
+          ],
+          "storedSummaryChars": 1517,
+          "rawReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "summaryReadPaths": [
+            "资料 C.txt",
+            "资料 D.txt"
+          ],
+          "storedSummarySha256": "6d5b1c6386389333269c6900a7a5339c8b2bcab38eee6bd6129f01ae072411ad"
+        }
+      ],
+      "expectedSha256": "248984c4cc2550887c1cc62adacb064527c1626997a26d0cd6a5af4a3ddda8a0",
+      "actualSha256": "248984c4cc2550887c1cc62adacb064527c1626997a26d0cd6a5af4a3ddda8a0",
+      "verification": {
+        "exactBytes": true,
+        "resumedAccurate": true,
+        "completedCompactions": 2,
+        "wireCompactedRequests": 6,
+        "writeExecutions": 1
+      },
+      "remoteUsage": {
+        "input": 29368,
+        "output": 670
+      },
+      "loopUsage": {
+        "input": 29368,
+        "output": 670
+      },
+      "runs": [
+        {
+          "label": "cross-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 333,
+          "firstVisibleMs": 3611,
+          "totalMs": 33026,
+          "toolWaitMs": 58
+        },
+        {
+          "label": "resume-after-compaction",
+          "exit": 0,
+          "status": "completed",
+          "timedOut": false,
+          "firstEventMs": 326,
+          "firstVisibleMs": 3132,
+          "totalMs": 3357,
+          "toolWaitMs": 0
+        }
+      ],
+      "requestTelemetry": {
+        "count": 8,
+        "allHttp200": true,
+        "summaryRequests": 0,
+        "firstVisibleRangeMs": [
+          2733,
+          3608
+        ],
+        "totalRangeMs": [
+          2961,
+          9589
+        ]
+      },
+      "inputHashesMatchOriginal": true
+    }
+  ],
+  "contracts": {
+    "perItemSummaryChars": 240,
+    "totalSummaryChars": 4000,
+    "excerptLines": 3,
+    "sourceFields": [
+      "read_file path",
+      "offset",
+      "limit"
+    ],
+    "summaryData": "quoted untrusted observations",
+    "journalFormat": "unchanged",
+    "permissions": "unchanged",
+    "learning": "unchanged",
+    "chatStop": "hold finish for trailing usage until DONE/EOF or caller cancellation; no new timeout",
+    "cancellation": "ignore only aborted-reader cleanup errors matching signal.reason or AbortError; release lock; rethrow unrelated failures",
+    "summaryAccounting": "independent request capped at 1024; not included in main-loop iterations/output/usage; characterized, not changed"
+  },
+  "limitations": [
+    "Bounded extraction does not guarantee all facts: unique long prose, more than three distinctive lines and global overflow remain lossy.",
+    "Older outputs above 20000 characters still use the existing marked head/tail microcompact; no broad rehydration rewrite.",
+    "One unchanged real baseline replay passed because the model restated facts; deterministic client-chain red is the fix evidence.",
+    "No new actual Desktop UI or real MCP verification; no claim about native GLM reasoning from reasoning=false AMD."
+  ],
+  "httpMeasurements": {
+    "currentRoundExternalRequests": 0,
+    "actualLocalHttp": [
+      {
+        "mode": "late-usage",
+        "timing": {
+          "requestArrivedMs": 37.88,
+          "maxTokens": 1024,
+          "toolCount": 0,
+          "headersWrittenMs": 38.84,
+          "textFrameWrittenMs": 39.03,
+          "stopFrameWrittenMs": 39.06,
+          "firstVisibleMs": 41.79,
+          "waitObservedMs": 145.27,
+          "settledBeforeTail": false,
+          "usageSentMs": 145.27,
+          "usageReceivedMs": 145.71,
+          "settledMs": 147.38,
+          "httpClosedMs": 149.65
+        },
+        "events": [
+          "stream_start",
+          "text_start",
+          "text_delta",
+          "text_end",
+          "usage",
+          "finish"
+        ],
+        "fallback": false,
+        "normalSummary": true
+      },
+      {
+        "mode": "stop-hang",
+        "timing": {
+          "requestArrivedMs": 4.3,
+          "maxTokens": 1024,
+          "toolCount": 0,
+          "headersWrittenMs": 4.34,
+          "textFrameWrittenMs": 4.36,
+          "stopFrameWrittenMs": 4.37,
+          "firstVisibleMs": 4.95,
+          "waitObservedMs": 308.43,
+          "settledBeforeTail": false,
+          "cancelRequestedMs": 308.43,
+          "settledMs": 309.25,
+          "httpClosedMs": 309.56
+        },
+        "events": [
+          "stream_start",
+          "text_start",
+          "text_delta",
+          "text_end",
+          "finish"
+        ],
+        "fallback": true,
+        "normalSummary": false
+      },
+      {
+        "mode": "text-hang",
+        "timing": {
+          "requestArrivedMs": 3.81,
+          "maxTokens": 1024,
+          "toolCount": 0,
+          "headersWrittenMs": 3.84,
+          "textFrameWrittenMs": 3.86,
+          "firstVisibleMs": 4.36,
+          "waitObservedMs": 306.74,
+          "settledBeforeTail": false,
+          "cancelRequestedMs": 306.74,
+          "settledMs": 307.12,
+          "httpClosedMs": 307.39
+        },
+        "events": [
+          "stream_start",
+          "text_start",
+          "text_delta",
+          "error"
+        ],
+        "fallback": true,
+        "normalSummary": false
+      },
+      {
+        "mode": "half-json",
+        "timing": {
+          "requestArrivedMs": 5.73,
+          "maxTokens": 1024,
+          "toolCount": 0,
+          "headersWrittenMs": 5.75,
+          "textFrameWrittenMs": 5.76,
+          "eofSentMs": 6.04,
+          "httpClosedMs": 6.16,
+          "firstVisibleMs": 6.53,
+          "settledMs": 6.66
+        },
+        "events": [
+          "stream_start",
+          "text_start",
+          "text_delta",
+          "text_end"
+        ],
+        "fallback": true,
+        "normalSummary": false
+      },
+      {
+        "mode": "network-cut",
+        "timing": {
+          "requestArrivedMs": 3.88,
+          "maxTokens": 1024,
+          "toolCount": 0,
+          "headersWrittenMs": 3.9,
+          "textFrameWrittenMs": 3.91,
+          "firstVisibleMs": 4.21,
+          "waitObservedMs": 4.24,
+          "settledBeforeTail": false,
+          "disconnectMs": 4.24,
+          "settledMs": 4.67,
+          "httpClosedMs": 4.74
+        },
+        "events": [
+          "stream_start",
+          "text_start",
+          "text_delta",
+          "error"
+        ],
+        "fallback": true,
+        "normalSummary": false
+      }
+    ],
+    "priorRoundRealSummary": [
+      {
+        "round": "Debuglog04",
+        "request": 3,
+        "headersMs": 2854,
+        "firstByteMs": 2854,
+        "firstVisibleMs": 2855,
+        "totalMs": 59498,
+        "maxOutputTokens": 1024,
+        "outputTokens": 1024,
+        "finish": "length",
+        "idleGapMs": null,
+        "note": "Prior harness did not time every output fragment; no idle-gap duration can be inferred."
+      },
+      {
+        "round": "Debuglog04",
+        "request": 6,
+        "headersMs": 3717,
+        "firstByteMs": 3717,
+        "firstVisibleMs": 3717,
+        "totalMs": 8859,
+        "maxOutputTokens": 1024,
+        "outputTokens": 197,
+        "finish": "stop",
+        "idleGapMs": null,
+        "note": "Prior harness did not time every output fragment; no idle-gap duration can be inferred."
+      }
+    ],
+    "boundary": "No universal idle timeout was introduced. Wire stop alone waits for trailing usage; caller cancellation bounds hangs."
+  },
+  "originalInputs": [
+    {
+      "path": "资料 A.txt",
+      "bytes": 8916,
+      "sha256": "7d3d89c5c1370a67cd79b3513a1902b2488138ac6d6173f33b5595b7180843d8"
+    },
+    {
+      "path": "资料 B.txt",
+      "bytes": 8916,
+      "sha256": "161547b6143abf88d4ba493c8a38f23965e5f3ffed476cc64fad201d06a35aaf"
+    },
+    {
+      "path": "资料 C.txt",
+      "bytes": 8916,
+      "sha256": "61b660233e4e3796da45c27cbf12a5fa64d6745f9c321cc4d1fb6db678ce2dbc"
+    },
+    {
+      "path": "资料 D.txt",
+      "bytes": 8916,
+      "sha256": "552ecfecb8d759cd3af3de2650e3d29ac6adffa43ce0c1d236dcf71c2b163ae5"
+    }
+  ],
+  "privateEvidenceNote": "Per-request sanitized timing and wire observations are retained in the local Debuglog05 report; this public record keeps aggregates, source/input hashes and per-window facts."
+}
