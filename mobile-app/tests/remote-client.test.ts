@@ -45,6 +45,15 @@ function client() {
   });
 }
 
+test("an unpaired demo client reports offline without opening a remote connection", () => {
+  const gateway = new RemoteGatewayClient({ baseUrl: '', demo: true });
+  const state = vi.fn();
+  const dispose = gateway.subscribe(vi.fn(), state);
+  expect(state).toHaveBeenCalledWith('offline');
+  expect(request).not.toHaveBeenCalled();
+  dispose();
+});
+
 test("production client sends the expected methods, routes, identity and Code/Work payloads", async () => {
   const gateway = client();
   await gateway.sendChat(

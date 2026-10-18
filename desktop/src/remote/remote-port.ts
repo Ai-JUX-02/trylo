@@ -77,7 +77,9 @@ export class ServicesRemotePort implements RemotePort {
   }
 
   enable(config: RemoteEnableParams): Promise<RemoteStatusResult> {
-    return this.manager.client.request('remote.enable', config);
+    // A newly created tunnel can take 35s. The ordinary 30s RPC deadline
+    // must not report failure while the gateway is still starting it.
+    return this.manager.client.request('remote.enable', config, { timeoutMs: 60_000 });
   }
 
   async disable(): Promise<{ readonly ok: boolean }> {

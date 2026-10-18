@@ -54,6 +54,12 @@ test("B6: a list that parses resolves to exactly the names given", () => {
   assert.deepEqual(denied.denyTools, ["run_shell"]);
 });
 
+test("memory permission names survive both CLI allow and deny parsing", () => {
+  const names = ["memory_remember", "memory_correct", "memory_forget"];
+  assert.deepEqual(optionsOf(["run", "hi", "--allow-tools", names.join(",")]).allowTools, names);
+  assert.deepEqual(optionsOf(["run", "hi", "--deny-tools", names.join(",")]).denyTools, names);
+});
+
 test("B6: an empty list is refused rather than read as 'no restriction'", () => {
   const { message } = errorOf(["run", "hi", "--allow-tools", " , "]);
   assert.match(message, /needs at least one tool name/);

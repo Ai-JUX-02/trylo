@@ -18,6 +18,31 @@
 
 export { deriveUserPolicy, evidenceOf, type DerivedUserPolicy, type DeriveInput } from "./chain.js";
 export { createFileLedgerPort, LEDGER_TAIL_RECORDS, USER_LEDGER_FILE } from "./ledger-file.js";
+export {
+  createFileFactStore,
+  USER_FACTS_FILE,
+  type FactAppendResult,
+  type FactReadResult,
+  type UserFactStore,
+} from "./facts-file.js";
+export {
+  createUserMemoryService,
+  type RememberRequest,
+  type ReviseRequest,
+  type UserMemoryDeps,
+  type UserMemoryService,
+  type UserMemoryTurn,
+} from "./memory-service.js";
+export { deleteUserMemory, type MemoryDeleteResult } from "./memory-delete.js";
+export {
+  decodeLegacyDocument,
+  importLegacyFacts,
+  legacyRecordId,
+  type LegacyDecode,
+  type LegacyDecision,
+  type LegacyDocument,
+  type LegacyFactEntry,
+} from "./legacy-import.js";
 export { journalEventOf, userLearningObserver } from "./observer.js";
 export {
   composeLearningPorts,

@@ -131,6 +131,32 @@ describe('settingsForCodeRun — protocol × path resolution', () => {
       }
     }
   });
+
+  // WP-CL / B: the learning switch is a snapshot fact like the protocol.
+  // Leaving it out is what made "Enable User Learning" a UI-only promise:
+  // the run never told the CLI, so nothing was ever saved.
+  it('forwards an enabled user-learning switch and stays silent when it is off', () => {
+    setCliRuntimeResolution(BUNDLED);
+    expect(settingsForCodeRun({ cliPath: '', userLearning: { enabled: true } }, CWD).learning).toBe('user');
+    expect(settingsForCodeRun({ cliPath: '', userLearning: { enabled: false } }, CWD).learning).toBeUndefined();
+    expect(settingsForCodeRun({ cliPath: '' }, CWD).learning).toBeUndefined();
+  });
+
+  it('never upgrades the Desktop toggle to --learning=all', () => {
+    // The Desktop owns one toggle. If it ever maps to `all`, method and tool
+    // learning start running on the strength of a checkbox that never mentioned them.
+    setCliRuntimeResolution(BUNDLED);
+    for (const enabled of [true, false]) {
+      expect(settingsForCodeRun({ cliPath: '', userLearning: { enabled } }, CWD).learning).not.toBe('all');
+    }
+  });
+
+  it('a private or session-only turn cannot enable the CLI user ledger', () => {
+    setCliRuntimeResolution(BUNDLED);
+    const settings = { cliPath: '' as FilePath, userLearning: { enabled: true } };
+    expect(settingsForCodeRun(settings, CWD, { collectNewLearning: false, retention: 'normal' }).learning).toBeUndefined();
+    expect(settingsForCodeRun(settings, CWD, { collectNewLearning: true, retention: 'session_only' }).learning).toBeUndefined();
+  });
 });
 
 

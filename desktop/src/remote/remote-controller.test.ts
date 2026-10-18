@@ -233,6 +233,65 @@ describe('RemoteController lifecycle', () => {
     expect(h.manager.stop).not.toHaveBeenCalled();
   });
 
+  it('pairing waits for host startup before requesting the QR', async () => {
+    const h = createHarness();
+    let ready!: () => void;
+    h.manager.ensureRunning.mockImplementationOnce(() => new Promise<void>((resolve) => { ready = resolve; }));
+    const start = h.controller.setEnabled(true);
+    const qr = h.controller.pairing();
+    await waitFor(() => !!ready, 'spawn requested');
+    expect(h.port.pairingInfo).not.toHaveBeenCalled();
+    h.fireHealth('ready');
+    ready();
+    await start;
+    await expect(qr).resolves.toHaveProperty('qrDataUrl');
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
+  });
+
+  it('a QR retry recovers an initial host spawn failure', async () => {
+    const h = createHarness();
+    h.manager.ensureRunning.mockRejectedValueOnce(new Error('host script not found'));
+    await h.controller.setEnabled(true);
+    expect(h.controller.status().running).toBe(false);
+    h.fireHealth('ready');
+    await expect(h.controller.pairing()).resolves.toHaveProperty('qrDataUrl');
+    expect(h.manager.ensureRunning).toHaveBeenCalledTimes(2);
+    expect(h.port.enable).toHaveBeenCalledTimes(1);
+    expect(h.manager.onHealth).toHaveBeenCalledTimes(2);
+  });
+
+  it('a QR retry restarts a failed tunnel even when the local gateway is running', async () => {
+    const h = createHarness();
+    await h.controller.setEnabled(true);
+    h.fireHealth('ready');
+    h.fireStatus({ ...h.controller.status(), publicUrl: '', reasonCode: 'tunnel_start_failed' });
+    await expect(h.controller.pairing()).resolves.toHaveProperty('qrDataUrl');
+    expect(h.port.enable).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the original startup failure visible and never requests QR from a stopped host', async () => {
+    const h = createHarness();
+    h.manager.ensureRunning.mockRejectedValue(new Error('host script not found'));
+    await h.controller.setEnabled(true);
+    await expect(h.controller.pairing()).rejects.toThrow('host script not found');
+    expect(h.port.pairingInfo).not.toHaveBeenCalled();
+    await h.controller.setEnabled(false);
+    await expect(h.controller.pairing()).rejects.toThrow('请先启用');
+  });
+
+  it('does not enable a gateway after remote access was switched off during spawn', async () => {
+    const h = createHarness();
+    let ready!: () => void;
+    h.manager.ensureRunning.mockImplementationOnce(() => new Promise<void>((resolve) => { ready = resolve; }));
+    const start = h.controller.setEnabled(true);
+    await waitFor(() => !!ready, 'spawn requested');
+    await h.controller.setEnabled(false);
+    ready();
+    await start;
+    expect(h.port.enable).not.toHaveBeenCalled();
+    expect(h.controller.status().running).toBe(false);
+  });
+
   it('dispose disables the gateway and stops the service host', async () => {
     const h = createHarness();
     await h.controller.setEnabled(true);

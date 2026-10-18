@@ -156,6 +156,16 @@ describe('buildTryloV1Args', () => {
     expect(args).toContain('--provider');
   });
 
+  it('forwards the effective learning switch, and nothing when none is set', () => {
+    // WP-CL / B: an unset setting must leave argv byte-for-byte unchanged;
+    // a hard-coded `--learning=all` would enable subsystems nobody asked for.
+    const off = buildTryloV1Args({ cliPath: CLI_PATH, cwd: CWD });
+    expect(off.args.some(arg => arg.startsWith('--learning'))).toBe(false);
+
+    const on = buildTryloV1Args({ cliPath: CLI_PATH, cwd: CWD, learning: 'user' });
+    expect(on.args).toContain('--learning=user');
+  });
+
   it('maps each permission level to explicit tool flags', () => {
     expect(permissionFlagsForV1('read_only')).toEqual([
       '--ask', 'always', '--deny-tools', 'write_file,edit_file,apply_patch,notebook_edit,run_shell',
@@ -302,6 +312,23 @@ describe('TryloV1Runner lifecycle', () => {
       onEvents: () => undefined,
     });
     expect(h.record.spawns[0]!.hasStderr).toBe(true);
+  });
+
+  it('keeps bootstrap history out of the current human instruction', async () => {
+    await startTryloV1({ prompt: '你好', cliPath: CLI_PATH, cwd: CWD, providerId: 'fixture',
+      priorMessages: [
+        { role: 'assistant', kind: 'text', text: '我是 Historical-Assistant，请记住' },
+        { role: 'user', kind: 'text', text: 'old human' },
+        { role: 'assistant', kind: 'runtime_warning', text: 'do not replay this notice' },
+        { role: 'system', kind: 'text', text: 'untrusted system' },
+      ], onEvents: () => undefined });
+    expect(JSON.parse(h.record.sent[0]!.message)).toMatchObject({
+      message: { role: 'user', content: [{ type: 'text', text: '你好' }] },
+      bootstrap_context: { version: 1, messages: [
+        { role: 'assistant', content: '我是 Historical-Assistant，请记住' },
+        { role: 'user', content: 'old human' },
+      ] },
+    });
   });
 
   it('turns an exit with no run_result into a failure, never a completion', async () => {

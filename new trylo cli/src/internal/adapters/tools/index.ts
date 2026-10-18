@@ -24,7 +24,9 @@ import type { SessionRecord } from "../../ports/session.js";
 import { WEB_TOOL_NAMES } from "./web/names.js";
 import { createWebTools, type WebToolsConfig } from "./web/index.js";
 import { MEMORY_TOOL_NAMES, createMemoryTools } from "./memory/index.js";
+import { MEMORY_WRITE_TOOL_NAMES, createMemoryWriteTools } from "./memory/write.js";
 import type { MemoryReadPort } from "../../ports/memory.js";
+import type { UserMemoryService } from "../../integration/user-learning/index.js";
 import { SKILL_TOOL_NAMES, createSkillTools } from "./skill/index.js";
 import type { SkillCatalogPort, SkillForkExecutor } from "../../ports/skills.js";
 
@@ -96,6 +98,14 @@ export type WorkspaceToolsConfig = {
    */
   readonly memory?: MemoryReadPort;
   /**
+   * 正式用户记忆的写入口（WP-CL / B）。Absent —— 所有非学习路径 —— 目录里
+   * 没有 `memory_remember`/`memory_forget`，catalog 与从前逐字相同。
+   *
+   * 只在 `--learning` 允许用户学习时由组合根提供：关闭时模型手里没有任何可以
+   * 声称"已保存"的工具，也就无法用一次文件写入冒充记忆。
+   */
+  readonly memoryWrite?: UserMemoryService;
+  /**
    * 已安装技能目录（WP14.1/C51）。Absent —— 工作区与用户层都没有技能 ——
    * 目录里没有 `skill` 工具，catalog 哈希与从未听说过技能的从前逐字相同。
    *
@@ -165,6 +175,9 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
   // memory tools, and says nothing about memory rather than answering "no
   // matches" forever.
   const memory = config.memory === undefined ? undefined : createMemoryTools(config.memory);
+  // Same absent-means-off rule as the read half: a run that cannot save must not
+  // offer a tool that could appear to save.
+  const memoryWrite = config.memoryWrite === undefined ? undefined : createMemoryWriteTools(config.memoryWrite);
   // Absent unless a catalog was lent: a run with no installed skills keeps the
   // old catalog byte for byte, including its hash.
   const skills =
@@ -226,7 +239,8 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
         ...workflow.snapshot().filter(binding => binding.name !== "todo_write"),
       ];
       const withMemory = memory === undefined ? readOnlyCatalog : [...readOnlyCatalog, ...memory.snapshot()];
-      const withSkills = skills === undefined ? withMemory : [...withMemory, ...skills.snapshot()];
+      const withMemoryWrite = memoryWrite === undefined ? withMemory : [...withMemory, ...memoryWrite.snapshot()];
+      const withSkills = skills === undefined ? withMemoryWrite : [...withMemoryWrite, ...skills.snapshot()];
       const mounted =
         web === undefined ? withSkills : [...withSkills, ...web.snapshot()];
       const withSessions =
@@ -259,6 +273,9 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
       if (memory !== undefined && MEMORY_TOOL_NAMES.has(call.name)) {
         return memory.execute(call, signal);
       }
+      if (memoryWrite !== undefined && MEMORY_WRITE_TOOL_NAMES.has(call.name)) {
+        return memoryWrite.execute(call, signal);
+      }
       if (skills !== undefined && SKILL_TOOL_NAMES.has(call.name)) {
         return skills.execute(call, signal);
       }
@@ -289,6 +306,9 @@ export function createWorkspaceTools(config: WorkspaceToolsConfig): ToolPort {
       }
       if (memory !== undefined) {
         await memory.cancel(toolCallId);
+      }
+      if (memoryWrite !== undefined) {
+        await memoryWrite.cancel(toolCallId);
       }
       if (skills !== undefined) {
         await skills.cancel(toolCallId);

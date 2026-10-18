@@ -96,7 +96,7 @@ test("automatic compaction preserves the complete original user constraint", asy
   assert.ok(bodies[1]!.messages.some(m => m.role === "user" && m.content === text));
 });
 
-test("a resumed history without original native state reports degradation through the loop", async () => {
+test("a resumed history with no journaled native source is not reported as lost context", async () => {
   const provider = createOpenAiCompatibleProvider({ endpoint, model, apiKey: "fixture-key", fetchImpl: async () => response() });
   const result = await runTurn({ provider, permission, profile: emptyProfileLoader(), tools: echoTools() }, {
     ...input, resumedTranscript: [
@@ -106,7 +106,10 @@ test("a resumed history without original native state reports degradation throug
     ],
   });
   assert.equal(result.state.terminalReason, "completed");
-  assert.equal(result.envelopes.filter(e => e.kind === "observation" && e.payload.code === "native_continuation_unavailable").length, 1);
+  // WP-CL / A04: no journaled source record means "unknown", not "lost". A
+  // count here would be an invented number, and repeating it every process is
+  // the noise this work package removes.
+  assert.equal(result.envelopes.filter(e => e.kind === "observation" && e.payload.code === "native_continuation_unavailable").length, 0);
 });
 
 test("an oversized user constraint is refused rather than compacted away", async () => {

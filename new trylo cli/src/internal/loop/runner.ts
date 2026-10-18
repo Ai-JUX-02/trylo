@@ -414,7 +414,8 @@ async function runOneIteration(
   const observation = await consumeProviderStream({
     port: ports.provider, request,
     signal: engine.abort.signal,
-    onWarning: warning => emitRaw(engine, "observation", { component: "provider", degraded: true, code: warning.code, message: warning.message }),
+    onWarning: warning => emitRaw(engine, "observation", { component: "provider", degraded: true, code: warning.code, message: warning.message,
+      ...(warning.diagnostic === undefined ? {} : { diagnostic: warning.diagnostic }) }),
     startSequence: nextTranscriptSequence(engine.transcript),
     nextEventId: () => nextId(engine),
     // One normalizer per turn, built from the catalog this turn will actually

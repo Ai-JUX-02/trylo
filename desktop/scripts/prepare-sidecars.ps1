@@ -239,6 +239,10 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "release-inventory failed against $resources (exit $LASTEXITCODE)"
   }
+  node scripts/verify-remote-runtime.mjs $resources
+  if ($LASTEXITCODE -ne 0) {
+    throw "Remote runtime verification failed against $resources (exit $LASTEXITCODE)"
+  }
 } finally {
   Pop-Location
   Remove-Item Env:\TRYLO_RESOURCE_DIR -ErrorAction SilentlyContinue

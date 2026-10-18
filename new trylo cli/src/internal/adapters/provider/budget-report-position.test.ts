@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { runTurn } from "../../loop/runner.js";
 import { createFakePermission, emptyProfileLoader, echoBinding, toolResult } from "../../loop/fakes.js";
 import { createOpenAiCompatibleProvider } from "./openai-compatible.js";
-import { FINAL_REPORT_INSTRUCTIONS } from "../../loop/budget-final-report.js";
+import { finalReportInstructions } from "../../loop/budget-final-report.js";
 
 test("reserved report stays the latest request on Chat wire without inventing human input or executing more tools", async () => {
   const wires: Array<{ messages: Array<{ role: string; content: string }>; tools?: unknown[] }> = [];
@@ -29,7 +29,8 @@ test("reserved report stays the latest request on Chat wire without inventing hu
     budget: { maxIterations: 2, finalRequest: "report_only" },
   });
   assert.equal(wires.length, 2);
-  assert.deepEqual(wires[1]?.messages.at(-1), { role: "user", content: FINAL_REPORT_INSTRUCTIONS });
+  assert.deepEqual(wires[1]?.messages.at(-1), { role: "user", content: finalReportInstructions(result.transcript) });
+  assert.match(wires[1]!.messages.at(-1)!.content, /echo: succeeded/);
   assert.equal(wires[1]?.messages[0]?.role, "system");
   assert.equal(wires[1]?.messages[0]?.content, "Governing instructions stay in the system channel.");
   assert.equal(wires[1]?.tools?.length ?? 0, 0);

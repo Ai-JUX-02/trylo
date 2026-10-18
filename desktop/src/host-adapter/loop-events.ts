@@ -305,6 +305,12 @@ export interface RuntimeWarningEvent extends BaseEvent {
   readonly id?: string;
   readonly code: string;
   readonly message: string;
+  /**
+   * Additive diagnosis for degradations the CLI can classify. The renderer
+   * uses `noticeId` to keep one degraded notice per reason and history set,
+   * across journal replays and panel remounts.
+   */
+  readonly diagnostic?: import('./trylo-v1-protocol').NativeContinuationDiagnostic;
 }
 
 export interface InputRequestEvent extends BaseEvent {

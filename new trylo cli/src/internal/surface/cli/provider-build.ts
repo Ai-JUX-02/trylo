@@ -1,5 +1,5 @@
 import type { ProviderPort } from "../../ports/provider.js";
-import { createFixtureProvider, DEFAULT_FIXTURE_SCRIPT, SUBAGENT_FIXTURE_SCRIPT, WRITE_FIXTURE_SCRIPT } from "../../adapters/provider/fixture.js";
+import { createFixtureProvider, createMemoryFixtureProvider, DEFAULT_FIXTURE_SCRIPT, SUBAGENT_FIXTURE_SCRIPT, WRITE_FIXTURE_SCRIPT } from "../../adapters/provider/fixture.js";
 import { createOpenAiCompatibleProvider } from "../../adapters/provider/openai-compatible.js";
 import { createResponsesProvider } from "../../adapters/provider/responses.js";
 import { isKeyedProviderKind, isProviderKind, type ProviderKind } from "../../adapters/provider/providers-file.js";
@@ -66,6 +66,9 @@ function preflight(input: WiringInput, kind: ProviderKind): WiringFailure | unde
 }
 
 function constructTransport(input: WiringInput, kind: ProviderKind): ProviderPort {
+  if (input.providerId === "fixture-memory" && kind === "fixture") {
+    return createMemoryFixtureProvider();
+  }
   if (kind === "fixture") {
     return createFixtureProvider(DEFAULT_FIXTURE_SCRIPT);
   }

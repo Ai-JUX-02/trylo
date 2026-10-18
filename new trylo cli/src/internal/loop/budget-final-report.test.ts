@@ -4,8 +4,23 @@ import { runTurn } from "./runner.js";
 import { createFakeCompaction, createFakePermission, emptyProfileLoader, echoBinding, toolResult } from "./fakes.js";
 import type { ProviderRequest, ProviderEvent } from "../ports/provider.js";
 import type { ToolPort } from "../ports/tools.js";
+import { finalReportInstructions } from "./budget-final-report.js";
 
 const request = { sessionId: "s", turnId: "t", correlationId: "c", text: "Do the work and report actual validation." };
+
+test("final report action facts exclude prior turns, preserve failures and omit tool payloads", () => {
+  const prompt = finalReportInstructions([
+    { kind: "user", sequence: 1, text: "prior" },
+    { kind: "tool_result", sequence: 2, toolCallId: "old", name: "old_writer", outcome: "succeeded", output: "private-old", truncated: false },
+    { kind: "user", sequence: 3, text: "current" },
+    { kind: "tool_result", sequence: 4, toolCallId: "find", name: "find_files", outcome: "succeeded", output: "private-name", truncated: false },
+    { kind: "tool_result", sequence: 5, toolCallId: "write", name: "write_file", outcome: "failed", output: "private-error", truncated: false },
+  ]);
+  assert.match(prompt, /find_files: succeeded/);
+  assert.match(prompt, /write_file: failed/);
+  assert.doesNotMatch(prompt, /old_writer|private-/);
+  assert.match(prompt, /not proof of delivery/);
+});
 
 async function scenario(final: "report" | "rogue", reserve: boolean) {
   const requests: ProviderRequest[] = [];

@@ -81,7 +81,17 @@ export type CliV1Event =
       readonly durationMs?: number;
       readonly fileChanges?: readonly FileMutationFact[];
     }
-  | { readonly type: 'warning'; readonly code: string; readonly message: string }
+  | {
+      readonly type: 'warning';
+      readonly code: string;
+      readonly message: string;
+      /**
+       * Additive diagnosis for a degradation the CLI could classify. Absent on
+       * every warning that predates it, and on every warning it does not
+       * describe, so `code` + `message` remain the whole contract for those.
+       */
+      readonly diagnostic?: NativeContinuationDiagnostic;
+    }
   | { readonly type: 'usage'; readonly usage: CliV1Usage }
   | { readonly type: 'compact'; readonly status: 'started' | 'completed' | 'failed';
       readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }
@@ -97,6 +107,43 @@ export type CliV1Event =
       readonly lastMessage: string;
       readonly attemptTurnId?: string;
     };
+
+/** Closed set of provenance failures the CLI can prove. */
+export const NATIVE_CONTINUATION_CAUSES = [
+  'checkpoint_missing',
+  'checkpoint_invalid',
+  'binding_mismatch',
+  'cache_evicted',
+  'history_mismatch',
+  'capture_rejected',
+] as const;
+
+export type NativeContinuationDiagnostic = {
+  readonly schemaVersion: 1;
+  readonly cause: (typeof NATIVE_CONTINUATION_CAUSES)[number] | 'unknown_source';
+  readonly affected: number;
+  readonly basis: 'native_expected_occurrences' | 'unknown';
+  readonly severity: 'degraded' | 'info';
+  /** Stable across processes and replays for the same reason + history set. */
+  readonly noticeId: string;
+};
+
+/**
+ * Runtime guard, not a cast: a newer CLI may name a cause this build does not
+ * know. Refusing the diagnostic keeps the notice rendering on `code`/`message`
+ * instead of silently showing half-understood data.
+ */
+export function isNativeContinuationDiagnostic(value: unknown): value is NativeContinuationDiagnostic {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const fields = value as Record<string, unknown>;
+  const causes: readonly string[] = NATIVE_CONTINUATION_CAUSES;
+  return fields['schemaVersion'] === 1
+    && (fields['cause'] === 'unknown_source' || causes.includes(String(fields['cause'])))
+    && typeof fields['affected'] === 'number' && Number.isInteger(fields['affected']) && fields['affected'] >= 0
+    && (fields['basis'] === 'native_expected_occurrences' || fields['basis'] === 'unknown')
+    && (fields['severity'] === 'degraded' || fields['severity'] === 'info')
+    && typeof fields['noticeId'] === 'string' && fields['noticeId'].length > 0;
+}
 
 /** Why a line was rejected. Callers surface this; they never swallow it. */
 export type CliV1RejectReason =
@@ -192,8 +239,10 @@ function fieldsAreValid(type: CliV1EventType, raw: Record<string, unknown>): boo
     case 'warning':
       // `message` may legitimately be empty — the captured golden traces
       // carry `{"code":"checkpoint","message":""}` and `{"code":"denied",
-      // "message":""}`. Only `code` is required.
-      return isNonEmptyString(raw.code) && typeof raw.message === 'string';
+      // "message":""}`. Only `code` is required. A diagnostic is optional but,
+      // when present, must be a shape this build understands.
+      return isNonEmptyString(raw.code) && typeof raw.message === 'string'
+        && (raw.diagnostic === undefined || isNativeContinuationDiagnostic(raw.diagnostic));
     case 'usage':
       return isUsage(raw.usage);
     case 'compact':

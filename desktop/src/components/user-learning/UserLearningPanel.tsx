@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import '../../styles/components/learning-center.css'
 import { Virtuoso } from 'react-virtuoso'
+import { CliMemoryRecords, type CliMemoryRecordsProps } from './CliMemoryRecords'
 import { cognitionMap, isWorkDimension } from '../../user-learning/cognition'
 import type {
   EnforcementMode,
@@ -61,9 +62,10 @@ export interface UserLearningPanelProps {
   readonly onOpenCognition?: () => void
   readonly onExport?: () => void
   readonly onDeleteUserData?: () => void
+  readonly cliMemory?: CliMemoryRecordsProps
 }
 
-const MODE_LABELS = { shadow: '仅观察', enforced: '应用偏好', off: '关闭' }
+const MODE_LABELS = { shadow: '仅观察', enforced: '应用偏好', off: '停用偏好' }
 const STATE_LABELS = { ok: '已了解', missing: '待了解', conflict: '有分歧', drift: '有变化' }
 const PROFILE_LABELS = {
   role_identity: '角色与身份',
@@ -158,7 +160,8 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
         state: 'missing' as const,
       },
   )
-  const profile = props.snapshot.profileFacts.filter((p) => p.status === 'active')
+  const cliIds = new Set(props.cliMemory?.facts.map((fact) => fact.id) ?? [])
+  const profile = props.snapshot.profileFacts.filter((p) => p.status === 'active' && !cliIds.has(p.id))
   const conclusions = props.snapshot.conclusions.filter((c) => c.status === 'active')
   // Some host/test fixtures predate schema v5. The persisted migration fills
   // this field, but the inspector remains tolerant of an in-memory legacy prop.
@@ -516,7 +519,8 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
 
               {module === 'cognition' && !aux && cognitionTab === 'profile' ? (
                 <section className="learning-inspector__section">
-                  {profile.length === 0 ? (
+                  {props.cliMemory ? <CliMemoryRecords {...props.cliMemory} /> : null}
+                  {profile.length === 0 && (props.cliMemory?.facts.length ?? 0) === 0 ? (
                     <p className="learning-inspector__empty">
                       还没有个人资料。可以补充你的专业背景和长期工作场景。
                     </p>
@@ -718,7 +722,7 @@ export function UserLearningPanel(props: UserLearningPanelProps): ReactElement |
                     ))}
                   </div>
                   <p className="learning-inspector__hint">
-                    “仅观察”会记录学习结果；“应用偏好”会将符合条件的偏好用于任务；“关闭”停用该模式。
+                    “仅观察”会记录学习结果；“应用偏好”会将符合条件的偏好用于任务；“停用偏好”只停止应用偏好。正式用户记忆与学习采集由设置中的 Enable User Learning 开关控制。
                     聊天里表达的习惯会先作为依据记录，再逐步形成偏好。
                   </p>
                   <ul className="learning-inspector__list">

@@ -37,6 +37,7 @@ import type {
 import type { DiffCommandOptions, ReviewCommandOptions, SessionReviewOptions } from "./args-review.js";
 import type { UpdateOptions } from "./args-update.js";
 import type { OutputStyleListOptions, OutputStyleShowOptions } from "./args-output-style.js";
+import type { MemoryDeleteOptions, MemoryImportOptions } from "./args-memory.js";
 import type { WorkflowListOptions, WorkflowRunOptions, WorkflowShowOptions } from "./args-workflow.js";
 import type { ContextOptions } from "./args-context.js";
 import {
@@ -79,6 +80,8 @@ export type {
   UpdateOptions,
   OutputStyleListOptions,
   OutputStyleShowOptions,
+  MemoryImportOptions,
+  MemoryDeleteOptions,
   WorkflowListOptions,
   WorkflowShowOptions,
   WorkflowRunOptions,
@@ -352,6 +355,11 @@ export type ParsedCommand =
   | { readonly kind: "update"; readonly options: UpdateOptions }
   | { readonly kind: "output_style_list"; readonly options: OutputStyleListOptions }
   | { readonly kind: "output_style_show"; readonly options: OutputStyleShowOptions }
+  | { readonly kind: "memory_import"; readonly options: MemoryImportOptions }
+  | { readonly kind: "memory_list"; readonly options: { readonly json: boolean } }
+  | { readonly kind: "memory_compact"; readonly options: { readonly json: boolean } }
+  | { readonly kind: "memory_delete"; readonly options: MemoryDeleteOptions }
+  | { readonly kind: "memory_mutate"; readonly action: "correct" | "retract" }
   | { readonly kind: "workflow_list"; readonly options: WorkflowListOptions }
   | { readonly kind: "workflow_show"; readonly options: WorkflowShowOptions }
   | { readonly kind: "workflow_run"; readonly options: WorkflowRunOptions }

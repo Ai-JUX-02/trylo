@@ -109,7 +109,7 @@ function App() {
   const [isDemo, setIsDemo] = useState(gatewayClient.isDemo);
   const [connectionState, setConnectionState] =
     useState<GatewayConnectionState>(
-      gatewayClient.isDemo ? "connected" : "connecting",
+      gatewayClient.isDemo ? "offline" : "connecting",
     );
   const [connectionVersion, setConnectionVersion] = useState(0);
   const snapshotRevision = useRef(0);
@@ -118,7 +118,7 @@ function App() {
   const controlsReady = useRef(false);
   const navigationRequest = useRef(false);
   const updateConnection = (state: GatewayConnectionState) => {
-    controlsReady.current = state === "connected";
+    controlsReady.current = !gatewayClient.isDemo && state === "connected";
     setConnectionState(state);
   };
   const reconnect = () => {
@@ -306,7 +306,7 @@ function App() {
         await gatewayClient.initialize();
         if (cancelled) return;
         setIsDemo(gatewayClient.isDemo);
-        updateConnection(gatewayClient.isDemo ? "connected" : "connecting");
+        updateConnection(gatewayClient.isDemo ? "offline" : "connecting");
         // Subscribe independently of REST/history. A failed initial read must
         // not prevent automatic recovery when the computer comes back online.
         dispose = gatewayClient.subscribe(

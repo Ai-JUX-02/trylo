@@ -26,11 +26,20 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:net';
+import qrcodeModule from 'qrcode';
 
 const require = createRequire(import.meta.url);
 
 export const REMOTE_HANDLER_TIMEOUT_MS = 30_000;
 const DEFAULT_PORT = 49380;
+async function availablePort() {
+  const probe = createServer();
+  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+  const port = probe.address().port;
+  await new Promise((resolve, reject) => probe.close(error => error ? reject(error) : resolve()));
+  return port;
+}
 const KNOWN_HANDLERS = [
   'projects',
   'project',
@@ -59,17 +68,9 @@ function resolveVendorGatewayModule() {
   return null;
 }
 
-// Static `require('qrcode')` (not dynamic import): esbuild then INLINES the CJS
-// package and converts its internal `require('fs')` into a real import. A
-// dynamic `import('qrcode')` stays a runtime ESM import and hits "Dynamic
-// require of 'fs' is not supported" when the bundled CJS runs under Node ESM
-// (verified in the dist bundle, 2026-08-28).
-let qrcodeModule = null;
-try {
-  qrcodeModule = require('qrcode');
-} catch {
-  qrcodeModule = null;
-}
+// The static import above lets esbuild include QRCode. A local createRequire
+// call stays external and would require an unstaged node_modules/qrcode.
+// The bundle banner supplies Node require for QRCode's built-in fs/zlib use.
 
 /**
  * @param {{ identity: object, tunnel?: object, emit?: (topic: string, payload: unknown) => void,
@@ -106,6 +107,12 @@ export function createRemoteAdapter(options) {
   let publicUrl = '';
   let tunnelMode = 'named';
   let tunnelRunning = false;
+  let lifecycle = Promise.resolve();
+  const serialize = operation => {
+    const next = lifecycle.then(operation);
+    lifecycle = next.catch(() => {});
+    return next;
+  };
   /** In-flight handler invocations awaiting the Desktop response. */
   const pending = new Map();
 
@@ -215,32 +222,66 @@ export function createRemoteAdapter(options) {
 
   /** D→S `remote.enable`. Creates+starts the gateway and, when configured,
    *  the tunnel. Idempotent: re-enabling with new config restarts cleanly. */
-  async function enable(params = {}) {
+  function enable(params = {}) {
+    return serialize(() => enableGateway(params));
+  }
+
+  async function enableGateway(params) {
     if (!gatewayModule) {
       reasonCode = 'gateway_module_missing';
       emitStatus();
       throw new Error('Remote gateway module is unavailable.');
     }
-    if (gateway) await disable();
+    if (gateway) await disableGateway();
     const identityValue = await identity.loadOrCreate();
-    port = Math.max(1024, Math.min(65535, Number(params.port) || DEFAULT_PORT));
+    const preferredPort = Math.trunc(Math.max(1024, Math.min(65535, Number(params.port) || DEFAULT_PORT)));
+    port = preferredPort;
     workspaceName = String(params.workspaceName || 'Trylo Code');
     tunnelMode = String(params.tunnelMode || 'named').toLowerCase();
     publicUrl = '';
     tunnelRunning = false;
 
-    gateway = gatewayModule.createRemoteGateway({
-      port,
-      host: '127.0.0.1',
-      authToken: identityValue.pairingToken,
-      workspaceName,
-      deviceName: String(params.deviceName || os.hostname()),
-      deviceSeed: identityValue.deviceSeed,
-      handlers: buildHandlers(),
-    });
-    await gateway.start();
+    // Own a listener independently of any other process. Never kill or hand
+    // off another program merely because it occupies the preferred port.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      port = attempt === 0 ? preferredPort : attempt === 1 && preferredPort < 65535 ? preferredPort + 1 : await availablePort();
+      const candidate = gatewayModule.createRemoteGateway({
+        port,
+        host: '127.0.0.1',
+        authToken: identityValue.pairingToken,
+        workspaceName,
+        deviceName: String(params.deviceName || os.hostname()),
+        deviceSeed: identityValue.deviceSeed,
+        handlers: buildHandlers(),
+      });
+      try {
+        await candidate.start();
+        gateway = candidate;
+        break;
+      } catch (error) {
+        await candidate.stop().catch(() => {});
+        // Windows excluded port ranges can reject a nearby port with EACCES.
+        // Ask the OS for an available listener after the first nearby retry.
+        const unavailable = error?.code === 'EADDRINUSE' || error?.code === 'EACCES';
+        if (unavailable && attempt < 7) continue;
+        gateway = null;
+        enabled = false;
+        reasonCode = unavailable ? 'port_in_use' : 'gateway_start_failed';
+        emitStatus();
+        if (unavailable) {
+          throw Object.assign(new Error(`无法为 Desktop 分配可用的远程端口（首选 ${preferredPort}），请稍后重试。`), { code: 'REMOTE_PORT_IN_USE' });
+        }
+        throw error;
+      }
+    }
     enabled = true;
-    reasonCode = '';
+    reasonCode = port === preferredPort ? '' : 'port_fallback';
+
+    // A static named/manual URL may still point to the occupied port and a
+    // different authority. Use a Desktop-owned tunnel for the actual listener.
+    if (port !== preferredPort && (tunnelMode === 'named' || tunnelMode === 'manual')) {
+      tunnelMode = 'quick';
+    }
 
     // Tunnel after the gateway is listening so the tunnel can reach it.
     if (tunnel && tunnelMode !== 'off') {
@@ -258,6 +299,7 @@ export function createRemoteAdapter(options) {
         // Keep the loopback gateway available for diagnostics/retry. Phone
         // pairing still requires an externally reachable HTTPS endpoint.
         sanitizedNote(`tunnel start failed (${err?.message || err}) — phone pairing requires HTTPS`);
+        reasonCode = 'tunnel_start_failed';
       }
     }
     emitStatus();
@@ -266,7 +308,11 @@ export function createRemoteAdapter(options) {
 
   /** D→S `remote.disable`. Stops tunnel then gateway, releasing the port
    *  (arch §7.6: a later owner can bind 49380). */
-  async function disable() {
+  function disable() {
+    return serialize(disableGateway);
+  }
+
+  async function disableGateway() {
     if (tunnel && tunnelRunning) {
       await tunnel.stop().catch(() => {});
       tunnelRunning = false;
@@ -274,6 +320,7 @@ export function createRemoteAdapter(options) {
     const active = gateway;
     gateway = null;
     enabled = false;
+    publicUrl = '';
     if (active) {
       await active.stop().catch(() => {});
     }
@@ -297,7 +344,7 @@ export function createRemoteAdapter(options) {
   /** D→S `remote.pairingInfo`: pairing payload (identity token + tunnel/local
    *  base URL) plus a QR data URL for the phone. */
   async function pairingInfo() {
-    if (!gateway) {
+    if (!gateway?.listening || !enabled) {
       throw Object.assign(new Error('Remote gateway is not running.'), { code: 'REMOTE_NOT_RUNNING' });
     }
     // The listener is loopback-only; its fallback URL cannot be reached by a
@@ -309,6 +356,9 @@ export function createRemoteAdapter(options) {
       || ['localhost', '127.0.0.1', '[::1]'].includes(pairingUrl.hostname)
       || pairingUrl.username || pairingUrl.password || pairingUrl.search || pairingUrl.hash
       || (pairingUrl.pathname !== '' && pairingUrl.pathname !== '/')) {
+      if (reasonCode === 'tunnel_start_failed') {
+        throw Object.assign(new Error('Desktop 本地服务已启动，但远程通道启动失败。请检查网络后重试生成二维码。'), { code: 'REMOTE_TUNNEL_FAILED' });
+      }
       throw Object.assign(new Error('手机配对需要可从手机访问的 HTTPS 远程地址。请在远程设置中配置隧道或 HTTPS 地址后重试。'), {
         code: 'REMOTE_PUBLIC_URL_REQUIRED', statusCode: 409,
       });
@@ -320,7 +370,11 @@ export function createRemoteAdapter(options) {
       qrDataUrl = await QRCode.toDataURL(JSON.stringify(pairing));
     } catch (err) {
       sanitizedNote(`QR generation failed (${err?.message || err})`);
+      throw Object.assign(new Error('配对二维码生成失败，请重试或检查桌面程序的配套服务文件。'), {
+        code: 'REMOTE_QR_FAILED',
+      });
     }
+    if (!qrDataUrl) throw Object.assign(new Error('配对二维码生成失败，请重试。'), { code: 'REMOTE_QR_FAILED' });
     return { pairing, qrDataUrl };
   }
 

@@ -460,8 +460,15 @@ export function settingsForCodeRun(
     providerId?: string;
     /** P08 §4.1: which CLI contract to spawn. */
     cliRuntimeProtocol?: CliRuntimeProtocol;
+    /**
+     * WP-CL / B: the user-learning switch the person actually turned on.
+     * Only `enabled` matters here — this mapping never invents a value the
+     * settings do not hold.
+     */
+    userLearning?: { readonly enabled?: boolean };
   },
   cwd: FilePath,
+  directive?: { readonly collectNewLearning: boolean; readonly retention: 'normal' | 'session_only' },
 ): SettingsForCodeRun {
   // Effective model = pool override || user's own model. The pool never
   // overwrites apiModel, so switching pool↔own always round-trips.
@@ -492,6 +499,13 @@ export function settingsForCodeRun(
     // P08 §4.1: snapshotted with the rest of the contract so the run
     // cannot be re-routed by a settings change after it started.
     cliRuntimeProtocol: protocol,
+    // WP-CL / B: the user-learning switch, forwarded as `--learning=user`.
+    //
+    // Only `user` — the Desktop has no method-learning or tool-learning toggle,
+    // so claiming `all` here would turn on subsystems the person never enabled.
+    // Absent (the default) leaves argv byte-for-byte what it was.
+    ...(settings.userLearning?.enabled === true && directive?.collectNewLearning !== false && directive?.retention !== 'session_only'
+      ? { learning: 'user' as const } : {}),
     // P08 §WP6 (audit P1): the pinned Node travels WITH the script — the
     // two come from one resolution and must not be separated, or a
     // machine without Node on PATH fails despite the bundle carrying one.

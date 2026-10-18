@@ -340,6 +340,16 @@
       "source": "docs/development/build-from-source.md",
       "target": "docs/development/build-from-source.md",
       "reason": "Explicit native build input or preparation instructions; dependency caches and full release output remain excluded."
+    },
+    {
+      "source": "docs/architecture/memory-continuation-update.md",
+      "target": "docs/architecture/memory-continuation-update.md",
+      "reason": "Current module and verification documentation for the synchronized public source."
+    },
+    {
+      "source": "docs/release/CURRENT_SOURCE_CHECKPOINT.md",
+      "target": "docs/release/CURRENT_SOURCE_CHECKPOINT.md",
+      "reason": "Current module and verification documentation for the synchronized public source."
     }
   ],
   "excludedRoots": [

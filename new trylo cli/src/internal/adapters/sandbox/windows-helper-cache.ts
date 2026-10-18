@@ -10,6 +10,12 @@ type ProtectCache = (target: CacheTarget) => void;
 
 function digest(bytes: Uint8Array): string { return createHash("sha256").update(bytes).digest("hex"); }
 
+/** Native resolution also sees Windows reparse points that lstat can report as directories. */
+function redirectedDirectory(directory: string): boolean {
+  const expected = join(realpathSync.native(dirname(directory)), basename(directory));
+  return lstatSync(directory).isSymbolicLink() || relative(expected, realpathSync.native(directory)) !== "";
+}
+
 /** A pinned executable outside writable/low-integrity workspaces; never a new download. */
 export function cacheWindowsHelper(source: HelperSource, directory: string, protect: ProtectCache, writableRoots: readonly string[] = []): string {
   assertOutsideWriteRoots(directory, writableRoots);
@@ -17,11 +23,11 @@ export function cacheWindowsHelper(source: HelperSource, directory: string, prot
   const bytes = readFileSync(source.path);
   if (digest(bytes) !== source.sha256) throw new Error("isolation_helper_invalid: shipped helper digest differs from provenance");
   const directoryExists = existsSync(directory);
-  if (directoryExists && (!lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink())) {
+  if (directoryExists && (!lstatSync(directory).isDirectory() || redirectedDirectory(directory))) {
     throw new Error("isolation_helper_invalid: private cache is redirected");
   }
   mkdirSync(directory, { recursive: true });
-  if (lstatSync(directory).isSymbolicLink()) throw new Error("isolation_helper_invalid: cache became redirected");
+  if (redirectedDirectory(directory)) throw new Error("isolation_helper_invalid: cache became redirected");
   protect({ kind: "directory", path: directory, state: directoryExists ? "existing" : "new" });
   const executable = join(directory, `srt-win-${source.sha256}.exe`);
   const executableExists = existsSync(executable);
@@ -43,9 +49,9 @@ export function cacheWindowsHelper(source: HelperSource, directory: string, prot
 
 function assertOutsideWriteRoots(directory: string, roots: readonly string[]): void {
   if (roots.length === 0) return;
-  const canonical = existsSync(directory) ? realpathSync(directory) : join(realpathSync(dirname(directory)), basename(directory));
+  const canonical = existsSync(directory) ? realpathSync.native(directory) : join(realpathSync.native(dirname(directory)), basename(directory));
   for (const root of roots) {
-    const path = relative(realpathSync(root), canonical);
+    const path = relative(realpathSync.native(root), canonical);
     if (path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`))) {
       throw new Error("isolation_helper_invalid: trusted helper cache is inside a granted write root; use a narrower workspace");
     }
@@ -76,7 +82,7 @@ export function existingWindowsHelper(env = hostProcessEnvironment()): string {
   const candidate = join(directory, `srt-win-${source.sha256}.exe`);
   if (!existsSync(candidate)) return source.path;
   const stat = lstatSync(candidate);
-  if (lstatSync(directory).isSymbolicLink() || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(candidate)) !== source.sha256) throw new Error("isolation_helper_invalid: cached helper differs from provenance");
+  if (redirectedDirectory(directory) || !stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || digest(readFileSync(candidate)) !== source.sha256) throw new Error("isolation_helper_invalid: cached helper differs from provenance");
   return candidate;
 }
 

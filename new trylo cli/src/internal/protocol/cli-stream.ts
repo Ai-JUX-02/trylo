@@ -72,7 +72,16 @@ export type CliStreamEvent =
       readonly durationMs?: number;
       readonly fileChanges?: ReadonlyArray<CliFileMutation>;
     }
-  | { readonly type: "warning"; readonly code: string; readonly message: string }
+  | {
+      readonly type: "warning";
+      readonly code: string;
+      readonly message: string;
+      /**
+       * Additive diagnosis for degradations this build can classify. Absent on
+       * every other warning, and older consumers keep reading `code`/`message`.
+       */
+      readonly diagnostic?: import("../ports/provider.js").NativeContinuationDiagnostic;
+    }
   | { readonly type: "usage"; readonly usage: CliUsage }
   | { readonly type: "compact"; readonly status: "started" | "completed" | "failed";
       readonly tokensBefore?: number; readonly tokensAfter?: number; readonly reason: string }

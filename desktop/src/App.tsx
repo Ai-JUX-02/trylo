@@ -231,7 +231,9 @@ import {
   learningImpactMessage,
   prepareLearningInteraction,
   type UserLearningRuntime,
+  LOCAL_USER_ID,
 } from './user-learning'
+import { deleteCliUserMemory, loadCliMemoryFacts, mutateCliMemory, snapshotToLegacyDocument, withCliFacts, type CliMemoryFact } from './user-learning/cli-memory'
 import { contractFilePath, serializeContractForDisk } from './user-learning/team-access/persist'
 import { parsePersonSeatOutput } from './user-learning/team-access/person-output'
 import { contractSummaryFromContract } from './user-learning/team-access/contract-summary'
@@ -1641,6 +1643,35 @@ function App(): ReactElement {
   >({})
   const [cognitionSendTick, setCognitionSendTick] = useState(0)
   const bumpLearning = useCallback(() => setLearningTick((n) => n + 1), [])
+  // WP-CL / B: the panel's profile facts come from the CLI's formal ledger.
+  //
+  // Read once per panel open (and after a save bumps the learning tick), through
+  // the canonical `memory list --json` — not by parsing `facts.ndjson` here, so
+  // there is exactly one schema owner. A failed read leaves the local snapshot
+  // untouched rather than blanking the panel.
+  const [cliMemoryFacts, setCliMemoryFacts] = useState<readonly CliMemoryFact[]>([])
+  const [cliMemoryError, setCliMemoryError] = useState<string>()
+  useEffect(() => {
+    if (!learningPanelOpen || settings.userLearning.enabled !== true) {
+      setCliMemoryFacts([])
+      setCliMemoryError(undefined)
+      return
+    }
+    let cancelled = false
+    const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+    void loadCliMemoryFacts({
+      process: hostAdapter.process,
+      cliPath: resolved.cliPath,
+      ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }),
+      cwd: currentWorkspace.root,
+    }).then((result) => {
+      if (!cancelled) {
+        setCliMemoryFacts(result.ok ? result.facts : [])
+        setCliMemoryError(result.ok ? undefined : `用户记忆读取失败：${result.reason}`)
+      }
+    })
+    return () => { cancelled = true }
+  }, [learningPanelOpen, learningTick, settings, currentWorkspace.root])
   // Standalone User Cognition session (the "fifth mode"): when
   // `cognitionViewOpen` the Person surface's main column becomes the
   // CognitionSurface instead of ChatPanel. It is NOT a third Code/Work
@@ -2977,7 +3008,7 @@ function App(): ReactElement {
                   projectKey: workspaceKey(root),
                   conversationId: sessionId,
                   text: formatWorkMessage({ userText: text, attachments: workAttachmentSnapshot }),
-                  settings: settingsForCodeRun(currentSettings, root),
+                  settings: settingsForCodeRun(currentSettings, root, effectiveLearningDirective),
                   systemPrompt,
                   codeMode: 'agent',
                   permissionLevel: effectivePermission.level,
@@ -3046,7 +3077,7 @@ function App(): ReactElement {
           projectKey: workspaceKey(root),
           conversationId: sessionId,
           text: formatWorkMessage({ userText: text, attachments: workAttachmentSnapshot }),
-          settings: settingsForCodeRun(currentSettings, root),
+          settings: settingsForCodeRun(currentSettings, root, effectiveLearningDirective),
           systemPrompt: workSystemPrompt,
           codeMode: 'agent',
           permissionLevel: effectivePermission.level,
@@ -4769,7 +4800,7 @@ function App(): ReactElement {
       // the user's interaction intent; the level is the
       // permission. Both travel with the request.
       const sendPermissionLevel = effectivePermission.level
-      let runSettings = settingsForCodeRun(current, workspaceRootAtSend)
+      let runSettings = settingsForCodeRun(current, workspaceRootAtSend, effectiveLearningDirective)
       let skipAgent = false
       let teamLaunch = false
       try {
@@ -4834,6 +4865,7 @@ function App(): ReactElement {
         runSettings = settingsForCodeRun(
           { ...current, systemPrompt: prepared.systemPrompt },
           workspaceRootAtSend,
+          effectiveLearningDirective,
         )
         if (prepared.contract) void persistTeamContract(workspaceRootAtSend, prepared.contract)
         const codeContractSummary = prepared.contract
@@ -4844,7 +4876,7 @@ function App(): ReactElement {
           void supervisor
             .runCode(projectKeyAtSend, sessionIdAtSend, {
               prompt: cliPrompt,
-              settings: settingsForCodeRun({ ...current, systemPrompt }, workspaceRootAtSend),
+              settings: settingsForCodeRun({ ...current, systemPrompt }, workspaceRootAtSend, effectiveLearningDirective),
               codeMode: cliCodeMode(codeMode),
               permissionLevel: sendPermissionLevel,
               priorMessages: priorMessagesAtSend,
@@ -5539,7 +5571,7 @@ function App(): ReactElement {
           cognitionViewOpen && cognitionSession ? (
             <CognitionSurface
               session={cognitionSession}
-              snapshot={userLearning.snapshot()}
+              snapshot={withCliFacts(userLearning.snapshot(), cliMemoryFacts, LOCAL_USER_ID)}
               busy={cognitionBusy}
               onSend={handleCognitionSurfaceSend}
               onStop={handleCognitionSurfaceStop}
@@ -5800,9 +5832,24 @@ function App(): ReactElement {
         }
       />
       <UserLearningPanel
-        key={learningTick}
+        key={currentWorkspace.id}
         open={learningPanelOpen}
-        snapshot={userLearning.snapshot()}
+        snapshot={withCliFacts(userLearning.snapshot(), cliMemoryFacts, LOCAL_USER_ID)}
+        cliMemory={{ facts: cliMemoryFacts, ...(cliMemoryError === undefined ? {} : { error: cliMemoryError }),
+          onChange: async (fact, statement) => {
+            const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+            const runtime = { process: hostAdapter.process, cliPath: resolved.cliPath, cwd: currentWorkspace.root,
+              ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }) }
+            const result = await mutateCliMemory({ ...runtime, action: statement === undefined ? 'retract' : 'correct',
+              recordId: fact.id, expectedVersion: fact.version, commandId: crypto.randomUUID(),
+              ...(statement === undefined ? {} : { statement }) })
+            if (!result.ok) throw new Error(`记忆更新失败：${result.reason}`)
+            const reload = await loadCliMemoryFacts(runtime)
+            if (!reload.ok) throw new Error(`更新后读取失败：${reload.reason}`)
+            setCliMemoryFacts(reload.facts)
+            setCliMemoryError(undefined)
+          },
+        }}
         settings={userLearning.settings()}
         learningPort={learningPortRef.current}
         lastDecision={userLearning.snapshot().policyDecisions.at(-1)?.mode}
@@ -5817,7 +5864,13 @@ function App(): ReactElement {
         onOpenCognition={() => openCognitionView()}
         onCorrect={() => openCognitionView()}
         onExport={() => {
-          const payload = JSON.stringify(userLearning.exportForUser(), null, 2)
+          // WP-CL / B17: the panel backup also carries the narrow document the
+          // CLI imports, so a migration never needs a second exporter.
+          const backup = userLearning.exportForUser()
+          const payload = JSON.stringify({
+            ...(typeof backup === 'object' && backup !== null ? backup : {}),
+            cliImport: snapshotToLegacyDocument(userLearning.snapshot()),
+          }, null, 2)
           const blob = new Blob([payload], { type: 'application/json' })
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
@@ -5828,8 +5881,24 @@ function App(): ReactElement {
         }}
         onDeleteUserData={() => {
           if (!window.confirm('删除全部 User Learning 数据？此操作不能恢复。')) return
-          userLearning.deleteUserData()
-          bumpLearning()
+          // WP-CL / B20: the formal ledger lives in the CLI's home, not in this
+          // store. Clear it first and only then clear the panel — the other
+          // order lets the UI say "deleted" while `facts.ndjson` still holds
+          // who the user is.
+          const resolved = settingsForCodeRun(settings, currentWorkspace.root)
+          void deleteCliUserMemory({
+            process: hostAdapter.process,
+            cliPath: resolved.cliPath,
+            ...(resolved.cliNodeProgram === undefined ? {} : { nodeProgram: resolved.cliNodeProgram }),
+            cwd: currentWorkspace.root,
+          }).then((result) => {
+            if (!result.ok) {
+              window.alert(`本机记忆没有删干净：${result.reason}`)
+              return
+            }
+            userLearning.deleteUserData()
+            bumpLearning()
+          })
         }}
       />
     </AppShell>

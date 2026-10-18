@@ -211,7 +211,7 @@ export default function RemoteWorkbench({
   const contextKey = `${snapshot.device.id}:${snapshot.activeProjectId}:${snapshot.activeSessionId || "pending"}`;
   const currentContext = useRef(contextKey);
   currentContext.current = contextKey;
-  const ready = state === "connected";
+  const ready = !demo && state === "connected";
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const mutation = useRef(false);
@@ -302,12 +302,12 @@ export default function RemoteWorkbench({
     !["idle", "done", "failed"].includes(snapshot.agent.status) &&
     snapshot.agent.phase !== "stopped";
   const offlineText =
-    state === "offline"
+    demo ? t("尚未连接电脑，当前显示演示内容") : state === "offline"
       ? t("连接已断开")
       : state === "reconnecting"
         ? t("正在恢复连接")
         : t("正在同步会话");
-  const connectionText = ready
+  const connectionText = demo ? t("未配对") : ready
     ? t("已同步")
     : state === "offline"
       ? t("离线")
@@ -597,9 +597,9 @@ export default function RemoteWorkbench({
                   <Icon name="retry" size={15} />
                   <span>
                     {offlineText}
-                    {t("，已保留内容和草稿。")}
+                    {!demo && t("，已保留内容和草稿。")}
                   </span>
-                  <button onClick={reconnect}>{t("重试")}</button>
+                  <button onClick={demo ? onPair : reconnect}>{t(demo ? "连接电脑" : "重试")}</button>
                 </div>
               )}
               <div className="rw-viewbar">

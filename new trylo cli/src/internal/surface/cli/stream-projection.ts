@@ -1,5 +1,6 @@
 import type { Envelope, JsonObject, JsonValue } from "../../protocol/envelope.js";
 import type { CliStreamEvent, CliUsage } from "../../protocol/cli-stream.js";
+import { isNativeContinuationDiagnostic } from "../../ports/provider.js";
 import { projectFileMutations } from "./file-mutation-projection.js";
 
 /**
@@ -188,10 +189,15 @@ function warningFor(payload: Record<string, unknown>, kind: string): CliStreamEv
     permission_input_closed: "Approval input closed before a decision; the command did not run.",
     permission_user_cancelled: "You cancelled approval and the current turn; the command did not run.",
   };
+  const diagnostic = payload["diagnostic"];
   return {
     type: "warning",
     code,
     message: permissionMessages[code] ?? (text(payload, "message") || text(payload, "reason") || text(payload, "decision")),
+    // Only a diagnosis this build can validate travels further. An unknown
+    // shape is dropped rather than half-rendered, and `code`/`message` still
+    // carry the warning.
+    ...(isNativeContinuationDiagnostic(diagnostic) ? { diagnostic } : {}),
   };
 }
 

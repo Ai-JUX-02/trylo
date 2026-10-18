@@ -37,6 +37,15 @@ yarn tauri:dev
 The first build is slow (Rust compiles the Tauri shell). Subsequent rebuilds are fast.
 Resource staging can also take several minutes before the native window opens.
 
+Remote access recovers automatically when the preferred local port is occupied:
+Desktop tries a nearby port, then OS-allocated ports with bounded retries, and
+reports the actual port. When a
+static named/manual tunnel could still target the occupied listener, this
+recovery starts a separate Quick Tunnel for Desktop and pairs with its URL.
+Scan the current QR after recovery. Other processes and saved pairing identities
+are not modified. Gateway enable/disable requests run in order, and stopping the
+Service Host releases its gateway and any tunnel it created.
+
 On Windows, `pnpm tauri:dev` first asks a previous Desktop instance from this
 checkout to close, so Cargo can replace `target/debug/trylo-desktop.exe`. If that
 window does not exit within ten seconds, startup reports its PID and stops without
@@ -70,6 +79,19 @@ Outputs:
 - `src-tauri/target/release/bundle/dmg/*.dmg` (macOS)
 - `src-tauri/target/release/bundle/appimage/*.AppImage` (Linux)
 - `src-tauri/target/release/bundle/deb/*.deb` (Linux)
+
+On Windows, use the complete installer or keep the executable with its staged
+`desktop-services`, `runtime`, `sidecars`, `cli`, `work`, and `workd` directories.
+Copying only `trylo-desktop.exe` to another directory does not produce a complete
+app. Resource mappings place these directories directly beside the executable,
+matching the native service resolvers. Packaging verifies a real Service Host
+startup, gateway startup and QR generation with an isolated test identity.
+
+For an existing standalone test executable missing only its Service Host runtime,
+`powershell -File scripts/repair-servicehost-runtime.ps1 -DesktopDirectory <directory>`
+stages the service, Node and sidecars without replacing the executable or pairing
+identity. Re-enable remote access afterward. This is not a replacement for the
+full installer or a check of the phone's external network connection.
 
 ### Windows Git Bash startup
 

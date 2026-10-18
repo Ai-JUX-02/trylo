@@ -51,6 +51,11 @@ export const USAGE = [
   "  trylo diff [--json]           workspace diff including untracked files (read-only; not a git repo reads as empty)",
   "  trylo output-style list [--json]  installed style prompts `run --output-style` can consume (read-only)",
   "  trylo output-style show <name> [--json]  print one style prompt (read-only)",
+  "  trylo memory list [--json]            show what Trylo remembers about the user (read-only)",
+  "  trylo memory import --file <path>     import a panel export into the user ledger (idempotent)",
+  "  trylo memory delete --all --yes       delete every saved user memory on this machine (no undo)",
+  "  trylo memory update|retract --json    revise one record using a JSON request on stdin",
+  "  trylo memory compact [--json]        atomically retain current versions and consumed command keys",
   "  trylo workflow list [--json]  installed workflow prompts (read-only)",
   "  trylo workflow show <name> [--json]  print one workflow prompt (read-only)",
   "  trylo workflow run <name> [-- <run options>]  run the workflow prompt through the ordinary run pipeline",
@@ -189,6 +194,7 @@ export const HELP_FAMILIES = [
   "config",
   "update",
   "output-style",
+  "memory",
   "workflow",
   "context",
 ] as const;
@@ -206,6 +212,7 @@ const FAMILY_VERB_PREFIXES: Readonly<Record<HelpFamily, ReadonlyArray<string>>> 
   config: ["  trylo config "],
   update: ["  trylo update "],
   "output-style": ["  trylo output-style "],
+  memory: ["  trylo memory "],
   workflow: ["  trylo workflow "],
   context: ["  trylo context "],
 };
@@ -220,6 +227,7 @@ const FAMILY_OPTION_BLOCKS: Readonly<Record<HelpFamily, string | undefined>> = {
   config: undefined,
   update: undefined,
   "output-style": undefined,
+  memory: undefined,
   workflow: undefined,
   context: undefined,
 };

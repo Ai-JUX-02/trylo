@@ -15,11 +15,9 @@ import {
  * to approve it without reading, which is worse than not offering it.
  *
  * What these tools may not do is the reason the schemas look the way they do.
- * There is no `write`, no `remember`, no `forget`. A model that wants a rule
- * remembered has to propose it through the learning path, where a human and the
- * board decide whether it is true. A tool that let a model simply note something
- * down would make the board's judgement optional, and the board is the thing that
- * makes memory worth having.
+ * This adapter only reads. Explicit user facts are written by the separate
+ * consent-bound user-memory tools through the learning service's sole writer;
+ * learning rules still use the board's proposal/adoption path.
  *
  * The three states stay distinct: a record that does not exist
  * (`unknown_document`), a cursor that does not address this result set
@@ -47,7 +45,7 @@ const MATCH_MODES = ["any", "all_on_same_line", "all_within_lines"] as const;
 export const MEMORY_SEARCH_BINDING: ToolBinding = {
   name: MEMORY_SEARCH_TOOL,
   description:
-    "Search this project's memory: the learning rules that are currently in effect, and the project rule files this run adopted. Returns matching lines with the record each came from. Use it to find out what is already decided before asking the user, or before proposing a change to how this project works.",
+    "Search memory. With queries: matches the learning rules in effect, the adopted project rule files, AND the persistent user memory (who the user is, their preferences, facts about this workspace). With an EMPTY queries array: lists the stored user memories instead of matching text — use this for questions about the user themselves, since they are stored under their name, not under words like who.",
   sideEffect: "read_only",
   parameters: {
     type: "object",
@@ -55,7 +53,7 @@ export const MEMORY_SEARCH_BINDING: ToolBinding = {
       queries: {
         type: "array",
         items: { type: "string" },
-        description: "One or more substrings to look for.",
+        description: "One or more substrings to look for. An empty array (or omitting it) lists the stored user memories instead of matching.",
       },
       match_mode: {
         type: "string",
@@ -86,8 +84,9 @@ export const MEMORY_SEARCH_BINDING: ToolBinding = {
         type: "string",
         description: "Restrict the search to one record, by the id a previous result reported.",
       },
+      record_kind: { type: "string", description: "Optional source category filter, e.g. identity_fact for user identity. Applied before pagination." },
     },
-    required: ["queries"],
+    required: [],
     additionalProperties: false,
   },
   needsApproval: false,
@@ -172,10 +171,9 @@ async function runSearch(
   signal: AbortSignal,
 ): Promise<ToolOutcome> {
   const args = call.arguments;
-  const queries = stringList(args, "queries");
-  if (queries === undefined || queries.length === 0) {
-    return { outcome: "error", code: "invalid_arguments", message: "memory_search requires a non-empty queries array" };
-  }
+  // Absent or empty queries is the list mode (see port.ts): "what do you
+  // remember about the user" is a real read, not a malformed search.
+  const queries = stringList(args, "queries") ?? [];
   const requestedMode = args["match_mode"];
   if (requestedMode !== undefined && matchModeArgument(args) === undefined) {
     return {
@@ -186,6 +184,7 @@ async function runSearch(
   }
   const cursor = stringArgument(args, "cursor");
   const documentId = stringArgument(args, "document_id");
+  const recordKind = stringArgument(args, "record_kind");
   const outcome = await port.search(
     {
       queries,
@@ -196,6 +195,7 @@ async function runSearch(
       maxResults: numberArgument(args, "max_results") ?? 20,
       ...(cursor === undefined ? {} : { cursor }),
       ...(documentId === undefined ? {} : { documentId }),
+      ...(recordKind === undefined ? {} : { recordKind }),
     },
     signal,
   );
@@ -204,7 +204,9 @@ async function runSearch(
   }
   const lines = outcome.matches.map(
     (match) =>
-      `${match.documentId}:${match.matchLineNumber} (${match.origin})\n${match.content}`,
+      match.origin === "user-memory"
+        ? `document_id: ${match.documentId}\nline_number: ${match.matchLineNumber}\n${match.content}`
+        : `${match.documentId}:${match.matchLineNumber} (${match.origin})\n${match.content}`,
   );
   const footer = outcome.truncated
     ? `\n[more results exist; call memory_search again with cursor "${outcome.nextCursor ?? ""}"]`
@@ -219,6 +221,8 @@ async function runSearch(
         path: match.path,
         origin: match.origin,
         matchLineNumber: match.matchLineNumber,
+        content: match.content,
+        ...(match.recordKind === undefined ? {} : { recordKind: match.recordKind }),
         matchedQueries: [...match.matchedQueries],
       })),
       ...(outcome.nextCursor === undefined ? {} : { nextCursor: outcome.nextCursor }),

@@ -1,8 +1,20 @@
 import type { ToolPort } from "../ports/tools.js";
 import type { Engine } from "./runner-engine.js";
 import type { LoopPorts } from "./runner.js";
+import type { Transcript } from "../protocol/transcript.js";
 
-export const FINAL_REPORT_INSTRUCTIONS = "Final request at this turn's provider-request limit. No tools are available for this request. Give the final response in the user's requested language and format: report actual work done, validation that actually ran, and any unfinished or unverified requirements. Do not claim full completion merely because a budget ended. Return only the user-facing report, without restating instructions or internal planning. Return the report itself, not a plan for more work or tool-call markup. Use the existing tool results; do not perform or propose another verification.";
+export const FINAL_REPORT_INSTRUCTIONS = "Final request at this turn's provider-request limit. No tools are available for this request. Give the final response in the user's requested language and format: report actual work done, validation that actually ran, and any unfinished or unverified requirements. Do not claim full completion merely because a budget ended. Search, list, glob, plans and promises do not create or modify a file. A failed or denied write is not a successful delivery. Claim a file or memory change only when actual successful results support the requested target and content; a successful tool name alone is not that proof. If only discovery ran, explicitly say the requested file was not created. Return only the user-facing report, without restating instructions or internal planning. Return the report itself, not a plan for more work or tool-call markup. Use the existing tool results; do not perform or propose another verification.";
+
+/** Recent action facts, not a delivery verdict. Do not include arguments or
+ * output (which may contain credentials), and never count a prior user turn.
+ */
+export function finalReportInstructions(transcript: Transcript): string {
+  let lastUser = transcript.length - 1;
+  while (lastUser >= 0 && transcript[lastUser]?.kind !== "user") lastUser -= 1;
+  const results = transcript.slice(lastUser + 1).filter((item) => item.kind === "tool_result");
+  const facts = results.slice(-64).map((item) => `${item.name}: ${item.outcome}`).join("\n");
+  return `${FINAL_REPORT_INSTRUCTIONS}\nCurrent user turn tool outcomes (not proof of delivery):\n${facts || "none"}${results.length > 64 ? "\nEarlier outcomes omitted; consult the existing transcript." : ""}`;
+}
 
 /** Narrow both the advertised catalog and actual execution. No remembered grant
  * can reopen actions, and even a provider ignoring the empty catalog cannot act.

@@ -206,3 +206,5 @@ website/                         来自 trylocode-site
 当前产物是公开目录预览、文件哈希/映射清单和本文，未改业务执行语义、权限或学习行为。
 
 后续按 [迁移顺序](../development/repository-layout.md) 和 [提交与打包](../release/source-submission.md) 执行。预览清单通过只证明选中文件已正确归位；还必须完成路径接线、旧运行依赖清理、固定第三方闭包、干净克隆构建和安装制品验收。发布阻断项保存在机器清单和本地预览报告中。
+
+Current source update: [formal memory and native continuation](memory-continuation-update.md).

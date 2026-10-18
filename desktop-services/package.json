@@ -11,7 +11,7 @@
     "smoke:pet-chain:exe": "node scripts/pet-chain-smoke.cjs --require-exe",
     "smoke:legacy-gateway": "node vendor/legacy/remote-gateway/smoke-test.js && node vendor/legacy/remote-gateway/handoff-test.js",
     "smoke:legacy-tunnel": "node tests/legacy/remote-tunnel-test.js 2>/dev/null || exit 0",
-    "smoke:remote-bundle": "node scripts/remote-bundle-smoke.mjs",
+    "smoke:remote-bundle": "node scripts/verify-remote-runtime.mjs ../desktop/src-tauri/resources",
     "inventory": "node scripts/release-inventory.mjs",
     "validate:tool-bridge": "node scripts/validate-tool-bridge.mjs"
   },

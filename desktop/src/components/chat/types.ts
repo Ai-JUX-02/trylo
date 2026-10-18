@@ -111,6 +111,12 @@ export interface NoticeMessage extends MessageBase {
   readonly contextTokens?: number;
   readonly kind: 'notice';
   readonly text: string;
+  /**
+   * Stable identity of a runtime degradation (from the CLI diagnostic). Two
+   * notices with the same value describe the same degradation and must render
+   * once, however many turns, replays or remounts delivered them.
+   */
+  readonly noticeId?: string;
 }
 
 export interface ToolMessage extends MessageBase {

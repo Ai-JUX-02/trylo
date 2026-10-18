@@ -7,6 +7,8 @@ Trylo 的手机 App。1.5.0 接入已确认的双模式远程工作台。会话�
 
 两部分互不依赖：不扫码配对电脑，也能正常使用直连聊天。
 
+1.5.1 修复连接状态：未配对 / 演示内容明确显示「未配对」，不显示电脑在线、会话已同步，也不允许发送远程操作。电脑服务停止时真实连接仍按离线和重连流程处理。此版本包含 2026-10-15 接线修复，需要配套更新 Desktop 与 Service Host；本机回归不等同于真机扫码及外网隧道验收。
+
 ## 技术栈
 
 - Ionic React 8（MIT）
@@ -75,7 +77,7 @@ npm.cmd run test:remote
 npm.cmd run test:remote:ui
 ```
 
-界面回归使用同仓库 `desktop/node_modules` 中已有的 Vitest / jsdom，需先安装 Desktop 开发依赖。它挂载真实 App、导航与工作台组件，替换 Ionic 原生外壳和 Gateway 边界以注入延迟 / 失败；连接回归另以生产 Gateway 实现与合成 authority 验证本机 HTTP / WebSocket。这两类测试不等同于真机联机验收。2026-10-15 本轮接线修复更新源码和 web 产物，之前的 1.5.0 APK 暂未重打包。
+界面回归使用同仓库 `desktop/node_modules` 中已有的 Vitest / jsdom，需先安装 Desktop 开发依赖。它挂载真实 App、导航与工作台组件，替换 Ionic 原生外壳和 Gateway 边界以注入延迟 / 失败；连接回归另以生产 Gateway 实现与合成 authority 验证本机 HTTP / WebSocket。这两类测试不等同于真机联机验收。2026-10-15 接线修复当时仅更新源码和 web 产物；1.5.1 APK 已包含这些修复及本轮连接状态修复，并通过签名与 APK 内资源一致性检查。
 
 本次会话创建与完整事件投影需要配套更新 Desktop 和 Desktop Service Host。旧版电脑仍可显示其提供的状态，无法新建会话时会显示接口错误。
 

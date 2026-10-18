@@ -92,6 +92,9 @@ export class RemoteController {
   private started = false;
   private channelEnabled = false;
   private startupInFlight = false;
+  private gatewayStart: Promise<void> | null = null;
+  private enabled = false;
+  private startupError = '';
   private lifecycleGeneration = 0;
   private needsReenable = false;
   private disposed = false;
@@ -148,14 +151,16 @@ export class RemoteController {
 
   async setEnabled(enabled: boolean): Promise<void> {
     if (this.disposed) return;
+    this.enabled = enabled && this.options.isTauri();
     if (!enabled || !this.options.isTauri()) {
       this.lifecycleGeneration += 1;
       await this.shutdown(false);
       return;
     }
-    if (this.started) return;
+    if (this.gatewayStart) await this.gatewayStart;
+    if (!this.enabled || this.disposed || this.started) return;
     const generation = ++this.lifecycleGeneration;
-    await this.startup(generation);
+    await this.startOnce(() => this.startup(generation));
   }
 
   async dispose(): Promise<void> {
@@ -182,13 +187,37 @@ export class RemoteController {
     try {
       this.setStatus(await this.options.port.status());
     } catch {
-      // Dead sidecar — keep the stale status; the host health chip tells the story.
+      this.setStatus(EMPTY_REMOTE_STATUS);
     }
     return this.remoteStatusValue;
   }
 
-  pairing(): Promise<RemotePairingInfoResult> {
-    return this.options.port.pairingInfo();
+  async pairing(): Promise<RemotePairingInfoResult> {
+    if (!this.enabled || this.disposed) throw new Error('请先启用远程访问。');
+    // A QR request may arrive before startup finishes, or after a failed
+    // spawn. Wait for startup and let this explicit retry recover the host.
+    await this.setEnabled(true);
+    if (this.started && (!this.remoteStatusValue.running || this.options.manager.currentHealth !== 'ready' || this.remoteStatusValue.reasonCode === 'tunnel_start_failed')) {
+      await this.startOnce(() => this.reenable(this.lifecycleGeneration));
+    }
+    if (!this.enabled || this.disposed) throw new Error('远程访问已关闭。');
+    if (!this.remoteStatusValue.running) {
+      throw new Error(`远程服务启动失败：${this.startupError || '请重试，或检查桌面程序的配套服务文件是否完整。'}`);
+    }
+    const publicUrl = this.remoteStatusValue.publicUrl;
+    const info = await this.options.port.pairingInfo();
+    if (!this.enabled || this.disposed || !this.remoteStatusValue.running || this.remoteStatusValue.publicUrl !== publicUrl) {
+      throw new Error('远程连接已变化，请重试生成二维码。');
+    }
+    return info;
+  }
+
+  private async startOnce(operation: () => Promise<void>): Promise<void> {
+    if (this.gatewayStart) return this.gatewayStart;
+    const start = operation();
+    this.gatewayStart = start;
+    try { await start; }
+    finally { if (this.gatewayStart === start) this.gatewayStart = null; }
   }
 
   /** Announce a mobile task receipt on the phone (frozen-gateway vocabulary
@@ -216,7 +245,7 @@ export class RemoteController {
           // path enables itself; only a later host generation needs a rebind.
           if (!this.startupInFlight && this.needsReenable) {
             this.needsReenable = false;
-            void this.reenable(this.lifecycleGeneration);
+            void this.startOnce(() => this.reenable(this.lifecycleGeneration));
           }
           return;
         }
@@ -233,6 +262,7 @@ export class RemoteController {
     } catch (error) {
       if (generation !== this.lifecycleGeneration) return;
       console.warn('[remote] failed to start the remote gateway', error);
+      this.startupError = error instanceof Error ? error.message : String(error);
       this.started = false;
       this.channelEnabled = false;
       this.setStatus(EMPTY_REMOTE_STATUS);
@@ -247,6 +277,7 @@ export class RemoteController {
   private async startGateway(generation: number): Promise<void> {
     const { sidecarsDir, appDataDir } = await this.options.paths();
     await this.options.manager.ensureRunning({ sidecarsDir, appDataDir });
+    if (this.disposed || generation !== this.lifecycleGeneration) return;
     const status = await this.options.port.enable(this.enableParams());
     this.channelEnabled = true;
     if (this.disposed || generation !== this.lifecycleGeneration) {
@@ -255,18 +286,24 @@ export class RemoteController {
       return;
     }
     this.setStatus(status);
+    this.startupError = '';
     this.needsReenable = false;
     this.publishSnapshot();
   }
 
   private async reenable(generation: number): Promise<void> {
+    this.startupInFlight = true;
     try {
       await this.startGateway(generation);
     } catch (error) {
+      if (generation !== this.lifecycleGeneration) return;
+      this.startupError = error instanceof Error ? error.message : String(error);
       this.channelEnabled = false;
       this.needsReenable = true;
       this.setStatus(EMPTY_REMOTE_STATUS);
       console.warn('[remote] failed to re-enable after service host restart', error);
+    } finally {
+      if (generation === this.lifecycleGeneration) this.startupInFlight = false;
     }
   }
 

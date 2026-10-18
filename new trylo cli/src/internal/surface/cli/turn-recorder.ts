@@ -1,5 +1,6 @@
 import { ExecutionProgressError, type ExecutionProgress, type ExecutionProgressPort, type ProgressWriteOutcome } from "../../ports/execution-progress.js";
 import type { SessionPort } from "../../ports/session.js";
+import type { BootstrapContext } from "./bootstrap-context.js";
 import type { CliRunStatus, CliUsage } from "../../protocol/cli-stream.js";
 import { streamPartialPayload, type StreamPartials } from "../../protocol/stream-partial.js";
 import type { Transcript } from "../../protocol/transcript.js";
@@ -27,7 +28,7 @@ type RecorderCursor = {
 export type TurnRecorder = {
   readonly session: SessionPort;
   readonly progress: ExecutionProgressPort;
-  start(input: { readonly startedAt: number; readonly toolCatalogHash: string; readonly sources?: ReadonlyArray<ProjectInstructionSource>; readonly continuation?: ProviderContinuationPort }): Promise<void>;
+  start(input: { readonly startedAt: number; readonly toolCatalogHash: string; readonly sources?: ReadonlyArray<ProjectInstructionSource>; readonly continuation?: ProviderContinuationPort; readonly bootstrapContext?: BootstrapContext; readonly userSourceAvailable?: false }): Promise<void>;
   finish(input: { readonly status: CliRunStatus; readonly finishReason: string; readonly usage: CliUsage }): Promise<void>;
 };
 
@@ -61,6 +62,8 @@ export function createTurnRecorder(input: TurnRecorderInput): TurnRecorder | und
       cursor.continuation = metadata.continuation;
       await requireWrite("turn_start", append("turn_start", {
         toolCatalogHash: metadata.toolCatalogHash,
+        ...(metadata.bootstrapContext === undefined ? {} : { bootstrapContext: sessionPayload(metadata.bootstrapContext) }),
+        ...(metadata.userSourceAvailable === undefined ? {} : { userSourceAvailable: metadata.userSourceAvailable }),
         ...(metadata.sources === undefined ? {} : { projectInstructions: sessionPayload(metadata.sources) }),
       }, new Date(metadata.startedAt).toISOString()));
     },
@@ -186,6 +189,11 @@ async function appendNewFacts(append: AppendFact, cursor: RecorderCursor, facts:
       ...(checkpoint === undefined ? {} : { providerContinuation: checkpoint }),
     }, envelope.timestamp);
     if (!result.ok) return result;
+    if (envelope.kind === "observation" && envelope.payload["component"] === "provider") {
+      const diagnostic = envelope.payload["diagnostic"];
+      if (diagnostic !== null && typeof diagnostic === "object" && !Array.isArray(diagnostic)
+        && "noticeId" in diagnostic && typeof diagnostic.noticeId === "string") cursor.continuation?.acknowledgeNotice?.(diagnostic.noticeId);
+    }
     cursor.envelopes.set(envelope.sequence, digest);
     if (envelope.sequence > cursor.highEnvelope) cursor.highEnvelope = envelope.sequence;
   }

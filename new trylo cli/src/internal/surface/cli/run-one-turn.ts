@@ -17,6 +17,7 @@ import path from "node:path";
 import { skillsPortFor } from "./skills-wiring.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
 import { createFallbackStream } from "./fallback-stream.js";
+import { BootstrapContextError, bootstrapContextFailure, bootstrapForFallback } from "./bootstrap-context.js";
 
 /**
  * One turn of a prepared run.
@@ -99,6 +100,8 @@ export async function runOneTurn(
   const fallbackStream = scaffold.format === "stream-json" && scaffold.fallbackModel !== undefined && permissionMode === "non_interactive"
     ? createFallbackStream(sink) : undefined;
   const base: TurnHostInput = {
+    ...(ctx.bootstrapContext === undefined ? {} : { bootstrap: { state: "import_pending" as const, context: ctx.bootstrapContext } }),
+    ...(ctx.userSourceAvailable === undefined ? {} : { userSourceAvailable: ctx.userSourceAvailable }),
     ...(scaffold.toolSelection === undefined ? {} : { toolSelection: scaffold.toolSelection }),
     ...(scaffold.questions === undefined ? {} : { questions: scaffold.questions }),
     ...(scaffold.execution === undefined ? {} : { execution: scaffold.execution }),
@@ -240,8 +243,17 @@ async function maybeFallbackTurn(
   ) {
     return outcome;
   }
+  const { bootstrap: _initialImport, ...retryBase } = base;
+  let bootstrap: Awaited<ReturnType<typeof bootstrapForFallback>>;
+  try { bootstrap = await bootstrapForFallback(base); }
+  catch (error) {
+    if (!(error instanceof BootstrapContextError)) throw error;
+    await base.session?.release();
+    return { ...bootstrapContextFailure(error), ...(base.session === undefined ? {} : { continuation: "session_closed" as const }) };
+  }
   const retried = await executeTurn({
-    ...base,
+    ...retryBase,
+    ...bootstrap,
     turnId: ctx.newId("turn"),
     correlationId: ctx.newId("cor"),
     model: fallback,

@@ -354,6 +354,12 @@ function applySubagent(msgs: ChatMessage[], e: SubagentEvent): ChatMessage[] {
 function applyRuntimeWarning(msgs: ChatMessage[], e: RuntimeWarningEvent): ChatMessage[] {
   const id = e.id ?? eventMessageId(msgs, e, 'warn');
   if (msgs.some(message => message.id === id)) return msgs;
+  // A degradation keeps one row per reason + affected history set, not one per
+  // turn or per replay. The event id is per-turn; `noticeId` is the identity
+  // the CLI makes stable across processes, so it is what the panel dedupes on.
+  const noticeId = e.diagnostic?.noticeId;
+  if (noticeId !== undefined
+    && msgs.some(message => message.kind === 'notice' && message.noticeId === noticeId)) return msgs;
   const text = e.message.trim() !== '' ? e.message : `运行时提示：${e.code}`;
   return [
     ...msgs,
@@ -366,6 +372,7 @@ function applyRuntimeWarning(msgs: ChatMessage[], e: RuntimeWarningEvent): ChatM
       createdAt: e.ts,
       kind: 'notice',
       text,
+      ...(noticeId === undefined ? {} : { noticeId }),
     } satisfies NoticeMessage,
   ];
 }

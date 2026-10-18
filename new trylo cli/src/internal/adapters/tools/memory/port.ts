@@ -8,6 +8,8 @@ import {
   type MemoryReadResult,
   type MemorySearchRequest,
   type MemorySearchResult,
+  type MemoryDocuments,
+  type MemoryFailure,
 } from "../../../ports/memory.js";
 import { createMatcher, hitsInDocument, windowFor } from "./matcher.js";
 
@@ -43,6 +45,11 @@ export function createMemoryReadPort(documents: MemoryReadPort["documents"]): Me
   };
 }
 
+async function loadSource(source: MemoryReadPort["documents"]): Promise<{ readonly ok: true; readonly value: MemoryDocuments } | MemoryFailure> {
+  try { return { ok: true, value: await source() }; }
+  catch { return memoryFailure("source_unavailable", "记忆源读取失败，本次不能确认已保存的内容。"); }
+}
+
 function clamp(value: number | undefined, fallback: number, max: number): number {
   const requested = value ?? fallback;
   return Math.min(Math.max(1, Math.floor(requested)), max);
@@ -54,8 +61,10 @@ async function search(
   signal: AbortSignal,
 ): Promise<MemoryOutcome<MemorySearchResult>> {
   const queries = request.queries.map((query) => query.trim()).filter((query) => query.length > 0);
-  if (queries.length === 0 || queries.length !== request.queries.length) {
-    return memoryFailure("empty_query", "memory_search requires non-empty query strings");
+  // Whitespace-only entries are a mistake even in list mode: they mean the model
+  // wanted to match something and lost the text.
+  if (queries.length !== request.queries.length && request.queries.length > 0) {
+    return memoryFailure("empty_query", "memory_search query strings must be non-empty when any are given");
   }
   const window = windowFor(request.matchMode);
   if (request.matchMode === "all_within_lines" && window.kind === "all_within_lines" && window.lineCount < 1) {
@@ -64,17 +73,42 @@ async function search(
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_search was cancelled");
   }
-  const loaded = await source();
+  const loading = await loadSource(source);
+  if (!loading.ok) return loading;
+  const loaded = loading.value;
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_search was cancelled while reading records");
   }
-  const corpus = request.documentId === undefined
+  const selectedDocuments = request.documentId === undefined
     ? loaded.documents
     : loaded.documents.filter((document) => document.id === request.documentId);
-  if (request.documentId !== undefined && corpus.length === 0) {
+  if (request.documentId !== undefined && selectedDocuments.length === 0) {
     return memoryFailure("unknown_document", `no record named ${request.documentId}`);
   }
+  const corpus = request.recordKind === undefined ? selectedDocuments
+    : selectedDocuments.filter((document) => document.recordKind === request.recordKind);
 
+  if (queries.length === 0) {
+    // List mode (B20 of the retrieval half): the model asked "what do you remember
+    // about the user", not "match this text". Keyword matching cannot answer an
+    // identity question — the person is stored under their name, not under
+    // "who" — so the honest read is the whole user ledger, capped. Only the user
+    // ledger answers this: rules and boards are retrievable by name, and dumping
+    // them here would bury the person under project noise.
+    const listed = corpus
+      .filter((document) => document.origin === "user-memory")
+      .flatMap((document) => document.lines.map((line, index): MemoryMatch => ({
+        documentId: document.id,
+        path: document.path,
+        origin: document.origin,
+        ...(document.recordKind === undefined ? {} : { recordKind: document.recordKind }),
+        matchLineNumber: index + 1,
+        contentStartLineNumber: index + 1,
+        content: line,
+        matchedQueries: [],
+      })));
+    return paginateMatches(listed, queries, request);
+  }
   const matcher = createMatcher({
     queries,
     window,
@@ -91,6 +125,10 @@ async function search(
         ? -1
         : 1,
   );
+  return paginateMatches(matches, queries, request);
+}
+
+function paginateMatches(matches: ReadonlyArray<MemoryMatch>, queries: ReadonlyArray<string>, request: MemorySearchRequest): MemoryOutcome<MemorySearchResult> {
   const start = parseCursor(request.cursor, matches.length);
   if (start === undefined) {
     return memoryFailure("invalid_cursor", `cursor ${request.cursor ?? ""} does not name a position in these results`);
@@ -112,8 +150,8 @@ function parseCursor(cursor: string | undefined, total: number): number | undefi
   if (cursor === undefined) {
     return 0;
   }
-  const parsed = Number.parseInt(cursor, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  const parsed = /^(?:0|[1-9]\d*)$/u.test(cursor) ? Number(cursor) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
     return undefined;
   }
   return parsed <= total ? parsed : undefined;
@@ -132,6 +170,7 @@ function collectMatches(
         documentId: document.id,
         path: document.path,
         origin: document.origin,
+        ...(document.recordKind === undefined ? {} : { recordKind: document.recordKind }),
         matchLineNumber: hit.matchStartIndex + 1,
         contentStartLineNumber: Math.max(0, hit.matchStartIndex - contextLines) + 1,
         content: document.lines
@@ -158,7 +197,9 @@ async function read(
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_read was cancelled");
   }
-  const loaded = await source();
+  const loading = await loadSource(source);
+  if (!loading.ok) return loading;
+  const loaded = loading.value;
   if (signal.aborted) {
     return memoryFailure("cancelled", "memory_read was cancelled while reading records");
   }

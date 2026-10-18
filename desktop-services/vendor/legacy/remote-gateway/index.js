@@ -956,13 +956,21 @@ function createRemoteGateway(options = {}) {
     new Promise(resolve => {
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = null;
-      sockets.forEach(socket => socket.close(1001, 'Gateway stopping'));
+      const closingSockets = [...sockets];
+      closingSockets.forEach(socket => socket.close(1001, 'Gateway stopping'));
       sockets.clear();
       socketTickets.clear();
       const activeServer = server;
       server = null;
       if (!activeServer) return resolve();
-      activeServer.close(() => resolve());
+      // A suspended phone may never acknowledge the close frame. Bound the
+      // shutdown so a later Desktop enable can complete and reuse the port.
+      const deadline = setTimeout(() => {
+        closingSockets.forEach(socket => socket.terminate());
+        activeServer.closeAllConnections?.();
+      }, 250);
+      deadline.unref?.();
+      activeServer.close(() => { clearTimeout(deadline); resolve(); });
     });
 
   return {

@@ -8,8 +8,24 @@ const {
   LEGACY_RUNTIME_DEFAULT_CLI_PATH,
   describeCliResolution,
   effectiveV1CliPath,
+  cliSpawnCommand,
 } = await import('./cli-runtime-path');
 type CliRuntimeResolution = import('./cli-runtime-path').CliRuntimeResolution;
+
+describe('cliSpawnCommand Windows resource paths', () => {
+  it('converts a verbatim drive script path to a Node-compatible argument', () => {
+    expect(cliSpawnCommand('\\\\?\\C:\\Trylo resources\\cli\\main.js', 'C:\\Trylo\\node.exe')).toEqual({
+      command: 'C:\\Trylo\\node.exe', prefix: ['C:\\Trylo resources\\cli\\main.js'],
+    });
+  });
+  it('preserves UNC host and share when converting a verbatim script path', () => {
+    expect(cliSpawnCommand('\\\\?\\UNC\\server\\share\\main.js').prefix).toEqual(['\\\\server\\share\\main.js']);
+  });
+  it('leaves executable commands and ordinary script paths intact', () => {
+    expect(cliSpawnCommand('\\\\?\\C:\\Trylo\\trylo.exe')).toEqual({ command: '\\\\?\\C:\\Trylo\\trylo.exe', prefix: [] });
+    expect(cliSpawnCommand('/opt/trylo/main.mjs').prefix).toEqual(['/opt/trylo/main.mjs']);
+  });
+});
 
 const RESOLVED: CliRuntimeResolution = {
   cliScript: 'C:/Program Files/Trylo/resources/cli/dist/cmd/trylo/main.js',

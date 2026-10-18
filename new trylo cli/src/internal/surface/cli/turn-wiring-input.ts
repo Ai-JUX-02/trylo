@@ -1,6 +1,6 @@
 import type { LocalRuleLookup } from "../../adapters/project-instructions/appendix.js";
 import type { MemoryReadPort } from "../../ports/memory.js";
-import type { UserLearningRuntime } from "../../integration/user-learning/index.js";
+import type { UserLearningRuntime, UserMemoryService } from "../../integration/user-learning/index.js";
 import type { ToolGapRuntime } from "../../integration/tool-learning/index.js";
 import type { McpRuntime } from "../../adapters/mcp-runtime/index.js";
 import type { SubagentEventSink } from "../../subagent/index.js";
@@ -29,6 +29,7 @@ export function turnWiringInput(
   subagentEventSink?: SubagentEventSink | undefined,
   localRules?: LocalRuleLookup | undefined,
   memory?: MemoryReadPort | undefined,
+  memoryWrite?: UserMemoryService | undefined,
 ): WiringInput {
   return {
     turnId: input.turnId,
@@ -58,6 +59,7 @@ export function turnWiringInput(
     allowWeb: input.allowWeb === true,
     ...(input.web === undefined ? {} : { web: input.web }),
     ...(memory === undefined ? {} : { memory }),
+    ...(memoryWrite === undefined ? {} : { memoryWrite }),
     // Lent straight through: the surface that owns the terminal owns the words,
     // and nothing between it and the loop is allowed to hold a second copy.
     ...(input.pendingInput === undefined ? {} : { pendingInput: input.pendingInput }),

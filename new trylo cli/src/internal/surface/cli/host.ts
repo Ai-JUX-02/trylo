@@ -1,4 +1,5 @@
 import type { LocalRuleSource } from "../../adapters/project-instructions/appendix.js";
+import { bootstrapContextFor, type BootstrapContextBinding } from "./bootstrap-context.js";
 import type { AddressedUserInput } from "../../domain/input-queue.js";
 import { openMcpRuntime, type McpRuntime } from "../../adapters/mcp-runtime/index.js";
 import type { McpClientOpen } from "../../adapters/mcp-runtime/factory.js";
@@ -9,9 +10,8 @@ import type { WarmRegistry } from "../../adapters/provider/warm.js";
 import type { WebToolsConfig } from "../../adapters/tools/web/index.js";
 import type { TokenManagerLike } from "../../adapters/provider/openai-compatible.js";
 import { runRecordedTurn, budgetOf, pricingOf } from "./turn-execution.js";
-import { ExecutionProgressError } from "../../ports/execution-progress.js";
+import { hostFailure } from "./host-failure.js";
 import { createTurnRecorder } from "./turn-recorder.js";
-import { EXIT_CODES } from "../../protocol/cli-stream.js";
 import type { CompactWindow } from "../../ports/compaction.js";
 import type { McpRegistryPort, McpServerEntry } from "../../ports/mcp-registry.js";
 import type { SessionPort, SessionRecord } from "../../ports/session.js";
@@ -27,7 +27,9 @@ import { createToolGapRuntimeFor, type ToolLearningHost } from "./tool-learning-
 import { userLearningObserver } from "../../integration/user-learning/index.js";
 import { createTurnRenderer, type CliSink } from "./render.js";
 import { localRulesFor } from "./project-rules.js";
-import { memoryPortFor } from "./memory-wiring.js";
+import { memoryForTurnInput } from "./memory-wiring.js";
+import { memoryCommandWiring } from "./memory-command-provider.js";
+import { fileCommandWiring } from "./file-command-provider.js";
 import { reportProjectNotices } from "./turn-project-notices.js";
 import { createSubagentJournalSink } from "./subagent-sink.js";
 import type { SubagentRole } from "../../subagent/role.js";
@@ -55,6 +57,8 @@ export type { TurnOutcome } from "./turn-finish.js";
  */
 
 export type TurnHostInput = {
+  readonly bootstrap?: BootstrapContextBinding;
+  readonly userSourceAvailable?: false;
   readonly toolSelection?: readonly string[];
   readonly questions?: AskUserSession;
   readonly execution?: RunExecution;
@@ -286,16 +290,7 @@ export async function executeTurn(input: TurnHostInput): Promise<TurnOutcome | T
   try {
     return await runTurnWithPorts(input, mcp);
   } catch (error) {
-    if (!(error instanceof ExecutionProgressError)) throw error;
-    // Release the single-writer lease before returning. Even a direct host
-    // caller retaining this port cannot start another turn on the failed lease.
-    await input.session?.release();
-    return {
-      exitCode: EXIT_CODES.CONFIG,
-      message: error.message,
-      hint: "this session is closed; inspect its journal and workspace before reopening because an action outcome may need reconciliation",
-      continuation: "session_closed",
-    };
+    return await hostFailure(error, input.session);
   } finally {
     await mcp?.close();
   }
@@ -307,6 +302,10 @@ async function runTurnWithPorts(
   mcp: McpRuntime | undefined,
 ): Promise<TurnOutcome | TurnFailure> {
   const userLearning = input.userLearning === undefined ? undefined : createUserLearningRuntimeFor(input.userLearning);
+  // The explicit-memory endpoint and the read source are built together: they
+  // must agree about which facts exist, and the write half exists only when the
+  // switch does. See `memory-wiring.ts` for why they cannot be built apart.
+  const memory = memoryForTurnInput(input);
   const toolGap = input.toolGap === undefined ? undefined : createToolGapRuntimeFor(input.toolGap);
   // The observer shares this turn's learning runtime across all envelopes.
   const observe = userLearning === undefined ? undefined : userLearningObserver(userLearning);
@@ -314,7 +313,7 @@ async function runTurnWithPorts(
   const recorder = createTurnRecorder(input);
   const recordedInput = recorder === undefined ? input : { ...input, session: recorder.session };
   const subagentSink = createSubagentJournalSink(recordedInput);
-  const wiring = wirePorts(
+  const wiring = fileCommandWiring(memoryCommandWiring(wirePorts(
     turnWiringInput(
       input,
       mcp,
@@ -327,12 +326,10 @@ async function runTurnWithPorts(
       localRulesFor(input.workspaceRoot, input.projectContext, problem => input.sink.stderr(`${problem}\n`), input.resumeRecords),
       // Memory shares this turn's learning switch and project rules. Without
       // either, no memory port is constructed (WP20.3 / R1).
-      memoryPortFor({
-        ...(input.learning === undefined ? {} : { learning: input.learning }),
-        ...(input.projectContext === undefined ? {} : { projectContext: input.projectContext }),
-      }),
+      memory.read,
+      memory.write,
     ),
-  );
+  ), input), input);
   if ("code" in wiring) {
     return wiringFailure(wiring.detail);
   }
@@ -344,7 +341,10 @@ async function runTurnWithPorts(
     if (input.text.trim() === "/compact") return await executeCompaction(input, wiring);
 
     const startedAt = input.now();
+    const bootstrapContext = bootstrapContextFor(input);
     await recorder?.start({ startedAt, toolCatalogHash: wiring.toolCatalogHash,
+      ...(input.bootstrap?.state !== "import_pending" || bootstrapContext === undefined ? {} : { bootstrapContext }),
+      ...(input.userSourceAvailable === undefined ? {} : { userSourceAvailable: input.userSourceAvailable }),
       ...(wiring.ports.provider.continuation === undefined ? {} : { continuation: wiring.ports.provider.continuation }),
       ...(input.projectContext === undefined ? {} : { sources: input.projectContext.sources }),
     });

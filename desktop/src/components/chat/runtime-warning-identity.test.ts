@@ -22,6 +22,36 @@ describe('runtime warning identity across one-shot runs', () => {
     expect(applyEvents(applyEvents([], [warning]), [warning])).toHaveLength(1);
   });
 
+  it('keeps one degraded notice per noticeId even when a later turn redelivers it', () => {
+    // WP-CL / A11: the CLI makes `noticeId` stable across processes. The event
+    // id is per turn, so two turns carrying the same degradation produce two
+    // different ids — the notice must still render once.
+    const diagnostic = { schemaVersion: 1 as const, cause: 'binding_mismatch' as const, affected: 2,
+      basis: 'native_expected_occurrences' as const, severity: 'degraded' as const, noticeId: 'notice-a' };
+    const messages = applyEvents([], [
+      { type: 'runtime_warning', seq: 3, ts: 100, id: 'warn:s:turn-a:3', code: 'native_continuation_unavailable',
+        message: '部分历史的模型续接数据无法恢复（2 条），本轮将使用可见对话继续。', diagnostic },
+      { type: 'runtime_warning', seq: 4, ts: 200, id: 'warn:s:turn-b:4', code: 'native_continuation_unavailable',
+        message: '部分历史的模型续接数据无法恢复（2 条），本轮将使用可见对话继续。', diagnostic },
+    ]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ kind: 'notice', noticeId: 'notice-a' });
+  });
+
+  it('still shows two notices when the same words describe a different degradation', () => {
+    const base = { schemaVersion: 1 as const, cause: 'binding_mismatch' as const, affected: 2,
+      basis: 'native_expected_occurrences' as const, severity: 'degraded' as const };
+    const messages = applyEvents([], [
+      { type: 'runtime_warning', seq: 3, ts: 100, id: 'warn:s:turn-a:3', code: 'native_continuation_unavailable',
+        message: '部分历史的模型续接数据无法恢复（2 条），本轮将使用可见对话继续。',
+        diagnostic: { ...base, noticeId: 'notice-a' } },
+      { type: 'runtime_warning', seq: 4, ts: 200, id: 'warn:s:turn-b:4', code: 'native_continuation_unavailable',
+        message: '部分历史的模型续接数据无法恢复（2 条），本轮将使用可见对话继续。',
+        diagnostic: { ...base, noticeId: 'notice-b' } },
+    ]);
+    expect(messages).toHaveLength(2);
+  });
+
   it('uses the canonical session and turn to scope adapter warning ids', () => {
     const adapter = new TryloV1EventAdapter();
     adapter.feed(JSON.stringify({ type: 'run_start', sessionId: 'session',

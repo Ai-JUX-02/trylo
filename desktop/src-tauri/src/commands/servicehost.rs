@@ -97,8 +97,8 @@ fn pong_timeout() -> Duration {
 /// stale, and a dev shell that loaded it would answer every `tooling.*`
 /// request with `UNKNOWN_METHOD` while the sidecar itself looks healthy
 /// (A02/A03 of the 2026-09-02 manual acceptance). Debug builds therefore
-/// always run the source directly; a release build from this repo keeps
-/// bundle-first for checkouts without a sidecar dev environment.
+/// prefer the source; copied debug builds can use adjacent bundled resources.
+/// A release build keeps bundle-first for a self-contained installed app.
 fn resolve_host_script(resource_dir: Option<&std::path::Path>) -> Option<PathBuf> {
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let repo_root = manifest.ancestors().nth(2)?;
@@ -117,16 +117,19 @@ fn resolve_host_script(resource_dir: Option<&std::path::Path>) -> Option<PathBuf
         if bundled.is_file() {
             return Some(bundled);
         }
-    } else {
-        if let Some(dir) = resource_dir {
-            let candidate = dir
-                .join("desktop-services")
-                .join("dist")
-                .join("host.bundle.mjs");
-            if candidate.is_file() {
-                return Some(candidate);
-            }
+    }
+    // A copied debug executable can outlive its build checkout. It still
+    // needs to accept the same complete resource layout as an installed app.
+    if let Some(dir) = resource_dir {
+        let candidate = dir
+            .join("desktop-services")
+            .join("dist")
+            .join("host.bundle.mjs");
+        if candidate.is_file() {
+            return Some(candidate);
         }
+    }
+    if !cfg!(debug_assertions) {
         if bundled.is_file() {
             return Some(bundled);
         }

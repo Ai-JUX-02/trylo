@@ -114,11 +114,17 @@ export class TryloV1EventAdapter {
     return this.warningEvent(seq, ts, code, message);
   }
 
-  private warningEvent(seq: number, ts: number, code: string, message: string): LoopEvent {
+  private warningEvent(
+    seq: number,
+    ts: number,
+    code: string,
+    message: string,
+    diagnostic?: import('./trylo-v1-protocol').NativeContinuationDiagnostic,
+  ): LoopEvent {
     const id = this.sessionId && this.turnId
       ? `warn:${this.sessionId}:${this.turnId}:${seq}`
       : `warn-${ts}-${seq}`;
-    return { type: 'runtime_warning', id, seq, ts, code, message };
+    return { type: 'runtime_warning', id, seq, ts, code, message, ...(diagnostic === undefined ? {} : { diagnostic }) };
   }
 
   /** One sentence describing what the wire guard refused, if anything. */
@@ -256,7 +262,7 @@ export class TryloV1EventAdapter {
         // Never an assistant message: a warning is host evidence about
         // the run, not something the model said (spec §5).
         return [
-          this.warningEvent(seq, ts, event.code, event.message),
+          this.warningEvent(seq, ts, event.code, event.message, event.diagnostic),
         ];
       case 'usage':
         this.latestUsage = event.usage;

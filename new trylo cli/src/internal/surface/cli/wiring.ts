@@ -8,6 +8,7 @@ import { buildProvider, kindOf } from "./provider-build.js";
 import { SubagentRuntime } from "../../subagent/index.js";
 import { buildSubagentPorts } from "./wiring-subagent.js";
 import { createWorkspaceTools } from "../../adapters/tools/index.js";
+import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { mountedWebToolNames } from "./web-wiring.js";
 import { createWorkspaceSandbox } from "../../adapters/sandbox/index.js";
 import { lspToolsPatch } from "./lsp-wiring.js";
@@ -238,6 +239,7 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
     sessions,
     spawner: execution.spawner,
     ...(input.memory === undefined ? {} : { memory: input.memory }),
+    ...(input.memoryWrite === undefined ? {} : { memoryWrite: input.memoryWrite }),
     ...(input.skills === undefined
       ? {}
       : { skills: input.skills, ...(skillFork === undefined ? {} : { skillFork }) }),
@@ -255,9 +257,10 @@ export function wirePorts(input: WiringInput): Wiring | WiringFailure {
   const mcp = input.mcp;
   const tools = mcp === undefined ? workspaceTools : composeTools(workspaceTools, mcp.tools);
   const webNames = mountedWebToolNames(workspaceTools);
+  const memoryNames = workspaceTools.snapshot().filter((tool) => MEMORY_WRITE_TOOL_NAMES.has(tool.name)).map((tool) => tool.name);
   const admitted =
-    webNames.length > 0 || mcp !== undefined
-      ? new Set([...(mcp === undefined ? [] : mcp.toolNames), ...webNames])
+    webNames.length > 0 || memoryNames.length > 0 || mcp !== undefined
+      ? new Set([...(mcp === undefined ? [] : mcp.toolNames), ...webNames, ...memoryNames])
       : undefined;
   const effectiveSandbox = admitted === undefined ? sandbox : composeSandbox(sandbox, admitted);
 

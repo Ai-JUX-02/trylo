@@ -70,7 +70,7 @@ export function isInside(parent: string, child: string): boolean {
 
 function canonicalRoot(root: string): string {
   try {
-    return realpathSync(root);
+    return realpathSync.native(root);
   } catch {
     return path.resolve(root);
   }
@@ -99,7 +99,7 @@ export function resolveInsideWorkspace(root: string, candidate: string): PathVer
   }
   let real: string;
   try {
-    real = realpathSync(resolved);
+    real = realpathSync.native(resolved);
   } catch (error) {
     // Only "the path is not there" may fall back to the lexical path: a target
     // that does not exist cannot be read, so containment of the resolved path
@@ -157,7 +157,7 @@ export function resolveWriteTarget(root: string, candidate: string): PathVerdict
   }
   let ancestorReal: string;
   try {
-    ancestorReal = realpathSync(ancestor);
+    ancestorReal = realpathSync.native(ancestor);
   } catch {
     return { ok: false, code: "path_unverifiable" };
   }
@@ -175,7 +175,7 @@ export function resolveWriteTarget(root: string, candidate: string): PathVerdict
   }
   try {
     if (lstatSync(target).isSymbolicLink()) {
-      const real = realpathSync(target);
+      const real = realpathSync.native(target);
       if (!isInside(rootReal, real)) {
         return { ok: false, code: "path_escapes_via_link" };
       }

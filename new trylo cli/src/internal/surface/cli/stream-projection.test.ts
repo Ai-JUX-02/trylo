@@ -42,6 +42,38 @@ function fixtures(): ReadonlyArray<Envelope> {
   ];
 }
 
+test("accepted plain-language namespaces survive the warning projection", () => {
+  // A14: the native-continuation diagnostic is additive. A credential problem, a
+  // permission refusal or a protocol rejection must still reach the person with
+  // its own code — there is no global warning filter just because one warning
+  // learned a richer shape.
+  const events = projectEnvelopes([
+    envelope("observation", { component: "provider", code: "auth", message: "凭据不可用" }, 1),
+    envelope("observation", { component: "provider", code: "native_continuation_unavailable",
+      message: "部分历史的模型续接数据无法恢复（2 条），本轮将使用可见对话继续。",
+      diagnostic: { schemaVersion: 1, cause: "binding_mismatch", affected: 2,
+        basis: "native_expected_occurrences", severity: "degraded", noticeId: "n1" } }, 2),
+    envelope("error", { code: "permission_denied", message: "denied" }, 3),
+  ]);
+  const warnings = events.filter((event) => event.type === "warning");
+  assert.deepEqual(warnings.map((event) => event.type === "warning" ? event.code : ""),
+    ["auth", "native_continuation_unavailable", "permission_denied"]);
+  assert.equal(warnings[0]?.type === "warning" ? warnings[0].diagnostic : "absent", undefined,
+    "only the diagnosed warning carries a diagnostic");
+  assert.equal(warnings[1]?.type === "warning" ? warnings[1].diagnostic?.noticeId : "", "n1");
+});
+
+test("an unknown diagnostic shape is dropped, not half-rendered", () => {
+  const events = projectEnvelopes([
+    envelope("observation", { component: "provider", code: "native_continuation_unavailable",
+      message: "x", diagnostic: { schemaVersion: 99, cause: "from_the_future" } }, 1),
+  ]);
+  const warning = events.find((event) => event.type === "warning");
+  assert.equal(warning?.type === "warning" ? warning.diagnostic : "absent", undefined);
+  assert.equal(warning?.type === "warning" ? warning.code : "", "native_continuation_unavailable",
+    "the warning itself still reaches the user");
+});
+
 test("successful checkpoint observations stay in the journal and do not become warnings", () => {
   assert.deepEqual(projectEnvelopeSequence([
     envelope("observation", { component: "checkpoint", status: "ok", checkpointId: "cp-a" }, 1),

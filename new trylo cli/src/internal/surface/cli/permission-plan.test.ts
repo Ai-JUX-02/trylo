@@ -16,6 +16,7 @@ import {
   decideForPlan,
   defaultAskPolicy,
   isAskPolicy,
+  isApprovableToolName,
   planPermissions,
   type AskPolicy,
   type PermissionPlan,
@@ -38,7 +39,18 @@ const APPROVING = [APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHE
 // The flag vocabulary is wider: `--allow-tools` may name a mount-scoped tool
 // before its flag mounts it, so web_fetch is approvable-by-name while absent
 // from the default catalog above.
-const APPROVABLE_VOCAB = [...APPROVING, WEB_FETCH_TOOL].sort();
+const MEMORY_WRITERS = ["memory_remember", "memory_correct", "memory_forget"];
+const APPROVABLE_VOCAB = [...APPROVING, WEB_FETCH_TOOL, ...MEMORY_WRITERS].sort();
+
+test("user memory writers accept explicit permission names without inheriting workspace grants", () => {
+  for (const name of MEMORY_WRITERS) {
+    assert.equal(isApprovableToolName(name), true);
+    assert.equal(decisionFor(planPermissions({ interactive: false, allowTools: [name] }), name), "approved");
+    assert.equal(decisionFor(planPermissions({ interactive: false, allowTools: [name], denyTools: [name] }), name), "denied");
+    assert.equal(decisionFor(planPermissions({ interactive: false, allowWrites: true }), name), "denied");
+    assert.equal(decisionFor(planPermissions({ interactive: false }), name), "denied");
+  }
+});
 
 function action(name: string): PermissionAction {
   return { toolCallId: "call-1", name, arguments: {}, pattern: `${name}#p` };

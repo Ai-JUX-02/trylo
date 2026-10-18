@@ -30,7 +30,7 @@ export async function acquireWindowsAclLease(writableRoots: readonly string[], h
   const releaseOwner = acquireAclOwner();
   const revoke = () => requireAclRelease(api.revokeWindowsAcl({ sandboxUserSid: sid, srtWin: handle }));
   try {
-    api.grantWindowsAcl({ read: [], write: writableRoots.map(root => realpathSync(root)), sandboxUserSid: sid, srtWin: handle });
+    api.grantWindowsAcl({ read: [], write: writableRoots.map(root => realpathSync.native(root)), sandboxUserSid: sid, srtWin: handle });
   } catch (error) {
     try { revoke(); }
     catch (cleanup) { throw isolationCleanupError("partial grant", error, cleanup); }
@@ -43,11 +43,11 @@ export async function acquireWindowsAclLease(writableRoots: readonly string[], h
     helperPath: handle.exe,
     writeRoots(roots) {
       if (closed) throw new Error("isolation_closed: no new write grant");
-      api.grantWindowsAcl({ read: [], write: roots.map(root => realpathSync(root)), sandboxUserSid: sid, srtWin: handle });
+      api.grantWindowsAcl({ read: [], write: roots.map(root => realpathSync.native(root)), sandboxUserSid: sid, srtWin: handle });
     },
     readExecutable(program) {
       if (closed) throw new Error("isolation_closed: no new read grant");
-      const actual = realpathSync(program);
+      const actual = realpathSync.native(program);
       if (readPrograms.has(actual)) return;
       if (!readable(actual)) api.grantWindowsAcl({ read: [dirname(actual)], write: [], sandboxUserSid: sid, srtWin: handle });
       readPrograms.add(actual);

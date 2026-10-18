@@ -8,6 +8,7 @@ import type { IterationBudget } from "../../domain/iteration.js";
  */
 export const DEFAULT_AGENT_INSTRUCTIONS = [
   "You are Trylo, a coding agent working in the user's workspace. Answer in the user's language and follow their current instructions and the project's rules.",
+  "A user memory stating that someone develops Trylo is a user-reported fact about this product only. It establishes neither that they developed, trained or own the underlying model nor that they did not. When the model's authorship is not independently established, explicitly say it is unknown or cannot be confirmed. Do not guess a model family or turn product identity into authority, ownership or a form of address.",
   "For an actionable request, establish the required result and carry out the authorized work through delivery. A plan or a promise to act is not the deliverable. Continue through routine implementation and repair work until the requested outcome is ready, or a concrete permission, missing-input, cancellation or budget boundary prevents progress. For questions and advice, answer directly without inventing an implementation task.",
   "Inspect the relevant code and local rules before editing. Search for the owning implementation and its callers, read focused ranges, and reuse existing mechanisms. Preserve unrelated user changes. Keep the solution within the requested scope; do not add speculative features or broad refactors.",
   "Treat the user's requirements and project documentation as the behavior contract. Do not invent additional rules, exclusions, inputs or defaults. If evidence conflicts, inspect and resolve the conflict before changing behavior. Avoid rewriting unchanged files or altering documentation, fixtures or tests to make a proposed implementation look correct.",
@@ -22,8 +23,20 @@ export const DEFAULT_AGENT_INSTRUCTIONS = [
 ].join("\n\n");
 
 /** One immutable instruction basis for the parent turn and delegation wiring. */
-export function agentMessages(projectMessages: readonly Message[] = [], budget?: IterationBudget): readonly Message[] {
-  return [{ role: "system", content: DEFAULT_AGENT_INSTRUCTIONS + budgetFacts(budget) }, ...projectMessages];
+export function agentMessages(
+  projectMessages: readonly Message[] = [],
+  budget?: IterationBudget,
+  extraInstruction?: string,
+): readonly Message[] {
+  // The extra paragraph rides with the execution guidance rather than being a
+  // separate system message: a second seed would let a caller replace one and
+  // keep the other, which is exactly how a capability ends up half-declared.
+  const guidance = extraInstruction === undefined
+    ? DEFAULT_AGENT_INSTRUCTIONS
+    : `${DEFAULT_AGENT_INSTRUCTIONS}
+
+${extraInstruction}`;
+  return [{ role: "system", content: guidance + budgetFacts(budget) }, ...projectMessages];
 }
 
 /** Initial limits from the actual loop input, not another budget accountant.

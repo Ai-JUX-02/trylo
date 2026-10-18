@@ -754,6 +754,10 @@ export class CodeRunController {
             spawnEnv: v1SpawnEnv,
             systemPrompt: request.settings.systemPrompt,
             permissionLevel: request.permissionLevel,
+            // WP-CL / B: the CLI owns learning; the Desktop only forwards the
+            // effective setting. Absent means "not enabled" and the argv stays
+            // exactly what it was — never a hard-coded `--learning=all`.
+            ...(request.settings.learning === undefined ? {} : { learning: request.settings.learning }),
             projectKey: this.projectKey,
             conversationId: this.conversationId,
             ...(this.runId ? { runId: this.runId } : {}),

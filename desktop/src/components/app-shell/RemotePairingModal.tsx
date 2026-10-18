@@ -22,7 +22,7 @@
 // Settings keeps only the *configuration* (port / tunnel /
 // URL) — no more QR button there.
 
-import { useEffect, useState, type ReactElement, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type FormEvent } from 'react';
 import { RadioTower, RefreshCw, X } from 'lucide-react';
 import type {
   RemotePairingInfoResult,
@@ -46,41 +46,55 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
   const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const request = useRef(0);
+  const pending = useRef(false);
+  const liveStatus = useRef(props.remoteStatus);
+  liveStatus.current = props.remoteStatus;
 
   const enabled = props.remoteEnabled ?? false;
   const status = props.remoteStatus;
   const running = status?.running ?? false;
+  const wasRunning = useRef(running);
 
-  // Reset transient pairing state whenever the modal closes
-  // or the gateway is turned off.
-  useEffect(() => {
-    if (!props.open || !enabled) {
-      setQr(null);
-      setError(null);
-      setLoading(false);
-    }
-  }, [props.open, enabled]);
-
-  // Auto-generate the QR as soon as the modal is open AND
-  // the gateway is enabled. When the user flips the switch
-  // on from inside the modal, `enabled` flips → this effect
-  // re-runs and generates the QR without a second click.
-  useEffect(() => {
-    if (!props.open || !enabled || props.remoteController == null) return;
-    void generate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.open, enabled, props.remoteController]);
-
-  const generate = (): void => {
-    if (props.remoteController == null) return;
+  const generate = useCallback((): void => {
+    if (!props.open || !enabled || props.remoteController === null || props.remoteController === undefined) return;
+    const id = ++request.current;
+    pending.current = true;
+    setQr(null);
     setError(null);
     setLoading(true);
     void props.remoteController.pairing()
-      .then((info) => setQr(info.qrDataUrl))
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-  };
+      .then((info) => {
+        if (!info.qrDataUrl) throw new Error('配对二维码生成失败，请重试。');
+        if (liveStatus.current?.running === false) throw new Error('远程服务已断开，请重试启动。');
+        if (id === request.current) setQr(info.qrDataUrl);
+      })
+      .catch((err: unknown) => {
+        if (id === request.current) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => { if (id === request.current) { pending.current = false; setLoading(false); } });
+  }, [props.open, enabled, props.remoteController]);
+
+  const invalidateRequest = useCallback((): void => { ++request.current; }, []);
+
+  useEffect(() => {
+    setQr(null);
+    setError(null);
+    setLoading(false);
+    pending.current = false;
+    generate();
+    return invalidateRequest;
+  }, [generate, invalidateRequest]);
+
+  useEffect(() => {
+    if (!running) setQr(null);
+    if (wasRunning.current && !running && !pending.current) {
+      ++request.current;
+      setLoading(false);
+      if (props.open && enabled) setError('远程服务已断开，请重试启动。');
+    }
+    wasRunning.current = running;
+  }, [running, props.open, enabled]);
 
   if (!props.open) return null;
 
@@ -88,7 +102,7 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
     ? '远程访问已关闭'
     : running
       ? '远程访问运行中'
-      : '远程访问已启用（等待启动）';
+      : error ? '远程服务启动失败' : '远程服务正在启动';
 
   const statusTone = !enabled
     ? 'remote-pairing-modal__status--off'
@@ -149,6 +163,11 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
               端口: <code>{status.port}</code>
             </span>
           ) : null}
+          {running && status?.reasonCode === 'port_fallback' ? (
+            <span className="remote-pairing-modal__hint">
+              原端口被占用，已建立独立连接。请使用当前二维码重新配对。
+            </span>
+          ) : null}
         </div>
 
         {/* Enable / disable switch — the same handler the
@@ -199,7 +218,7 @@ export function RemotePairingModal(props: RemotePairingModalProps): ReactElement
                   aria-hidden="true"
                   className={loading ? 'remote-pairing-modal__spin' : undefined}
                 />
-                {loading ? '生成中…' : qr ? '刷新配对二维码' : '生成配对二维码'}
+                {loading ? '正在连接并生成…' : !running ? '重试启动并生成二维码' : qr ? '刷新配对二维码' : '生成配对二维码'}
               </button>
               {error ? (
                 <span className="remote-pairing-modal__hint remote-pairing-modal__hint--error">

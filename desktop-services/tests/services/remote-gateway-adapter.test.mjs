@@ -191,6 +191,18 @@ test('pairing refuses a loopback fallback instead of giving the phone an unusabl
   await adapter.disable();
 });
 
+test('QR encoder failures reject instead of returning a blank success', async () => {
+  for (const toDataURL of [async () => { throw new Error('encoder missing'); }, async () => '']) {
+    const factory = fakeGatewayFactory();
+    const { adapter } = adapterHarness({ extra: {
+      seam: { gateway: factory, qrcode: { toDataURL } },
+    } });
+    await adapter.enable({ tunnelMode: 'quick' });
+    await assert.rejects(() => adapter.pairingInfo(), (error) => error.code === 'REMOTE_QR_FAILED');
+    await adapter.disable();
+  }
+});
+
 test('enable with a tunnel starts the tunnel and exposes its public URL', async () => {
   const { adapter, tunnel } = adapterHarness();
   const status = await adapter.enable({ port: 49380, tunnelMode: 'quick' });
@@ -199,6 +211,24 @@ test('enable with a tunnel starts the tunnel and exposes its public URL', async 
   assert.equal(tunnel.status().running, true);
   const info = await adapter.pairingInfo();
   assert.equal(info.pairing.baseUrl, 'https://quick-49380.trycloudflare.com');
+});
+
+test('a failed tunnel is retryable and never returns a QR for another endpoint', async () => {
+  let attempts = 0;
+  const { adapter } = adapterHarness({ extra: { tunnel: {
+    start: async () => {
+      if (++attempts === 1) throw new Error('temporary network failure');
+      return { publicUrl: 'https://desktop.example.invalid', running: true };
+    },
+    stop: async () => {},
+  } } });
+  const first = await adapter.enable({ tunnelMode: 'quick' });
+  assert.equal(first.reasonCode, 'tunnel_start_failed');
+  await assert.rejects(adapter.pairingInfo(), error => error.code === 'REMOTE_TUNNEL_FAILED');
+  const second = await adapter.enable({ tunnelMode: 'quick' });
+  assert.equal(second.reasonCode, '');
+  assert.equal((await adapter.pairingInfo()).pairing.baseUrl, 'https://desktop.example.invalid');
+  await adapter.disable();
 });
 
 test('disable stops the tunnel and the gateway, releasing the port', async () => {

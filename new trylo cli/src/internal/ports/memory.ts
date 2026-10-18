@@ -44,6 +44,8 @@ export type MemoryDocument = {
   readonly lines: ReadonlyArray<string>;
   /** Where the record came from, stated in results rather than implied. */
   readonly origin: string;
+  /** Optional source-owned category; untagged legacy documents remain searchable. */
+  readonly recordKind?: string;
 };
 
 export type MemoryDocuments = {
@@ -66,12 +68,14 @@ export type MemorySearchRequest = {
   readonly cursor?: string;
   /** Only consider this document, when the caller names one. */
   readonly documentId?: string;
+  readonly recordKind?: string;
 };
 
 export type MemoryMatch = {
   readonly documentId: string;
   readonly path: string;
   readonly origin: string;
+  readonly recordKind?: string;
   /** 1-indexed, as the reader sees it. */
   readonly matchLineNumber: number;
   readonly contentStartLineNumber: number;
@@ -105,6 +109,7 @@ export type MemoryReadResult = {
 };
 
 export const MEMORY_FAILURE_CODES = [
+  "source_unavailable",
   "unknown_document",
   "not_a_document",
   "empty_query",

@@ -211,14 +211,14 @@ async function direct() {
   await devices();
   await click("手机直连聊天");
 }
-function workbench(state = h.snapshot, connection = "connected") {
+function workbench(state = h.snapshot, connection = "connected", demo = false) {
   return (
     <RemoteWorkbench
       snapshot={state}
       messages={state.conversation}
       state={connection as any}
       language="zh"
-      demo={false}
+      demo={demo}
       cachedAt={null}
       artifacts={[]}
       artifactsLoading={false}
@@ -296,6 +296,17 @@ test("direct sidebar destinations reach the matching remote page", async () => {
   await click("打开项目与会话");
   await click("设备与连接");
   expect(heading("设备")).toBeDefined();
+});
+
+test("demo content never claims a connected computer or permits remote writes", async () => {
+  await render(workbench(h.snapshot, "connected", true));
+  expect(container.textContent).toContain("未配对");
+  expect(container.textContent).toContain("尚未连接电脑，当前显示演示内容");
+  expect(container.textContent).not.toContain("已同步");
+  expect(button("发送消息")?.disabled).toBe(true);
+  await devices();
+  expect(container.textContent).not.toContain("连接正常，会话已同步");
+  expect(container.querySelector('.rw-device-card .online')).toBeNull();
 });
 test("remote draft survives a visit to direct chat", async () => {
   await render(<App />);

@@ -1,4 +1,5 @@
 import type {
+  NativeContinuationDiagnostic,
   ProviderErrorClass,
   ProviderEvent,
   ProviderPort,
@@ -247,6 +248,21 @@ async function acquireResponse(
   };
 }
 
+/**
+ * The one Chinese sentence a user sees when native continuation degraded.
+ *
+ * It states what the run does next, not what was lost in "messages": the count
+ * is occurrences of missing native state, and calling those "chats" or
+ * "context lost" would overstate a technical degradation. When the count is not
+ * evidence-backed the sentence carries no number at all.
+ */
+export function nativeContinuationNotice(diagnostic: NativeContinuationDiagnostic): string {
+  const headline = diagnostic.basis === "native_expected_occurrences" && diagnostic.affected > 0
+    ? `部分历史的模型续接数据无法恢复（${diagnostic.affected} 条），本轮将使用可见对话继续。`
+    : "部分历史缺少模型续接来源，本轮将使用可见对话继续。";
+  return headline;
+}
+
 export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): ProviderPort {
   const continuations = createGlmToolContinuation(config.endpoint, config.model);
   return {
@@ -297,10 +313,13 @@ export function createOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): 
         model: config.model,
         warnings: [],
       };
-      if (continuation !== undefined && continuation.missingMessages > 0) yield {
-        type: "warning", code: "native_continuation_unavailable",
-        message: `Original native context is unavailable for ${continuation.missingMessages} historical assistant messages; continuing with visible history.`,
-      };
+      if (continuation?.diagnostic !== undefined) {
+        yield {
+          type: "warning", code: "native_continuation_unavailable",
+          message: nativeContinuationNotice(continuation.diagnostic),
+          diagnostic: continuation.diagnostic,
+        };
+      }
       for await (const event of translateBody(body, signal)) {
         continuation?.observe(event);
         // The loop stops pulling at finish. Retain a complete native response

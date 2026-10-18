@@ -1,8 +1,12 @@
 import path from "node:path";
 import {
+  createFileFactStore,
   createFileLedgerPort,
   createUserLearningRuntime,
+  createUserMemoryService,
   type UserLearningRuntime,
+  type UserMemoryService,
+  type UserMemoryTurn,
 } from "../../integration/user-learning/index.js";
 import { DEFAULT_METHOD_GRANT } from "../../learning/method/contracts.js";
 import { decideScopeV2 } from "../../learning/domains/user/scope-v2.js";
@@ -71,5 +75,29 @@ export function createUserLearningRuntimeFor(host: UserLearningHost): UserLearni
     workspaceId: host.workspaceId,
     now: host.now,
     warn: host.warn,
+  });
+}
+
+/**
+ * 正式用户记忆：显式"请记住 / 改正 / 撤回"的唯一写入口。
+ *
+ * 与 `createUserLearningRuntimeFor` 分开构造，是因为两者的生命周期不同：运行时
+ * 是"每一拍都可能写证据"的观察者，记忆服务是"一轮可能被调用零次"的命令端点。
+ * 但它们**指向同一个家**——`userLearningRoot` 只算一次，事实与账本不会分家。
+ *
+ * 开关值由调用方传入而不是从 `UserLearningHost` 里猜：宿主那一层才知道
+ * `--learning` 实际取了什么值，猜一个就等于允许"UI 看着开着、运行时其实关着"。
+ */
+export function createUserMemoryFor(
+  host: UserLearningHost,
+  input: { readonly switchValue: string; readonly turn: UserMemoryTurn },
+): UserMemoryService {
+  return createUserMemoryService({
+    store: createFileFactStore(userLearningRoot(host.homeDir, host.env)),
+    userId: decideScopeV2({ workspaceId: host.workspaceId }).identity.userId,
+    workspaceId: host.workspaceId,
+    now: host.now,
+    switchValue: input.switchValue,
+    turn: input.turn,
   });
 }

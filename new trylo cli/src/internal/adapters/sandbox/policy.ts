@@ -34,7 +34,7 @@ export type WorkspaceSandboxConfig = {
 
 function canonicalRoot(root: string): string {
   try {
-    return realpathSync(root);
+    return realpathSync.native(root);
   } catch {
     return path.resolve(root);
   }

@@ -44,6 +44,7 @@ export const ROOT_COMMAND_WORDS: ReadonlyArray<string> = [
   "review",
   "providers",
   "output-style",
+  "memory",
   "workflow",
   "context",
   "completion",

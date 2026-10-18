@@ -2,6 +2,7 @@ import type { MemoryDocument, MemoryDocuments } from "../../../ports/memory.js";
 import type { BoardState } from "../../../learning/control/state.js";
 import { findActivation } from "../../../learning/control/state.js";
 import type { Message } from "../../../contract/execution.js";
+import { factDocumentId, factLines, type UserFactRecord } from "../../../learning/domains/user/memory-fact.js";
 
 /**
  * Where a memory read gets its records: the ones this run already owns.
@@ -35,6 +36,12 @@ export type MemorySourceInput = {
    */
   readonly board?: BoardState;
   readonly projectContext?: MemoryProjectContext;
+  /**
+   * User facts the run may see (WP-CL / B). A thunk, because a save earlier in
+   * this same turn must be visible to the next search — a captured array would
+   * make "I just saved it" and "I cannot find it" both true.
+   */
+  readonly facts?: () => ReadonlyArray<UserFactRecord>;
 };
 
 /**
@@ -163,11 +170,30 @@ function leadingPathOf(content: string): string | undefined {
  * matches" forever after the first turn, and the model would have no way to tell
  * that from "nothing was ever learned".
  */
+/**
+ * User facts as documents.
+ *
+ * The origin names the memory domain rather than the file: a model quoting a hit
+ * should be able to say "this is a Trylo user-memory fact", and a panel result
+ * carries the same `recordId` the ledger uses, so "the panel shows it" and "the
+ * model can read it" stop being two different facts.
+ */
+function factDocuments(facts: ReadonlyArray<UserFactRecord>): ReadonlyArray<MemoryDocument> {
+  return facts.map((record) => ({
+    id: factDocumentId(record.id),
+    path: `trylo://learning/user/${record.id}`,
+    lines: factLines(record),
+    origin: "user-memory",
+    recordKind: record.factKind,
+  }));
+}
+
 export function memoryDocumentsFrom(input: MemorySourceInput): () => Promise<MemoryDocuments> {
   return async () => ({
     documents: [
       ...(input.board === undefined ? [] : boardDocuments(input.board)),
       ...(input.projectContext === undefined ? [] : projectDocuments(input.projectContext)),
+      ...(input.facts === undefined ? [] : factDocuments(input.facts())),
     ],
   });
 }
@@ -178,6 +204,7 @@ export function memoryDocuments(input: MemorySourceInput): MemoryDocuments {
     documents: [
       ...(input.board === undefined ? [] : boardDocuments(input.board)),
       ...(input.projectContext === undefined ? [] : projectDocuments(input.projectContext)),
+      ...(input.facts === undefined ? [] : factDocuments(input.facts())),
     ],
   };
 }

@@ -47,3 +47,5 @@ First-party project code follows [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and
 Tool source restoration and checks: [2026-10-15 source audit](docs/release/SOURCE_COMPLETENESS_2026_10_15.md). From the repository root: `node scripts/release/check-source-completeness.mjs`; dependency setup: `node scripts/setup-repository-tools.mjs --install`.
 
 Current source synchronization: [current checkpoint and verification](docs/release/CURRENT_SOURCE_CHECKPOINT.md). Existing Desktop R3 downloads are unchanged.
+
+October 18 source synchronization merges the public context fixes with formal memory, continuation diagnostics, Desktop pairing and mobile remote updates. See the [current source checkpoint](docs/release/CURRENT_SOURCE_CHECKPOINT.md).

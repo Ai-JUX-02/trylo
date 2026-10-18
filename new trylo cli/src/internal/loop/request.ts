@@ -7,7 +7,7 @@ import type { ToolPort } from "../ports/tools.js";
 import type { MethodSlotMessage } from "./method-port.js";
 import type { PromptContext } from "./compact-boundary.js";
 import { promptViewMessages as promptMessages } from "./prompt-view.js";
-import { FINAL_REPORT_INSTRUCTIONS } from "./budget-final-report.js";
+import { finalReportInstructions } from "./budget-final-report.js";
 
 /**
  * Building the next provider request.
@@ -116,7 +116,7 @@ export function buildRequest(view: RequestView): ProviderRequest {
     // system segments to the head. Governing rules stay in system messages;
     // the report-only ToolPort, not message-role authority, forbids actions.
     messages: view.finalReport === undefined ? messages
-      : [...messages, { role: "user", content: FINAL_REPORT_INSTRUCTIONS }],
+      : [...messages, { role: "user", content: finalReportInstructions(view.prompt.transcript) }],
     tools: toolSpecs(view.tools),
     ...(view.maxOutputTokens === undefined ? {} : { maxOutputTokens: view.maxOutputTokens }),
     ...(view.responseSchema === undefined ? {} : { responseSchema: view.responseSchema }),

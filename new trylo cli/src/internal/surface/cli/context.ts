@@ -8,6 +8,7 @@
 
 import type { InteractivePermissionIo } from "./permission.js";
 import type { Envelope } from "../../protocol/envelope.js";
+import type { BootstrapContext } from "./bootstrap-context.js";
 
 export type DirEntryInfo = {
   readonly name: string;
@@ -16,6 +17,8 @@ export type DirEntryInfo = {
 };
 
 export type CliContext = {
+  readonly bootstrapContext?: BootstrapContext;
+  readonly userSourceAvailable?: false;
   /** Structured UI approval and ownership lifecycle; absent keeps text approval. */
   readonly approval?: Pick<InteractivePermissionIo, "requestApproval" | "onApproval">;
   /** Actual run events and timestamps for phase timing; observer cannot grant authority. */

@@ -993,7 +993,7 @@ export function SettingsModal(props: SettingsModalProps): ReactElement | null {
               <p className="settings-modal__desc">
                 协作偏好学习：Evidence → Conclusion → User Model → Policy。
                 默认 Shadow：计算并记录，不改变真实 Agent Prompt。
-                任务技能、会话检索和 MEMORY 事实仍走 Hermes，关闭此项不会关掉 Hermes Skill 学习。
+                对话中明确保存的用户事实进入 Trylo 正式用户记忆；用户学习开关控制其可用性。Hermes Skill 学习使用独立开关。
               </p>
               <label className="settings-modal__field settings-modal__field--inline">
                 <input

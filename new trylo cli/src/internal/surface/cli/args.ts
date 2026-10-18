@@ -12,6 +12,7 @@ import { parseMcp } from "./args-mcp.js";
 import { parseCheckpoint } from "./args-checkpoint.js";
 import { parseDiff, parseReview } from "./args-review.js";
 import { parseProviders } from "./args-providers.js";
+import { parseMemory } from "./args-memory.js";
 import { parseSession } from "./args-session.js";
 import { parseQueue } from "./args-queue.js";
 import { parseCompletion } from "./completion.js";
@@ -235,6 +236,9 @@ export function parseArgs(argv: ReadonlyArray<string>): ParsedCommand {
   }
   if (first === "providers") {
     return parseProviders(rest.slice(1));
+  }
+  if (first === "memory") {
+    return parseMemory(rest.slice(1));
   }
   // Command families parse themselves (`schedule`, `daemon`, `bg`): the root's job
   // is to recognise the word, not to learn what a schedule id looks like. The

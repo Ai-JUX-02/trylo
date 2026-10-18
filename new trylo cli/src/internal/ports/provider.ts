@@ -161,6 +161,66 @@ export type ProviderWarning = {
   readonly message: string;
 };
 
+/**
+ * Why a historical assistant occurrence has no usable native continuation.
+ *
+ * This is a closed set on purpose: a free-form string would let two adapters
+ * name the same failure differently, and the presentation layer could not tell
+ * "the provider never sends native fields" from "we lost them". Every member
+ * requires positive evidence; when the evidence is missing the answer is
+ * `unknown_source`, never a guess.
+ *
+ * `checkpoint_missing` is declared but not produced yet: proving one specific
+ * message lost its checkpoint needs a per-occurrence key that the journal does
+ * not carry. Reporting it today would be an inference, so an unclassifiable
+ * message is reported as `unknown_source` with no count.
+ */
+export const NATIVE_CONTINUATION_CAUSES = [
+  "checkpoint_missing",
+  "checkpoint_invalid",
+  "binding_mismatch",
+  "cache_evicted",
+  "history_mismatch",
+  "capture_rejected",
+] as const;
+export type NativeContinuationCause = (typeof NATIVE_CONTINUATION_CAUSES)[number];
+export type NativeContinuationUnknownCause = "unknown_source";
+
+/**
+ * The one observable shape of a native-continuation degradation.
+ *
+ * It deliberately carries no reasoning body, credential, endpoint or session
+ * id: `noticeId` is a stable hash, so the same degradation is recognised across
+ * processes and journal replays without exposing what was degraded.
+ */
+export type NativeContinuationDiagnostic = {
+  readonly schemaVersion: 1;
+  readonly cause: NativeContinuationCause | NativeContinuationUnknownCause;
+  /** Affected occurrences; always 0 when `basis` is `unknown`. */
+  readonly affected: number;
+  readonly basis: "native_expected_occurrences" | "unknown";
+  readonly severity: "degraded" | "info";
+  /** Stable across processes/replays for the same reason + history set. */
+  readonly noticeId: string;
+};
+
+/**
+ * Runtime guard for the diagnostic arriving from a journal replay or another
+ * process. A closed-set check, not a cast: an unknown cause from a newer writer
+ * must be refused rather than rendered as if this build understood it.
+ */
+export function isNativeContinuationDiagnostic(value: unknown): value is NativeContinuationDiagnostic {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const fields = value as Record<string, unknown>;
+  const causes: ReadonlyArray<string> = NATIVE_CONTINUATION_CAUSES;
+  return fields["schemaVersion"] === 1
+    && (fields["cause"] === "unknown_source" || causes.includes(String(fields["cause"])))
+    && typeof fields["affected"] === "number" && Number.isInteger(fields["affected"]) && fields["affected"] >= 0
+    && (fields["basis"] === "native_expected_occurrences" || fields["basis"] === "unknown")
+    && (fields["severity"] === "degraded" || fields["severity"] === "info")
+    && typeof fields["noticeId"] === "string" && fields["noticeId"].length > 0;
+}
+
 export type ProviderEvent =
   | {
       readonly type: "stream_start";
@@ -168,7 +228,17 @@ export type ProviderEvent =
       readonly model: string;
       readonly warnings: ReadonlyArray<ProviderWarning>;
     }
-  | { readonly type: "warning"; readonly code: string; readonly message: string }
+  | {
+      readonly type: "warning";
+      readonly code: string;
+      readonly message: string;
+      /**
+       * Present only for degradations this build can classify. Consumers that
+       * predate it keep rendering `code` + `message`, which stay unchanged in
+       * meaning; the diagnostic is additive.
+       */
+      readonly diagnostic?: NativeContinuationDiagnostic;
+    }
   | { readonly type: "text_start"; readonly blockId: ProviderBlockId }
   | { readonly type: "text_delta"; readonly blockId: ProviderBlockId; readonly text: string }
   | { readonly type: "text_end"; readonly blockId: ProviderBlockId }
@@ -254,6 +324,8 @@ export type ProviderEventType = (typeof PROVIDER_EVENT_TYPES)[number];
  * Only the adapter interprets it; it is never a display event or permission.
  */
 export type ProviderContinuationPort = {
+  /** Called by a durable recorder only after the notice envelope was appended. */
+  readonly acknowledgeNotice?: (noticeId: string) => void;
   capture(scope: string): JsonObject | undefined;
   /** Pure estimate of native fields added to these exact outgoing messages. */
   readonly estimateOverheadTokens?: (messages: ReadonlyArray<ProviderMessage>) => number;

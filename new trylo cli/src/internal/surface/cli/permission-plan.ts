@@ -8,6 +8,7 @@ import {
 import { APPLY_PATCH_TOOL, EDIT_FILE_TOOL, NOTEBOOK_EDIT_TOOL, RUN_SHELL_TOOL, WRITE_FILE_TOOL } from "../../adapters/tools/mutating/names.js";
 import { WORKSPACE_WRITE_TOOL_NAMES } from "../../adapters/tools/mutating/bindings.js";
 import { WEB_FETCH_TOOL } from "../../adapters/tools/web/names.js";
+import { MEMORY_WRITE_TOOL_NAMES } from "../../adapters/tools/memory/write.js";
 import { isMcpQualifiedName } from "../../mcp/names.js";
 import { createInteractivePermission, type InteractivePermissionIo } from "./permission.js";
 
@@ -47,6 +48,9 @@ export const APPROVABLE_TOOL_NAMES: ReadonlyArray<string> = [
   NOTEBOOK_EDIT_TOOL, // WP13 (L13): cell edits approve like file edits.
   RUN_SHELL_TOOL,
   WEB_FETCH_TOOL,
+  // Optional user-learning tools can be explicitly permitted before mounting.
+  // Their user scope never inherits the workspace-only --allow-writes grant.
+  ...MEMORY_WRITE_TOOL_NAMES,
   // The session tools are deliberately absent, all three of them.
   //
   // `stop_process` was here first, on the reasoning that ending a process is an

@@ -134,6 +134,16 @@ export interface CliSpawnCommand {
   readonly prefix: readonly string[];
 }
 
+/** Tauri can return verbatim Windows resource paths. Node's entry resolver
+ * treats the verbatim drive prefix as a directory and exits before main.js.
+ * Convert only filesystem script paths, retaining UNC host/share semantics.
+ */
+function nodeScriptArgument(script: string): string {
+  if (/^\\\\\?\\[a-z]:\\/i.test(script)) return script.slice(4);
+  if (/^\\\\\?\\UNC\\/i.test(script)) return `\\\\${script.slice(8)}`;
+  return script;
+}
+
 export function cliSpawnCommand(
   cliScript: string,
   nodeProgram?: string | null,
@@ -144,7 +154,7 @@ export function cliSpawnCommand(
   // Falling back to bare `node` keeps the dev loop working; the resolver
   // reports `system-path` when that happens, so a packaged build that
   // silently relied on PATH is visible in diagnostics.
-  return { command: node !== '' ? node : 'node', prefix: [cliScript] };
+  return { command: node !== '' ? node : 'node', prefix: [nodeScriptArgument(cliScript)] };
 }
 
 /** Resolve only the legacy entry; a discovered v1 entry can never substitute it. */

@@ -20,6 +20,16 @@ import type { CliRuntimeProtocol } from './cli-runtime-protocol';
 export interface SettingsForCodeRun {
   readonly cliPath: FilePath;
   readonly cwd: FilePath;
+  /**
+   * WP-CL / B: the effective user-learning setting for THIS run, forwarded to
+   * the CLI as `--learning=<value>`.
+   *
+   * `undefined` is not "off by policy" — it is "nothing was enabled", and the
+   * argv stays byte-for-byte what it was before learning existed. The Desktop
+   * must never substitute a default: `all` would turn on method and tool
+   * learning the user never asked for.
+   */
+  readonly learning?: 'method' | 'user' | 'all';
   readonly apiKey?: string;
   readonly apiHost?: string;
   readonly apiModel?: string;

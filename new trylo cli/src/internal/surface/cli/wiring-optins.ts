@@ -2,7 +2,7 @@ import type { LocalRuleLookup } from "../../adapters/project-instructions/append
 import type { WebToolsConfig } from "../../adapters/tools/web/index.js";
 import type { MemoryReadPort } from "../../ports/memory.js";
 import type { ToolGapRuntime } from "../../integration/tool-learning/index.js";
-import type { UserLearningRuntime } from "../../integration/user-learning/index.js";
+import type { UserLearningRuntime, UserMemoryService } from "../../integration/user-learning/index.js";
 import type { MethodEventSink } from "../../learning/method/port.js";
 import type {
   SubagentEventSink,
@@ -145,6 +145,11 @@ export type WiringOptIns = {
    * 若自己去开 board，就会在学习控制面旁边放第二个读者。
    */
   readonly memory?: MemoryReadPort;
+  /**
+   * 正式用户记忆的写入口（WP-CL / B）。Absent —— 未开启用户学习的每一条路径 ——
+   * 目录里没有 `memory_remember`/`memory_forget`。
+   */
+  readonly memoryWrite?: UserMemoryService;
   /**
    * `read_file` 的局部规则附段接点（WP-CLI-B1 §3.1）。Absent —— 每一条默认路径 ——
    * 工具结果与从前逐字相同。构造在 `host.ts`，每轮一次：本轮的冻结就是这一轮的

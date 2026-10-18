@@ -1,5 +1,9 @@
 # vendor/legacy 补丁清单（PATCHES）
 
+## 补丁 2026-10-18 — Desktop 网关关闭有界
+
+`remote-gateway/index.js` 的 `stop()` 保留 1001 close 通知，给手机 250ms 关闭宽限；超时后仅终止本网关持有的 WebSocket 和 HTTP 连接，再完成停止。挂起手机或未完成的 HTTP 请求不再让关闭操作永久等待，后续 Desktop 远程开关可以释放并重新绑定监听端口。修改不涉及其他进程、既有配对身份或任务执行。验证见 `tests/services/remote-ownership.test.mjs`。
+
 ## 补丁 2026-10-11 — 手机会话 UI 与执行事件
 
 `remote-gateway/index.js` 的增量补丁：保留 Desktop 发布的工具调用 id、输入、输出、耗时和失败状态，按调用 id 更新同一条记录；终态将未结束调用标为中断，并冻结耗时。`sessionState` 可携带 Desktop 的完整会话投影，恢复历史不再丢失思考和工具记录；切换会话清除旧任务状态。新增受原有鉴权保护的 `POST /v1/sessions`，转发 `session { create: true, surface }` 给 Desktop 创建会话。Gateway 仅保存有界投影，不执行任务、不改变权限。

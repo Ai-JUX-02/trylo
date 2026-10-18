@@ -1,5 +1,7 @@
 import { decision, type PermissionAction, type PermissionDecision } from "../../ports/permission.js";
 import type { CliContext } from "./context.js";
+import { parseBootstrapContext, type BootstrapContext } from "./bootstrap-context.js";
+import { isLegacyBootstrapText } from "./user-input-source.js";
 
 type RecordValue = Record<string, unknown>;
 type StdioControlIo = Pick<CliContext, "now" | "newId" | "stdout" | "readLine">;
@@ -28,18 +30,26 @@ export function stdioResponse(line: string): { readonly requestId: string; reado
 
 /** The same user frame Desktop sends to its legacy runner, text blocks only. */
 export function stdioPrompt(line: string | undefined): string | undefined {
+  return stdioUserPrompt(line)?.text;
+}
+
+export function stdioUserPrompt(line: string | undefined): { readonly text: string; readonly bootstrapContext?: BootstrapContext; readonly userSourceAvailable?: false } | undefined {
   if (line === undefined) return undefined;
   const frame = parse(line);
   if (!record(frame) || frame.type !== "user" || !record(frame.message) || frame.message.role !== "user") return undefined;
   const content = frame.message.content;
-  if (typeof content === "string") return content.trim() || undefined;
+  const bootstrapContext = "bootstrap_context" in frame ? parseBootstrapContext(frame.bootstrap_context) : undefined;
+  if (typeof content === "string") return content.trim() ? { text: content.trim(), ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
+    ...(isLegacyBootstrapText(content.trim()) ? { userSourceAvailable: false as const } : {}) } : undefined;
   if (!Array.isArray(content) || content.length === 0) return undefined;
   const parts: string[] = [];
   for (const block of content) {
     if (!record(block) || block.type !== "text" || typeof block.text !== "string") return undefined;
     parts.push(block.text);
   }
-  return parts.join("\n").trim() || undefined;
+  const text = parts.join("\n").trim();
+  return text ? { text, ...(bootstrapContext === undefined ? {} : { bootstrapContext }),
+    ...(isLegacyBootstrapText(text) ? { userSourceAvailable: false as const } : {}) } : undefined;
 }
 
 export function stdioAnswer(line: string, requestId: string): PermissionDecision | undefined {

@@ -684,7 +684,7 @@ export class RemoteGatewayClient {
     onFunEvent?: (event: FunChatEvent) => void,
   ): () => void {
     if (this.isDemo) {
-      onConnectionState('connected');
+      onConnectionState('offline');
       return () => {};
     }
     return connectRemoteGateway({

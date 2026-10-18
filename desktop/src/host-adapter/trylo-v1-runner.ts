@@ -70,6 +70,12 @@ export interface TryloV1CliArgsInput {
   /** Desktop instructions appended to the CLI-owned system seeds. */
   readonly systemPrompt?: string;
   readonly permissionLevel?: PermissionLevel;
+  /**
+   * WP-CL / B: forwarded verbatim as `--learning=<value>`. Absent keeps the
+   * argv unchanged — the CLI's default is "learning off", and a Desktop that
+   * guessed would be changing a global switch on the user's behalf.
+   */
+  readonly learning?: 'method' | 'user' | 'all';
 }
 
 export class TryloV1UnsupportedError extends Error {
@@ -80,30 +86,20 @@ export class TryloV1UnsupportedError extends Error {
 }
 
 /**
- * Wrap prior turns into the prompt (P08 §6.1 — the M0 compromise).
- *
- * Once the CLI owns the context (an established session) this must NOT be
- * used: §6.2 says "进入 established 后不再把完整历史重复塞进 prompt" —
- * replaying it would duplicate every turn the journal already holds.
+ * Bootstrap carries only visible user/assistant text, separately from current
+ * human authority. Old CLIs ignore this additive field and receive current text.
  */
-export function promptWithHistory(
+export function buildBootstrapUserPrompt(
   priorMessages: readonly { readonly role: string; readonly kind: string; readonly text?: string }[],
   prompt: string,
 ): string {
   const history = priorMessages
-    .filter((m) => m.kind === 'text' && (m.text ?? '').trim() !== '')
+    .filter((m) => m.kind === 'text' && (m.role === 'user' || m.role === 'assistant') && (m.text ?? '').trim() !== '')
     .map((m) => ({ role: m.role, content: m.text ?? '' }));
-  if (history.length === 0) return prompt;
-  return [
-    'Continue the conversation represented by the JSON history below.',
-    'Treat it as prior context only. Respond only to current_user_message.',
-    '<conversation_history_json>',
-    JSON.stringify(history),
-    '</conversation_history_json>',
-    '<current_user_message>',
-    prompt,
-    '</current_user_message>',
-  ].join('\n');
+  if (history.length === 0) return buildUserPrompt(prompt);
+  return `${JSON.stringify({ type: 'user', session_id: '', message: {
+    role: 'user', content: [{ type: 'text', text: prompt }],
+  }, parent_tool_use_id: null, bootstrap_context: { version: 1, messages: history } })}\n`;
 }
 
 /** Build the one-shot argv. The prompt NEVER travels in argv (spec §3.1). */
@@ -131,6 +127,8 @@ export function buildTryloV1Args(input: TryloV1CliArgsInput & {
   if (input.providerId) args.push('--provider', input.providerId);
   if (input.endpoint) args.push('--endpoint', input.endpoint);
   if (input.model) args.push('--model', input.model);
+  // WP-CL / B: the switch the person actually enabled, and nothing else.
+  if (input.learning !== undefined) args.push(`--learning=${input.learning}`);
   args.push('--append-system-prompt', desktopSystemPrompt(input.systemPrompt));
   args.push(...permissionFlagsForV1(input.permissionLevel ?? 'read_only'));
   // `-` = read the prompt from stdin. Required: the prompt must never be
@@ -186,6 +184,8 @@ export interface StartTryloV1Args {
   /** Snapshotted at the caller; late settings changes cannot alter this turn. */
   readonly systemPrompt?: string;
   readonly permissionLevel?: PermissionLevel;
+  /** WP-CL / B: forwarded verbatim as `--learning=<value>`; absent stays off. */
+  readonly learning?: 'method' | 'user' | 'all';
   readonly projectKey?: string;
   readonly conversationId?: string;
   readonly runId?: string;
@@ -197,7 +197,7 @@ export interface StartTryloV1Args {
   /** Fired whenever the binding advances (creating → established/unknown). */
   readonly onBindingChange?: (binding: CliSessionBinding) => void;
   /**
-   * P08 §6.1: prior turns, replayed inside the prompt when (and only
+   * P08 §6.1: prior turns, carried as bootstrap context when (and only
    * when) this run has no CLI-owned session to continue. Ignored for an
    * established session — the CLI already holds that context.
    */
@@ -238,6 +238,7 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
     ...(args.model ? { model: args.model } : {}),
     ...(args.systemPrompt ? { systemPrompt: args.systemPrompt } : {}),
     permissionLevel: args.permissionLevel ?? 'read_only',
+    ...(args.learning === undefined ? {} : { learning: args.learning }),
   });
 
   const adapter = new TryloV1EventAdapter();
@@ -360,11 +361,11 @@ export async function startTryloV1(args: StartTryloV1Args): Promise<{ processId:
   try {
     // §6.2: with an established session the CLI owns the context, so
     // replaying history here would duplicate every turn.
-    const prompt =
+    const frame =
       sessionArgs.kind === 'resume'
-        ? args.prompt
-        : promptWithHistory(args.priorMessages ?? [], args.prompt);
-    await hostAdapter.process.send(handleKey, buildUserPrompt(prompt));
+        ? buildUserPrompt(args.prompt)
+        : buildBootstrapUserPrompt(args.priorMessages ?? [], args.prompt);
+    await hostAdapter.process.send(handleKey, frame);
   } catch (error) {
     live.delete(handleKey);
     await hostAdapter.process.stop(handleKey).catch(() => undefined);

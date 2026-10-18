@@ -213,6 +213,26 @@ export async function dispatch(parsed: ParsedCommand, ctx: CliContext): Promise<
       const { handleUpdate } = await import("./commands-update.js");
       return handleUpdate(ctx, parsed.options);
     }
+    case "memory_import": {
+      const { handleMemoryImport } = await import("./commands-memory.js");
+      return handleMemoryImport(ctx, parsed.options);
+    }
+    case "memory_mutate": {
+      const { handleMemoryMutation } = await import("./commands-memory-mutate.js");
+      return handleMemoryMutation(ctx, parsed.action);
+    }
+    case "memory_delete": {
+      const { handleMemoryDelete } = await import("./commands-memory.js");
+      return handleMemoryDelete(ctx, parsed.options);
+    }
+    case "memory_list": {
+      const { handleMemoryList } = await import("./commands-memory.js");
+      return handleMemoryList(ctx, parsed.options);
+    }
+    case "memory_compact": {
+      const { handleMemoryCompact } = await import("./commands-memory.js");
+      return handleMemoryCompact(ctx, parsed.options);
+    }
     case "output_style_list": {
       const { handleOutputStyleList } = await import("./commands-output-style.js");
       return handleOutputStyleList(ctx, parsed.options);

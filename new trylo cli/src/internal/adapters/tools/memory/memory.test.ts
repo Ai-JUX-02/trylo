@@ -51,6 +51,26 @@ function searchArgs(over: Partial<Parameters<MemoryReadPort["search"]>[0]> = {})
 
 const signal = new AbortController().signal;
 
+test("user-memory lists advance their cursor and category filtering precedes pagination", async () => {
+  const documents: MemoryDocument[] = Array.from({ length: 12 }, (_, index) => ({
+    id: `user-memory:${index}`, path: "trylo://user", origin: "user-memory", recordKind: index === 11 ? "identity_fact" : "preference",
+    lines: [index === 11 ? "我是 Last-Person" : `偏好 ${index}`, `metadata ${index}`],
+  }));
+  const port = portOver(documents);
+  const first = await port.search(searchArgs({ queries: [] }), signal);
+  const next = await port.search(searchArgs({ queries: [], cursor: "20" }), signal);
+  assert.equal(first.ok && first.matches.length, 20);
+  assert.equal(next.ok && next.matches[0]?.documentId, "user-memory:10");
+  assert.equal(next.ok && next.truncated, false);
+  for (const cursor of ["20junk", "-1", "25", "1.2"]) {
+    const result = await port.search(searchArgs({ queries: [], cursor }), signal);
+    assert.equal(result.ok, false, cursor);
+  }
+  const identity = await port.search(searchArgs({ queries: [], recordKind: "identity_fact" }), signal);
+  assert.equal(identity.ok && identity.matches[0]?.content, "我是 Last-Person");
+  assert.equal(identity.ok && identity.matches.length, 2);
+});
+
 test("`any` matches each query independently and reports which query hit", async () => {
   // `read` is on line 3 only; `gate` is on lines 1, 4 and 5. Four hits, and the
   // one on line 3 says which of the two queries produced it.

@@ -67,6 +67,69 @@ export const SUBAGENT_FIXTURE_SCRIPT: FixtureScript = {
   toolCallId: "fx-sa-1",
 };
 
+/**
+ * Offline acceptance for the formal user-memory path (WP-CL / B).
+ *
+ * Two stages, chosen by what the person asked, and every final sentence is
+ * built from the tool result the run actually got back:
+ *
+ *  - "请记住 …"   → `memory_remember`, then the answer quotes the receipt;
+ *  - anything else → `memory_search`, then the answer quotes the hits.
+ *
+ * That is the whole point of this fixture: the second process can only answer
+ * "你是 YL Z" if the first process really wrote the fact to the ledger. The
+ * sentence is not stored anywhere in advance, and the workspace contains no
+ * such text, so a passing run cannot be a coincidence.
+ */
+export const MEMORY_FIXTURE_REMEMBER_CALL = "fx-remember-1";
+export const MEMORY_FIXTURE_SEARCH_CALL = "fx-search-1";
+
+function lastUserText(messages: ProviderRequest["messages"]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return message.content;
+  }
+  return "";
+}
+
+function toolOutput(messages: ProviderRequest["messages"], toolCallId: string): string | undefined {
+  return messages.find((message) => message.role === "tool" && message.toolCallId === toolCallId)?.content;
+}
+
+function quote(text: string, limit = 400): string {
+  const flat = text.replace(/\s+/gu, " ").trim();
+  return flat.length <= limit ? flat : `${flat.slice(0, limit)}…`;
+}
+
+export function createMemoryFixtureProvider(): ProviderPort {
+  return {
+    async *stream(request: ProviderRequest, signal: AbortSignal): AsyncIterable<ProviderEvent> {
+      yield { type: "stream_start", providerId: "fixture-memory", model: request.model, warnings: [] };
+      const userText = lastUserText(request.messages);
+      if (/记住|remember/iu.test(userText)) {
+        const receipt = toolOutput(request.messages, MEMORY_FIXTURE_REMEMBER_CALL);
+        if (receipt === undefined) {
+          yield* callTool(signal, MEMORY_FIXTURE_REMEMBER_CALL, "memory_remember", {
+            subject: "YL Z",
+            statement: userText.trim(),
+            fact_kind: "identity_fact",
+            scope: "user",
+          });
+          return;
+        }
+        yield* answer(`保存回执：${quote(receipt)}`, signal);
+        return;
+      }
+      const hits = toolOutput(request.messages, MEMORY_FIXTURE_SEARCH_CALL);
+      if (hits === undefined) {
+        yield* callTool(signal, MEMORY_FIXTURE_SEARCH_CALL, "memory_search", { queries: ["YL Z"] });
+        return;
+      }
+      yield* answer(`记忆检索结果：${quote(hits)}`, signal);
+    },
+  };
+}
+
 function usage(input: number, output: number): ProviderUsage {
   return { ...emptyUsage("snapshot"), inputTokens: input, outputTokens: output, totalTokens: input + output };
 }
@@ -75,7 +138,7 @@ async function* callTool(
   signal: AbortSignal,
   toolCallId: string,
   name: string,
-  args: Readonly<Record<string, string>>,
+  args: Readonly<Record<string, unknown>>,
 ): AsyncIterable<ProviderEvent> {
   const rawArguments = JSON.stringify(args);
   yield { type: "tool_input_start", toolCallId, name };

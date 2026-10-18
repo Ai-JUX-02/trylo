@@ -298,6 +298,7 @@ export function createHost({ stdout = process.stdout, stderr = process.stderr, s
       // Best effort — a slow adapter must not hold the process open.
       tooling.dispose();
       void Promise.allSettled([
+        remote.disable(),
         learning.stopMaintenance(),
         learning.sessionFlush(),
       ]).finally(() => {
